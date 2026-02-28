@@ -1,0 +1,8 @@
+*
+!*/
+!.gitignore
+
+!*.cls
+!*.tex
+!README.md
+!fonts
