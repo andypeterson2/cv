@@ -18,7 +18,7 @@
 % CONFIGURATIONS
 %-------------------------------------------------------------------------------
 % A4 paper size by default, use 'letterpaper' for US letter
-\documentclass[11pt, a4paper]{awesome-cv}
+\documentclass[11pt, letterpaper]{awesome-cv}
 
 % Configure page margins with geometry
 \geometry{left=1.4cm, top=.8cm, right=1.4cm, bottom=1.8cm, footskip=.5cm}
@@ -51,17 +51,20 @@
 %-------------------------------------------------------------------------------
 % Available options: circle|rectangle,edge/noedge,left/right
 % \photo[rectangle,edge,right]{./examples/profile}
-\name{Byungjin}{Park}
-\position{DevOps Engineer{\enskip\cdotp\enskip}Software Architect}
-\address{Mapo-gu, Seoul, Republic of Korea}
 
-\mobile{(+82) 10-9030-1843}
+\name{Andrew}{Peterson} % Legal
+% \name{Andromeda}{Peterson} % Preferred
+
+\position{Quantum Researcher{\enskip\cdotp\enskip}Security Engineer{\enskip\cdotp\enskip}Software Architect}
+\address{California, United States of America}
+
+\mobile{(+1) 951-551-6946}
+\email{acpeters@ucsd.edu}
+\github{andypeterson2}
+\linkedin{i-am-andy-peterson}
 %\whatsapp{(+82) 10-9030-1843}
-\email{posquit0.bj@gmail.com}
 %\dateofbirth{January 1st, 1970}
-\homepage{www.posquit0.com}
-\github{posquit0}
-\linkedin{posquit0}
+% \homepage{www.posquit0.com}
 % \gitlab{gitlab-id}
 % \stackoverflow{SO-id}{SO-name}
 % \twitter{@twit}
@@ -77,7 +80,7 @@
 % \googlescholar{googlescholar-id}{}
 % \extrainfo{extra information}
 
-\quote{``Be the change that you want to see in the world."}
+% \quote{``"Start early, start often" --- Rick Ord}
 
 
 %-------------------------------------------------------------------------------
@@ -91,7 +94,8 @@
 % Leave any of these blank if they are not needed
 \makecvfooter
   {\today}
-  {Byungjin Park~~~·~~~Résumé}
+  {Andrew~~~·~~~Peterson} % Legal
+  % {Andromeda~~~·~~~Peterson} % Preferred
   {\thepage}
 
 
@@ -99,15 +103,19 @@
 %	CV/RESUME CONTENT
 %	Each section is imported separately, open each file in turn to modify content
 %-------------------------------------------------------------------------------
-\input{resume/summary.tex}
-\input{resume/experience.tex}
-\input{resume/honors.tex}
-\input{resume/certificates.tex}
-% \input{resume/presentation.tex}
-% \input{resume/writing.tex}
-% \input{resume/committees.tex}
-\input{resume/education.tex}
-% \input{resume/extracurricular.tex}
+
+\input{resume/education.tex} % done
+\input{resume/experience.tex} % copied
+\input{cv/skills.tex} % copied
+\input{resume/extracurricular.tex} % copied
+\input{resume/certifications.tex} % copied
+
+% \input{resume/summary.tex} % TODO
+% \input{resume/honors.tex} % TODO: add notable competitions
+% \input{resume/writing.tex} % TODO: write stuff
+
+% \input{resume/presentation.tex} % not applicable yet
+% \input{resume/committees.tex} % not applicable yet
 
 
 %-------------------------------------------------------------------------------
