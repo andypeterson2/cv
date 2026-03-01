@@ -8,12 +8,9 @@ Necessary fonts: [Roboto](https://fonts.google.com/specimen/Roboto) and [Source 
 
 [Click here for the `.pdf`!](cv.pdf)
 
-![My CV Page 1](./assets/CV_1.jpeg)
-![My CV Page 2](./assets/CV_2.jpeg)
-
 ## My Resume
 
-TODO
+[Click here for the `.pdf`!](resume.pdf)
 
 ## My Cover Letter
 
