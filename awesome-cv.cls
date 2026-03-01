@@ -734,7 +734,7 @@
   \vspace{2mm}
 }
 
-% Define an environment for cvreferences with 4 distinct columns
+% Define an environment for cvreferences
 \newenvironment{cvreferences}{%
   \vspace{\acvSectionContentTopSkip}
   \vspace{-2mm}
@@ -742,7 +742,7 @@
     \setlength\tabcolsep{0pt}
     \setlength{\extrarowheight}{0pt}
     % Columns: Name (4cm), Relation (Dynamic), Phone (3.5cm), Email (5cm)
-    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} L{4.0cm} L{\textwidth - 12.5cm} R{3.5cm} R{5.0cm}}
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} L{4.0cm} L{\textwidth - 12.5cm} L{3.5cm} L{5.0cm}}
 }{%
     \end{tabular*}
   \end{center}
