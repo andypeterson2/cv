@@ -2,8 +2,7 @@
 !*/
 !.gitignore
 
+!README.md
 !*.cls
 !*.tex
-!README.md
-!*.jpeg
 !*.pdf
