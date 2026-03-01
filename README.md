@@ -8,8 +8,8 @@ Necessary fonts: [Roboto](https://fonts.google.com/specimen/Roboto) and [Source 
 
 [Click here for the `.pdf`!](cv.pdf)
 
-![My CV Page 1](./assets/CV_1.jpg)
-![My CV Page 2](./assets/CV_2.jpg)
+![My CV Page 1](./assets/CV_1.jpeg)
+![My CV Page 2](./assets/CV_2.jpeg)
 
 ## My Resume
 
