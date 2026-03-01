@@ -176,6 +176,8 @@
 \definecolor{awesome-concrete}{HTML}{95A5A6}
 \definecolor{awesome-darknight}{HTML}{131A28}
 \colorlet{awesome}{awesome-red}
+% Custom colors
+\definecolor{spinel}{HTML}{B21F5C}
 
 % Boolean value to switch section color highlighting
 \newbool{acvSectionColorHighlight}
@@ -730,6 +732,26 @@
 }{%
   \par
   \vspace{2mm}
+}
+
+% Define an environment for cvreferences with 4 distinct columns
+\newenvironment{cvreferences}{%
+  \vspace{\acvSectionContentTopSkip}
+  \vspace{-2mm}
+  \begin{center}
+    \setlength\tabcolsep{0pt}
+    \setlength{\extrarowheight}{0pt}
+    % Columns: Name (4cm), Relation (Dynamic), Phone (3.5cm), Email (5cm)
+    \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} L{4.0cm} L{\textwidth - 12.5cm} R{3.5cm} R{5.0cm}}
+}{%
+    \end{tabular*}
+  \end{center}
+}
+
+% Define a line of cv information (reference)
+% Usage: \cvreference{<name>}{<relation>}{<phone>}{<email>}
+\newcommand*{\cvreference}[4]{%
+  \skilltypestyle{#1} & \skillsetstyle{#2} & \skillsetstyle{\faPhone\ \href{tel:#3}{#3}} & \skillsetstyle{\faEnvelope\ \href{mailto:#4}{#4}} \\
 }
 
 % Define an environment for cventry
