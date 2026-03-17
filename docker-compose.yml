@@ -1,0 +1,11 @@
+services:
+  cv-editor:
+    image: node:20-slim
+    command: node server.js
+    ports:
+      - "${PORT:-3001}:${PORT:-3001}"
+    environment:
+      PORT: ${PORT:-3001}
+    volumes:
+      - ./editor:/app
+    working_dir: /app
