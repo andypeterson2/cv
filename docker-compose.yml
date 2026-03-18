@@ -3,7 +3,7 @@ services:
     image: node:20-slim
     command: node server.js
     ports:
-      - "${PORT:-3001}:${PORT:-3001}"
+      - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
     environment:
       PORT: ${PORT:-3001}
     volumes:
