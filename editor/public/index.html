@@ -79,19 +79,19 @@
       <!-- Resume / CV view -->
       <template x-if="activeDoc !== 'coverletter'">
         <div>
-          <div class="status-bar" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
+          <div class="ui-alert" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
 
           <div id="section-list" class="section-list">
             <template x-for="(sec, i) in docSections" :key="sec.file">
               <div class="section-card" :class="{ disabled: !sec.enabled }" :data-index="i" :data-sec-file="sec.file">
                 <div class="section-header">
-                  <span class="drag-handle" aria-hidden="true">&#9776;</span>
+                  <span class="ui-drag-handle" aria-hidden="true"></span>
                   <strong x-text="sectionTitle(sec.file)"></strong>
                   <label class="toggle-label" title="Include in CV">
                     <input type="checkbox" :checked="sec.enabled" @change="toggleSection(i)" :aria-label="'Enable ' + sectionTitle(sec.file)">
                   </label>
                   <label class="resume-toggle" title="Include in Resume">
-                    <span class="resume-tag">R</span>
+                    <span class="ui-badge resume-tag">R</span>
                     <input type="checkbox" :checked="isResumeSection(sec.file)" @change="toggleResumeSection(sec.file)" :aria-label="'Include ' + sectionTitle(sec.file) + ' in resume'">
                   </label>
                   <button class="btn-sm" @click="sec._expanded = !sec._expanded; if(sec._expanded) loadSectionData(sec)"
@@ -147,7 +147,7 @@
                                 <strong x-text="entry.organization || entry.position"></strong>
                                 <div class="entry-header-actions">
                                   <label class="resume-toggle" title="Include in Resume">
-                                    <span class="resume-tag">R</span>
+                                    <span class="ui-badge resume-tag">R</span>
                                     <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)" :aria-label="'Include entry in resume'">
                                   </label>
                                   <button class="btn-danger btn-sm" @click="removeEntry(sec, ei)">Remove</button>
@@ -161,10 +161,10 @@
                                 <strong>Bullet Points</strong>
                                 <template x-for="(item, ii) in entry.items" :key="ii">
                                   <div class="item-row" :class="{ 'resume-off': !isResumeBullet(sec.file, ei, ii) }">
-                                    <span class="bullet-drag-handle" aria-hidden="true">&#8801;</span>
+                                    <span class="ui-drag-handle" aria-hidden="true"></span>
                                     <textarea x-model="entry.items[ii]" rows="2" :aria-label="'Bullet point ' + (ii + 1)"></textarea>
                                     <label class="resume-toggle-inline" title="Include in Resume">
-                                      <span class="resume-tag-sm">R</span>
+                                      <span class="ui-badge resume-tag-sm">R</span>
                                       <input type="checkbox" :checked="isResumeBullet(sec.file, ei, ii)" @change="toggleResumeBullet(sec.file, ei, ii)">
                                     </label>
                                     <button class="btn-danger btn-xs" @click="removeBullet(sec, entry, ei, ii)" aria-label="Remove bullet point">x</button>
@@ -187,7 +187,7 @@
                                 <strong x-text="entry.category"></strong>
                                 <div class="entry-header-actions">
                                   <label class="resume-toggle" title="Include in Resume">
-                                    <span class="resume-tag">R</span>
+                                    <span class="ui-badge resume-tag">R</span>
                                     <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)">
                                   </label>
                                   <button class="btn-danger btn-xs" @click="removeEntry(sec, ei)">Remove</button>
@@ -210,7 +210,7 @@
                                 <strong x-text="entry.award"></strong>
                                 <div class="entry-header-actions">
                                   <label class="resume-toggle" title="Include in Resume">
-                                    <span class="resume-tag">R</span>
+                                    <span class="ui-badge resume-tag">R</span>
                                     <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)">
                                   </label>
                                   <button class="btn-danger btn-xs" @click="removeEntry(sec, ei)">Remove</button>
@@ -235,7 +235,7 @@
                                 <strong x-text="entry.name"></strong>
                                 <div class="entry-header-actions">
                                   <label class="resume-toggle" title="Include in Resume">
-                                    <span class="resume-tag">R</span>
+                                    <span class="ui-badge resume-tag">R</span>
                                     <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)">
                                   </label>
                                   <button class="btn-danger btn-xs" @click="removeEntry(sec, ei)">Remove</button>
@@ -287,7 +287,7 @@
         ">
           <template x-if="cl">
             <div>
-              <div class="status-bar" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
+              <div class="ui-alert" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
 
               <h2>Recipient</h2>
               <label>Name <input type="text" x-model="cl.recipient.name"></label>
