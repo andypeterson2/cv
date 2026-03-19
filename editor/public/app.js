@@ -39,12 +39,12 @@ function app() {
     // ------ Data (personal info + metrics from data.json) ------
 
     async loadData() {
-      const res = await fetch('/api/data');
+      const res = await fetch(API_BASE + '/api/data');
       this.dataModel = await res.json();
     },
 
     async saveData() {
-      const res = await fetch('/api/data', {
+      const res = await fetch(API_BASE + '/api/data', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.dataModel)
@@ -163,12 +163,12 @@ function app() {
     // ------ Resume Config ------
 
     async loadResumeConfig() {
-      const res = await fetch('/api/resume-config');
+      const res = await fetch(API_BASE + '/api/resume-config');
       this.resumeConfig = await res.json();
     },
 
     async saveResumeConfig() {
-      await fetch('/api/resume-config', {
+      await fetch(API_BASE + '/api/resume-config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(this.resumeConfig)
@@ -247,7 +247,7 @@ function app() {
     // ------ Document (section list) ------
 
     async loadDocument(name) {
-      const res = await fetch(`/api/document/${name}`);
+      const res = await fetch(`${API_BASE}/api/document/${name}`);
       const doc = await res.json();
       this.docSections = doc.sections.map(s => ({ ...s, _expanded: true, _data: null }));
       this.$nextTick(() => {
@@ -322,7 +322,7 @@ function app() {
       const sections = this.docSections.map(s => ({
         file: s.file, enabled: s.enabled, comment: s.comment
       }));
-      const res = await fetch('/api/document/cv/sections', {
+      const res = await fetch(API_BASE + '/api/document/cv/sections', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sections })
@@ -348,7 +348,7 @@ function app() {
         if (sec._data.type === 'cventries') this.initBulletSortables(sec);
         return;
       }
-      const res = await fetch(`/api/section/${sec.file}`);
+      const res = await fetch(`${API_BASE}/api/section/${sec.file}`);
       sec._data = await res.json();
       if (sec._data.type === 'cventries') {
         this.initBulletSortables(sec);
@@ -356,7 +356,7 @@ function app() {
     },
 
     async saveSection(sec) {
-      const res = await fetch(`/api/section/${sec.file}`, {
+      const res = await fetch(`${API_BASE}/api/section/${sec.file}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(sec._data)
@@ -409,7 +409,7 @@ function app() {
     // ------ Cover letter ------
 
     async saveCoverletter(cl) {
-      const res = await fetch('/api/coverletter', {
+      const res = await fetch(API_BASE + '/api/coverletter', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cl)
@@ -424,11 +424,11 @@ function app() {
       this.compiling = true;
       const name = this.activeDoc;
       try {
-        const res = await fetch(`/api/compile/${name}`, { method: 'POST' });
+        const res = await fetch(`${API_BASE}/api/compile/${name}`, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
           this.flash(`${name.charAt(0).toUpperCase() + name.slice(1)} compiled`, 'success');
-          const url = `/api/pdf/${name}?t=${Date.now()}`;
+          const url = `${API_BASE}/api/pdf/${name}?t=${Date.now()}`;
           this.compiledPdfs[name] = url;
           this.pdfUrl = url;
           this.showPdf = true;
