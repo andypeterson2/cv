@@ -22,6 +22,7 @@
   <header class="topbar" role="banner">
     <h1 class="topbar-title">CV Editor</h1>
     <div class="actions">
+      <div id="backend-connect"></div>
       <select class="doc-select" x-model="activeDoc" @change="switchDoc(activeDoc)" aria-label="Active document">
         <option value="resume">Resume</option>
         <option value="cv">CV</option>
@@ -331,5 +332,18 @@
   <script src="https://andypeterson2.github.io/ui-kit/ui-kit.js"></script>
   <script>const API_BASE = ServiceConfig.get("cv", "http://localhost:3000");</script>
   <script src="/app.js"></script>
+  <script>
+    (function() {
+      var el = document.getElementById('backend-connect');
+      if (el && window.UIKit && UIKit.initConnect) {
+        UIKit.initConnect(el, {
+          service: 'cv',
+          defaultHost: 'localhost',
+          defaultPort: 3000,
+          label: 'Backend'
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
