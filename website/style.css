@@ -1,0 +1,606 @@
+/* ---- Project-local token overrides ---- */
+:root {
+  --accent-bg: var(--accent-dark);
+}
+[data-theme="light"] {
+  --accent-bg: var(--accent);
+}
+
+body {
+  line-height: 1.5;
+  overflow: auto;
+  height: auto;
+}
+
+/* ---- Custom checkboxes (no rounded corners) ---- */
+input[type="checkbox"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  border: 1px solid var(--border);
+
+  background: var(--bg);
+  cursor: pointer;
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+input[type="checkbox"]:checked {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
+input[type="checkbox"]:checked::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 5px;
+  height: 9px;
+  border: 2px solid var(--text);
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+input[type="checkbox"]:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- Focus styles ---- */
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+input[type="text"]:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+/* ---- Top Bar ---- */
+.topbar {
+  display: flex;
+  align-items: stretch;
+  padding: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 37px;
+}
+
+.topbar-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  border-right: 1px solid var(--border);
+}
+
+.actions {
+  display: flex;
+  align-items: stretch;
+  margin-left: auto;
+}
+.actions > * {
+  border-left: 1px solid var(--border);
+
+}
+
+/* ---- Document select ---- */
+.doc-select {
+  padding: 0 10px;
+  border: none;
+  border-left: 1px solid var(--border);
+
+  background: var(--accent-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 700;
+}
+.doc-select:focus-visible {
+  outline: 1px solid var(--accent);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  padding: 0 14px;
+  border: none;
+  border-left: 1px solid var(--border);
+
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.btn:hover { background: var(--border); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.compile { background: var(--accent-bg); color: var(--text); }
+.btn.compile:hover { background: var(--accent-hover); }
+.btn.save { background: var(--success); color: var(--bg); border-color: var(--success); }
+.btn.save:hover { filter: brightness(1.1); }
+.btn.theme-toggle { min-width: 52px; justify-content: center; }
+
+/* Standalone buttons (outside topbar) */
+.section-body .btn,
+.entry-actions .btn,
+.coverletter-editor .btn {
+  height: auto;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+}
+
+.btn-sm {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+
+  background: var(--surface2);
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-sm:hover { background: var(--border); }
+.btn-xs {
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+}
+.btn-xs:hover { background: var(--surface2); color: var(--text); }
+.btn-danger { color: var(--danger) !important; border-color: var(--danger) !important; }
+.btn-danger:hover { background: var(--danger) !important; color: var(--bg) !important; }
+
+/* ---- Layout ---- */
+.layout {
+  display: flex;
+  height: calc(100vh - 37px);
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.pdf-panel {
+  width: 45%;
+  min-width: 300px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.pdf-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* ---- Sidebar ---- */
+.collapsible {
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+  display: block;
+}
+
+.sidebar-section { }
+
+/* Each sidebar label = bordered row, collapse adjacent borders */
+.sidebar label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar input[type="text"] {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+/* ---- Sidebar toggle row ---- */
+.sidebar-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-toggle-label {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+  margin: 0;
+}
+
+.field-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* Status bar uses .ui-alert + .ui-alert-success / .ui-alert-danger from ui-kit */
+
+/* ---- Section List ---- */
+.section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.section-card {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+
+  overflow: hidden;
+}
+.section-card:first-child { border-top: 1px solid var(--border); }
+.section-card.disabled { opacity: 0.5; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Section drag handles use .ui-drag-handle from ui-kit */
+
+.toggle-label { margin-left: auto; }
+
+.section-body { padding: 0; }
+
+/* ---- Inline Metrics ---- */
+.inline-metrics {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+}
+
+.inline-metrics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.inline-metrics-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.metric-group {
+  border: 1px solid var(--border);
+  margin-bottom: -1px;
+}
+
+.metric-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.metric-group-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.metric-group-name:hover { text-decoration: underline dotted; }
+
+.metric-group-actions { display: flex; gap: 0; }
+.metric-group-actions > * + * { margin-left: -1px; }
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0;
+  padding: 6px 8px;
+}
+
+.metric-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  margin: -1px 0 0 -1px;
+  padding: 4px 6px;
+}
+
+.metric-inline input[type="text"] {
+  width: 100%;
+  padding: 3px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.metric-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metric-label { font-family: inherit; font-size: 11px; font-weight: 700; color: var(--accent); }
+
+.btn-metric-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.5;
+}
+.btn-metric-remove:hover { color: var(--danger); opacity: 1; }
+
+/* ---- Entry Cards ---- */
+.entry-card {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+
+  padding: 0;
+  overflow: hidden;
+}
+.entry-card:first-child { border-top: 1px solid var(--border); }
+
+.entry-card .entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.entry-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.entry-card label:last-of-type { border-bottom: none; }
+
+.entry-card input[type="text"],
+.entry-card textarea,
+.coverletter-editor input[type="text"],
+.coverletter-editor textarea {
+  width: 100%;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.full-width { width: 100%; }
+
+/* ---- Bullet Points (items-list) ---- */
+.items-list {
+  border-top: 1px solid var(--border);
+}
+.items-list > strong {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 10px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+
+.item-row {
+  display: flex;
+  gap: 0;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  padding: 0;
+}
+.item-row textarea {
+  flex: 1;
+  border: none;
+  border-right: 1px solid var(--border);
+  padding: 5px 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* Bullet drag handle: extends .ui-drag-handle with app-specific overrides */
+.item-row .ui-drag-handle {
+  padding: 6px;
+  border-right: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.items-list > .btn-sm {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  padding: 4px 10px;
+}
+
+.entry-actions {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 0;
+}
+.entry-actions > * + * { margin-left: -1px; }
+
+/* ---- Resume Toggles ---- */
+.resume-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Resume badge uses .ui-badge with accent outline override */
+.resume-tag {
+  color: var(--accent);
+  background: var(--bg);
+  border-color: var(--accent);
+  padding: 1px 3px;
+  line-height: 1;
+}
+
+.resume-toggle-inline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  padding: 0 4px;
+  align-self: stretch;
+}
+
+.resume-tag-sm {
+  color: var(--accent);
+  border-color: var(--accent);
+  padding: 0 2px;
+  line-height: 1.2;
+  margin-right: 2px;
+}
+
+/* Dimming for CV-only items */
+.resume-off { opacity: 0.45; }
+.resume-off:hover { opacity: 0.7; }
+
+/* Entry header with actions */
+.entry-header-actions { display: flex; align-items: center; gap: 4px; }
+
+/* ---- Cover Letter ---- */
+.coverletter-editor { padding: 0; }
+.coverletter-editor h2 {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+}
+.coverletter-editor h2:first-child { border-top: none; }
+
+.coverletter-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.coverletter-editor .entry-card { margin: 8px 12px; }
+
+/* Paragraph labels */
+.paragraph-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  display: block;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.section-body textarea.full-width {
+  display: block;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* ---- Misc ---- */
+.muted { color: var(--text-muted); font-style: italic; font-size: 12px; }
+
+/* Sortable ghost/chosen: uses .ui-sortable-ghost / .ui-sortable-chosen from ui-kit */
+
+/* Scrollbars handled by ui-kit base.css */
