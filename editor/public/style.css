@@ -1,10 +1,3 @@
-/* ---- Shared design tokens + base reset ---- */
-@import url("ui-kit/ui-kit-core.css");
-@import url("ui-kit/components/scrollbar.css");
-@import url("ui-kit/components/alert.css");
-@import url("ui-kit/components/badges.css");
-@import url("ui-kit/components/drag-handle.css");
-
 /* ---- Project-local token overrides ---- */
 :root {
   --accent-bg: var(--accent-dark);
