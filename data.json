@@ -1,0 +1,159 @@
+{
+  "personal": {
+    "firstName": "Andrew",
+    "lastName": "Peterson",
+    "position": "Quantum Researcher{\\enskip\\cdotp\\enskip}Security Engineer{\\enskip\\cdotp\\enskip}Software Architect",
+    "address": "California, United States of America",
+    "mobile": "(+1) 951-551-6946",
+    "email": "acpeters@ucsd.edu",
+    "github": "andypeterson2",
+    "linkedin": "i-am-andy-peterson",
+    "quote": "",
+    "photo": {
+      "enabled": false,
+      "file": "profile"
+    }
+  },
+  "metrics": [
+    {
+      "command": "qiQubitCount",
+      "label": "qubit count",
+      "value": null,
+      "group": "Qualcomm Institute — Quantum-Encrypted Video Platform",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qiQBER",
+      "label": "QBER %",
+      "value": null,
+      "group": "Qualcomm Institute — Quantum-Encrypted Video Platform",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qiChannelDistance",
+      "label": "distance m",
+      "value": null,
+      "group": "Qualcomm Institute — Quantum-Encrypted Video Platform",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "groverSpeedup",
+      "label": "speedup",
+      "value": null,
+      "group": "Qualcomm Institute — Grover's Algorithm",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "groverVariables",
+      "label": "var count",
+      "value": null,
+      "group": "Qualcomm Institute — Grover's Algorithm",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "groverDepthReduction",
+      "label": "depth %",
+      "value": null,
+      "group": "Qualcomm Institute — Grover's Algorithm",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qmlAccuracy",
+      "label": "accuracy %",
+      "value": null,
+      "group": "Qualcomm Institute — QML Models",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qmlDataset",
+      "label": "dataset",
+      "value": null,
+      "group": "Qualcomm Institute — QML Models",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qmlBaselineGain",
+      "label": "gain pp",
+      "value": null,
+      "group": "Qualcomm Institute — QML Models",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qiInternCount",
+      "label": "intern count",
+      "value": null,
+      "group": "Qualcomm Institute — Mentoring",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "ritMAU",
+      "label": "MAU",
+      "value": null,
+      "group": "RIT Esports",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "ritTeamCount",
+      "label": "team count",
+      "value": null,
+      "group": "RIT Esports",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "ritDeployBefore",
+      "label": "hours",
+      "value": null,
+      "group": "RIT Esports",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "ritDeployAfter",
+      "label": "minutes",
+      "value": null,
+      "group": "RIT Esports",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "ritHoursSaved",
+      "label": "hours/yr",
+      "value": null,
+      "group": "RIT Esports",
+      "section": "cv/experience.tex"
+    },
+    {
+      "command": "qcWorkshopsPerQtr",
+      "label": "workshops/qtr",
+      "value": null,
+      "group": "Quantum Computing at UCSD",
+      "section": "cv/extracurricular.tex"
+    },
+    {
+      "command": "qcStudentsEducated",
+      "label": "students",
+      "value": null,
+      "group": "Quantum Computing at UCSD",
+      "section": "cv/extracurricular.tex"
+    },
+    {
+      "command": "qcAttendanceStart",
+      "label": "start",
+      "value": null,
+      "group": "Quantum Computing at UCSD",
+      "section": "cv/extracurricular.tex"
+    },
+    {
+      "command": "qcAttendanceEnd",
+      "label": "end",
+      "value": null,
+      "group": "Quantum Computing at UCSD",
+      "section": "cv/extracurricular.tex"
+    },
+    {
+      "command": "relevantCoursework",
+      "label": "e.g., Advanced Algorithms, Operating Systems, ML, Security, Distributed Systems",
+      "value": null,
+      "group": "Education",
+      "section": "cv/education.tex"
+    }
+  ]
+}

@@ -46,42 +46,10 @@
 
 
 %-------------------------------------------------------------------------------
-%	PERSONAL INFORMATION
-%	Comment any of the lines below if they are not required
+%	SHARED DATA (personal info + metrics)
+%	Single source of truth — shared with cv.tex
 %-------------------------------------------------------------------------------
-% Available options: circle|rectangle,edge/noedge,left/right
-% \photo[rectangle,edge,right]{./examples/profile}
-
-\name{Andrew}{Peterson} % Legal
-% \name{Andromeda}{Baphomet} % Preferred
-
-\position{Quantum Researcher{\enskip\cdotp\enskip}Security Engineer{\enskip\cdotp\enskip}Software Architect}
-\address{California, United States of America}
-
-\mobile{(+1) 951-551-6946}
-\email{acpeters@ucsd.edu}
-\github{andypeterson2}
-\linkedin{i-am-andy-peterson}
-
-%\whatsapp{(+82) 10-9030-1843}
-%\dateofbirth{January 1st, 1970}
-% \homepage{www.posquit0.com}
-% \gitlab{gitlab-id}
-% \stackoverflow{SO-id}{SO-name}
-% \twitter{@twit}
-% \x{x-id}
-% \skype{skype-id}
-% \reddit{reddit-id}
-% \medium{madium-id}
-% \kaggle{kaggle-id}
-% \hackerrank{hackerrank-id}
-% \telegram{telegram-username}
-% \googlescholar{googlescholar-id}{name-to-display}
-%% \firstname and \lastname will be used
-% \googlescholar{googlescholar-id}{}
-% \extrainfo{extra information}
-
-% \quote{``"Start early, start often" --- Rick Ord}
+\input{data.tex}
 
 
 %-------------------------------------------------------------------------------
@@ -104,15 +72,12 @@
 %	Each section is imported separately, open each file in turn to modify content
 %-------------------------------------------------------------------------------
 
-\input{resume/experience.tex} 
-\input{resume/extracurricular.tex} 
-\input{resume/skills.tex} 
-\input{resume/certifications.tex} 
-\input{resume/education.tex} 
-
-% \input{resume/summary.tex} % TODO
-% \input{resume/honors.tex} % TODO: add notable competitions
-% \input{resume/writing.tex} % TODO: write stuff
+\input{resume/summary.tex}
+\input{resume/experience.tex}
+\input{resume/extracurricular.tex}
+\input{resume/skills.tex}
+\input{resume/certifications.tex}
+\input{resume/education.tex}
 
 % \input{resume/presentation.tex} % not applicable yet
 % \input{resume/committees.tex} % not applicable yet

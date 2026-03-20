@@ -1,8 +1,2 @@
-*
-!*/
-!.gitignore
-
-!README.md
-!*.cls
-!*.tex
-!*.pdf
+.*
+!.git*

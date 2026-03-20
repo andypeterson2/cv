@@ -1,0 +1,144 @@
+{
+  "sectionOrder": [
+    "cv/summary.tex",
+    "cv/experience.tex",
+    "cv/extracurricular.tex",
+    "cv/skills.tex",
+    "cv/certifications.tex",
+    "cv/education.tex"
+  ],
+  "sections": {
+    "cv/summary.tex": {
+      "resume": true,
+      "resumeText": "Software engineer with 4+ years building quantum computing platforms, cloud infrastructure, and full-stack applications. Co-founded UCSD's first quantum computing org (100+ members), engineered backends for 500+ participant global competitions, and built quantum-encrypted video systems at Qualcomm Institute. Seeking roles at the intersection of emerging technology and production-grade engineering."
+    },
+    "cv/experience.tex": {
+      "resume": true,
+      "entries": [
+        {
+          "resume": true,
+          "items": [
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "resume": true,
+          "items": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "resume": false,
+          "items": [
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    "cv/extracurricular.tex": {
+      "resume": true,
+      "entries": [
+        {
+          "resume": true,
+          "items": [
+            true,
+            true,
+            false,
+            false
+          ]
+        },
+        {
+          "resume": false,
+          "items": [
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "resume": true,
+          "items": [
+            true,
+            true,
+            true,
+            false
+          ]
+        }
+      ]
+    },
+    "cv/skills.tex": {
+      "resume": true,
+      "entries": [
+        {
+          "resume": true
+        },
+        {
+          "resume": false
+        },
+        {
+          "resume": true
+        },
+        {
+          "resume": false
+        },
+        {
+          "resume": true
+        },
+        {
+          "resume": true
+        },
+        {
+          "resume": true
+        },
+        {
+          "resume": false
+        }
+      ]
+    },
+    "cv/certifications.tex": {
+      "resume": true,
+      "entries": [
+        {
+          "resume": true
+        },
+        {
+          "resume": true
+        }
+      ]
+    },
+    "cv/education.tex": {
+      "resume": true,
+      "entries": [
+        {
+          "resume": true,
+          "items": [
+            true,
+            true
+          ]
+        }
+      ]
+    },
+    "cv/honors.tex": {
+      "resume": false,
+      "entries": []
+    },
+    "cv/references.tex": {
+      "resume": false,
+      "entries": []
+    },
+    "cv/presentation.tex": {
+      "resume": false,
+      "entries": []
+    },
+    "cv/writing.tex": {
+      "resume": false,
+      "entries": []
+    }
+  }
+}
