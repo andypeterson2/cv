@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Visual editor for LaTeX resume, CV, and cover letter documents">
+  <title>CV Editor</title>
+  <meta name="site-nav-label" content="CV Editor">
+  <meta name="site-nav-icon" content="fa-solid fa-pen-to-square">
+  <meta name="site-backend-service" content="cv">
+  <meta name="site-backend-port" content="3000">
+  <script src="/lib/ui-kit/v1.1/theme-bootstrap.js"></script>
+  <script src="/shared/site-nav.js" defer></script>
+  <link rel="stylesheet" href="/lib/ui-kit/v1.1/ui-kit.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="/lib/ui-kit/v1.1/service-config.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+</head>
+<body x-data="app()" x-init="init()">
+
+  <!-- Top bar -->
+  <header class="topbar" role="banner">
+    <h1 class="topbar-title">CV Editor</h1>
+    <div class="actions">
+      <select class="doc-select" x-model="activeDoc" @change="switchDoc(activeDoc)" aria-label="Active document">
+        <option value="resume">Resume</option>
+        <option value="cv">CV</option>
+        <option value="coverletter">Cover Letter</option>
+      </select>
+      <button class="btn compile" @click="compile()" :disabled="compiling" aria-label="Compile document to PDF">
+        <span x-show="!compiling">Compile</span>
+        <span x-show="compiling">Compiling...</span>
+      </button>
+      <button class="btn theme-toggle" @click="toggleTheme()" :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" x-text="darkMode ? 'Light' : 'Dark'"></button>
+      <button class="btn" @click="showPdf = !showPdf" x-text="showPdf ? 'Hide PDF' : 'Show PDF'" aria-label="Toggle PDF preview"></button>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <div class="layout">
+    <!-- Sidebar: Personal Info -->
+    <aside class="sidebar ui-scrollbar-thin" aria-label="Personal information">
+      <h2 class="collapsible" @click="sidebarOpen = !sidebarOpen">
+        Personal Info <span x-text="sidebarOpen ? '\u25BE' : '\u25B8'" aria-hidden="true"></span>
+      </h2>
+      <div x-show="sidebarOpen" class="sidebar-section">
+        <template x-if="dataModel">
+          <div>
+            <label>First Name <input type="text" x-model="dataModel.personal.firstName" @change="saveData()"></label>
+            <label>Last Name <input type="text" x-model="dataModel.personal.lastName" @change="saveData()"></label>
+            <label>Position <input type="text" x-model="dataModel.personal.position" @change="saveData()"></label>
+            <label>Address <input type="text" x-model="dataModel.personal.address" @change="saveData()"></label>
+            <label>Mobile <input type="text" x-model="dataModel.personal.mobile" @change="saveData()"></label>
+            <label>Email <input type="text" x-model="dataModel.personal.email" @change="saveData()"></label>
+            <label>GitHub <input type="text" x-model="dataModel.personal.github" @change="saveData()"></label>
+            <label>LinkedIn <input type="text" x-model="dataModel.personal.linkedin" @change="saveData()"></label>
+            <label>Quote <span class="field-hint">optional, shown in header</span>
+              <input type="text" x-model="dataModel.personal.quote" @change="saveData()" placeholder="Leave blank to hide">
+            </label>
+            <div class="sidebar-toggle-row">
+              <span class="sidebar-toggle-label">Photo</span>
+              <label class="sidebar-toggle">
+                <input type="checkbox"
+                  :checked="dataModel.personal.photo && dataModel.personal.photo.enabled"
+                  @change="togglePhoto()">
+                <span x-text="dataModel.personal.photo && dataModel.personal.photo.enabled ? 'On' : 'Off'"></span>
+              </label>
+            </div>
+            <template x-if="dataModel.personal.photo && dataModel.personal.photo.enabled">
+              <label>Photo File <span class="field-hint">filename without extension</span>
+                <input type="text" x-model="dataModel.personal.photo.file" @change="saveData()" placeholder="e.g. profile">
+              </label>
+            </template>
+          </div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content ui-scrollbar-thin" role="main">
+      <!-- Resume / CV view -->
+      <template x-if="activeDoc !== 'coverletter'">
+        <div>
+          <div class="ui-alert" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
+
+          <div id="section-list" class="section-list">
+            <template x-for="(sec, i) in docSections" :key="sec.file">
+              <div class="section-card" :class="{ disabled: !sec.enabled }" :data-index="i" :data-sec-file="sec.file">
+                <div class="section-header">
+                  <span class="ui-drag-handle" aria-hidden="true"></span>
+                  <strong x-text="sectionTitle(sec.file)"></strong>
+                  <label class="toggle-label" title="Include in CV">
+                    <input type="checkbox" :checked="sec.enabled" @change="toggleSection(i)" :aria-label="'Enable ' + sectionTitle(sec.file)">
+                  </label>
+                  <label class="resume-toggle" title="Include in Resume">
+                    <span class="ui-badge resume-tag">R</span>
+                    <input type="checkbox" :checked="isResumeSection(sec.file)" @change="toggleResumeSection(sec.file)" :aria-label="'Include ' + sectionTitle(sec.file) + ' in resume'">
+                  </label>
+                  <button class="btn-sm" @click="sec._expanded = !sec._expanded; if(sec._expanded) loadSectionData(sec)"
+                    x-text="sec._expanded ? 'Collapse' : 'Expand'"></button>
+                </div>
+
+                <!-- Expanded editor -->
+                <div x-show="sec._expanded && (sec.enabled || isResumeSection(sec.file))" class="section-body">
+                  <template x-if="sec._data">
+                    <div>
+                      <!-- Inline metrics for this section -->
+                      <div class="inline-metrics">
+                        <div class="inline-metrics-header">
+                          <h3 class="inline-metrics-heading">Variables</h3>
+                          <button class="btn-xs" @click="addMetricGroup(sec.file)">+ Group</button>
+                        </div>
+                        <template x-for="[group, metrics] in metricGroupsForSection(sec.file)" :key="group">
+                          <div class="metric-group">
+                            <div class="metric-group-header">
+                              <span class="metric-group-name" x-text="group" @dblclick="renameMetricGroup(sec.file, group)" title="Double-click to rename"></span>
+                              <div class="metric-group-actions">
+                                <button class="btn-xs" @click="addMetric(sec.file, group)">+ Var</button>
+                                <button class="btn-xs btn-danger" @click="removeMetricGroup(sec.file, group)" title="Remove entire group">x</button>
+                              </div>
+                            </div>
+                            <div class="metrics-grid">
+                              <template x-for="metric in metrics" :key="metric.command">
+                                <div class="metric-inline">
+                                  <div class="metric-label-row">
+                                    <span class="metric-label" x-text="metric.command"></span>
+                                    <button class="btn-metric-remove" @click="removeMetric(metric.command)" title="Remove variable">&times;</button>
+                                  </div>
+                                  <input type="text"
+                                    :value="metric.value !== null ? metric.value : ''"
+                                    :placeholder="metric.label"
+                                    @change="updateMetric(metric.command, $event.target.value)">
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </template>
+                        <template x-if="metricsForSection(sec.file).length === 0">
+                          <p class="muted">No variables. Click "+ Group" to add a variable group.</p>
+                        </template>
+                      </div>
+
+                      <!-- cventries editor -->
+                      <template x-if="sec._data.type === 'cventries'">
+                        <div>
+                          <template x-for="(entry, ei) in sec._data.entries" :key="ei">
+                            <div class="entry-card" :class="{ 'resume-off': !isResumeEntry(sec.file, ei) }">
+                              <div class="entry-header">
+                                <strong x-text="entry.organization || entry.position"></strong>
+                                <div class="entry-header-actions">
+                                  <label class="resume-toggle" title="Include in Resume">
+                                    <span class="ui-badge resume-tag">R</span>
+                                    <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)" :aria-label="'Include entry in resume'">
+                                  </label>
+                                  <button class="btn-danger btn-sm" @click="removeEntry(sec, ei)">Remove</button>
+                                </div>
+                              </div>
+                              <label>Position <input type="text" x-model="entry.position"></label>
+                              <label>Organization <input type="text" x-model="entry.organization"></label>
+                              <label>Location <input type="text" x-model="entry.location"></label>
+                              <label>Date <input type="text" x-model="entry.date"></label>
+                              <div class="items-list" :data-entry-idx="ei" :data-sec-file="sec.file">
+                                <strong>Bullet Points</strong>
+                                <template x-for="(item, ii) in entry.items" :key="ii">
+                                  <div class="item-row" :class="{ 'resume-off': !isResumeBullet(sec.file, ei, ii) }">
+                                    <span class="ui-drag-handle" aria-hidden="true"></span>
+                                    <textarea x-model="entry.items[ii]" rows="2" :aria-label="'Bullet point ' + (ii + 1)"></textarea>
+                                    <label class="resume-toggle-inline" title="Include in Resume">
+                                      <span class="ui-badge resume-tag-sm">R</span>
+                                      <input type="checkbox" :checked="isResumeBullet(sec.file, ei, ii)" @change="toggleResumeBullet(sec.file, ei, ii)">
+                                    </label>
+                                    <button class="btn-danger btn-xs" @click="removeBullet(sec, entry, ei, ii)" aria-label="Remove bullet point">x</button>
+                                  </div>
+                                </template>
+                                <button class="btn-sm" @click="addBullet(sec, entry, ei)">+ Add Bullet</button>
+                              </div>
+                            </div>
+                          </template>
+                          <button class="btn" @click="addCventry(sec)">+ Add Entry</button>
+                        </div>
+                      </template>
+
+                      <!-- cvskills editor -->
+                      <template x-if="sec._data.type === 'cvskills'">
+                        <div>
+                          <template x-for="(entry, ei) in sec._data.entries" :key="ei">
+                            <div class="entry-card compact" :class="{ 'resume-off': !isResumeEntry(sec.file, ei) }">
+                              <div class="entry-header">
+                                <strong x-text="entry.category"></strong>
+                                <div class="entry-header-actions">
+                                  <label class="resume-toggle" title="Include in Resume">
+                                    <span class="ui-badge resume-tag">R</span>
+                                    <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)">
+                                  </label>
+                                  <button class="btn-danger btn-xs" @click="removeEntry(sec, ei)">Remove</button>
+                                </div>
+                              </div>
+                              <label>Category <input type="text" x-model="entry.category"></label>
+                              <label>Skills <input type="text" x-model="entry.skills"></label>
+                            </div>
+                          </template>
+                          <button class="btn-sm" @click="sec._data.entries.push({ category: '', skills: '' })">+ Add Skill</button>
+                        </div>
+                      </template>
+
+                      <!-- cvhonors editor -->
+                      <template x-if="sec._data.type === 'cvhonors'">
+                        <div>
+                          <template x-for="(entry, ei) in sec._data.entries" :key="ei">
+                            <div class="entry-card compact" :class="{ 'resume-off': !isResumeEntry(sec.file, ei) }">
+                              <div class="entry-header">
+                                <strong x-text="entry.award"></strong>
+                                <div class="entry-header-actions">
+                                  <label class="resume-toggle" title="Include in Resume">
+                                    <span class="ui-badge resume-tag">R</span>
+                                    <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)">
+                                  </label>
+                                  <button class="btn-danger btn-xs" @click="removeEntry(sec, ei)">Remove</button>
+                                </div>
+                              </div>
+                              <label>Award <input type="text" x-model="entry.award"></label>
+                              <label>Issuer <input type="text" x-model="entry.issuer"></label>
+                              <label>Location <input type="text" x-model="entry.location"></label>
+                              <label>Date <input type="text" x-model="entry.date"></label>
+                            </div>
+                          </template>
+                          <button class="btn-sm" @click="sec._data.entries.push({ award: '', issuer: '', location: '', date: '' })">+ Add Honor</button>
+                        </div>
+                      </template>
+
+                      <!-- cvreferences editor -->
+                      <template x-if="sec._data.type === 'cvreferences'">
+                        <div>
+                          <template x-for="(entry, ei) in sec._data.entries" :key="ei">
+                            <div class="entry-card compact" :class="{ 'resume-off': !isResumeEntry(sec.file, ei) }">
+                              <div class="entry-header">
+                                <strong x-text="entry.name"></strong>
+                                <div class="entry-header-actions">
+                                  <label class="resume-toggle" title="Include in Resume">
+                                    <span class="ui-badge resume-tag">R</span>
+                                    <input type="checkbox" :checked="isResumeEntry(sec.file, ei)" @change="toggleResumeEntry(sec.file, ei)">
+                                  </label>
+                                  <button class="btn-danger btn-xs" @click="removeEntry(sec, ei)">Remove</button>
+                                </div>
+                              </div>
+                              <label>Name <input type="text" x-model="entry.name"></label>
+                              <label>Relation <input type="text" x-model="entry.relation"></label>
+                              <label>Phone <input type="text" x-model="entry.phone"></label>
+                              <label>Email <input type="text" x-model="entry.email"></label>
+                            </div>
+                          </template>
+                          <button class="btn-sm" @click="sec._data.entries.push({ name: '', relation: '', phone: '', email: '' })">+ Add Reference</button>
+                        </div>
+                      </template>
+
+                      <!-- cvparagraph editor -->
+                      <template x-if="sec._data.type === 'cvparagraph'">
+                        <div>
+                          <label class="paragraph-label">CV Text</label>
+                          <textarea x-model="sec._data.text" rows="4" class="full-width" aria-label="CV summary text"></textarea>
+                          <template x-if="isResumeSection(sec.file)">
+                            <div>
+                              <label class="paragraph-label">Resume Text <span class="muted">(shorter version for resume)</span></label>
+                              <textarea :value="getResumeText(sec.file)" @change="setResumeText(sec.file, $event.target.value)" rows="3" class="full-width" aria-label="Resume summary text"></textarea>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+
+                      <div class="entry-actions">
+                        <button class="btn save" @click="saveSection(sec)">Save Section</button>
+                      </div>
+                    </div>
+                  </template>
+                  <template x-if="!sec._data">
+                    <p class="muted">Loading...</p>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- Cover Letter view -->
+      <template x-if="activeDoc === 'coverletter'">
+        <div class="coverletter-editor" x-data="{ cl: null }" x-init="
+          fetch(API_BASE + '/api/coverletter').then(r => r.json()).then(d => cl = d)
+        ">
+          <template x-if="cl">
+            <div>
+              <div class="ui-alert" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
+
+              <h2>Recipient</h2>
+              <label>Name <input type="text" x-model="cl.recipient.name"></label>
+              <label>Address <textarea x-model="cl.recipient.address" rows="3"></textarea></label>
+
+              <h2>Letter Details</h2>
+              <label>Title <input type="text" x-model="cl.title"></label>
+              <label>Opening <input type="text" x-model="cl.opening"></label>
+              <label>Closing <input type="text" x-model="cl.closing"></label>
+              <label>Enclosure Label <input type="text" x-model="cl.enclosure.label"></label>
+              <label>Enclosure Content <input type="text" x-model="cl.enclosure.content"></label>
+
+              <h2>Sections</h2>
+              <template x-for="(sec, si) in cl.sections" :key="si">
+                <div class="entry-card">
+                  <label>Section Title <input type="text" x-model="sec.title"></label>
+                  <label>Body <textarea x-model="sec.body" rows="6" class="full-width"></textarea></label>
+                  <button class="btn-danger btn-xs" @click="cl.sections.splice(si, 1)">Remove Section</button>
+                </div>
+              </template>
+              <button class="btn-sm" @click="cl.sections.push({ title: '', body: '' })">+ Add Section</button>
+
+              <div class="entry-actions">
+                <button class="btn save" @click="saveCoverletter(cl)">Save Cover Letter</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+    </main>
+
+    <!-- PDF Preview -->
+    <aside class="pdf-panel" x-show="showPdf" aria-label="PDF preview">
+      <iframe :src="pdfUrl" class="pdf-iframe" title="Compiled PDF preview"></iframe>
+    </aside>
+  </div>
+
+  <script src="/lib/ui-kit/v1.1/icons.js"></script>
+  <script src="/lib/ui-kit/v1.1/ui-kit.js"></script>
+  <script>const API_BASE = (ServiceConfig.resolveBackend || ServiceConfig.get).call(ServiceConfig, "cv", "https://localhost:3000");</script>
+  <script src="app.js"></script>
+</body>
+</html>
