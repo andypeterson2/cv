@@ -29,4 +29,4 @@ jobs:
             cv.tex
             resume.tex
             coverletter.tex
-          compiler: xelatex
+          latexmk_use_xelatex: true
