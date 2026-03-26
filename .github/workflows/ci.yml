@@ -30,3 +30,4 @@ jobs:
             resume.tex
             coverletter.tex
           latexmk_use_xelatex: true
+          extra_system_packages: "font-source-sans-pro font-roboto"
