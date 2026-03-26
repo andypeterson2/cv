@@ -276,7 +276,7 @@ function serializeData(data) {
   if (p.github) lines.push(`\\github{${p.github}}`);
   if (p.linkedin) lines.push(`\\linkedin{${p.linkedin}}`);
   if (p.homepage) lines.push(`\\homepage{${p.homepage}}`);
-  if (p.quote) lines.push('\\quote{``' + p.quote + "''"  + '}');;
+  if (p.quote) lines.push('\\quote{``' + p.quote + "''"  + '}');
   lines.push('');
 
   // Group metrics by group name
