@@ -10,7 +10,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.CV_CORS_ORIGINS
+    ? process.env.CV_CORS_ORIGINS.split(',')
+    : ['http://localhost:3001', 'http://127.0.0.1:3001']
+}));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -38,7 +42,7 @@ function readResumeConfig() {
 // ---------------------------------------------------------------------------
 
 app.get('/api/documents', (req, res) => {
-  res.json(['cv', 'coverletter']);
+  res.json(['cv', 'resume', 'coverletter']);
 });
 
 app.get('/api/document/:name', (req, res) => {
@@ -79,7 +83,11 @@ app.put('/api/document/:name/sections', (req, res) => {
 app.get('/api/section/*', (req, res) => {
   const relPath = req.params[0];
   try {
-    const tex = fs.readFileSync(texPath(relPath), 'utf-8');
+    const resolved = texPath(relPath);
+    if (!resolved.endsWith('.tex')) {
+      return res.status(400).json({ error: 'Only .tex files allowed' });
+    }
+    const tex = fs.readFileSync(resolved, 'utf-8');
     const parsed = parseSection(tex);
     parsed.file = relPath;
     res.json(parsed);
@@ -91,8 +99,12 @@ app.get('/api/section/*', (req, res) => {
 app.put('/api/section/*', (req, res) => {
   const relPath = req.params[0];
   try {
+    const resolved = texPath(relPath);
+    if (!resolved.endsWith('.tex')) {
+      return res.status(400).json({ error: 'Only .tex files allowed' });
+    }
     const serialized = serializeSection(req.body);
-    fs.writeFileSync(texPath(relPath), serialized + '\n', 'utf-8');
+    fs.writeFileSync(resolved, serialized + '\n', 'utf-8');
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -152,8 +164,12 @@ app.get('/api/resume-config', (req, res) => {
 });
 
 app.put('/api/resume-config', (req, res) => {
+  const body = req.body;
+  if (!body || typeof body !== 'object' || !Array.isArray(body.sectionOrder)) {
+    return res.status(400).json({ error: 'Invalid config: sectionOrder array required' });
+  }
   try {
-    fs.writeFileSync(RESUME_CONFIG_PATH, JSON.stringify(req.body, null, 2) + '\n', 'utf-8');
+    fs.writeFileSync(RESUME_CONFIG_PATH, JSON.stringify(body, null, 2) + '\n', 'utf-8');
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -252,7 +268,7 @@ app.post('/api/compile/:name', (req, res) => {
     return res.status(500).json({ success: false, log: 'Resume generation failed: ' + e.message });
   }
 
-  execFile('xelatex', ['-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], {
+  execFile('xelatex', ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], {
     cwd: PROJECT_ROOT,
     timeout: 30000
   }, (error, stdout, stderr) => {
