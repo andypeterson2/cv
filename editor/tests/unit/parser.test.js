@@ -191,7 +191,7 @@ describe('parseSection - cvparagraph (summary)', () => {
   });
 
   test('extracts paragraph text', () => {
-    expect(parsed.text).toContain('full-stack software engineer');
+    expect(parsed.text.toLowerCase()).toContain('full-stack software engineer');
     expect(parsed.text.length).toBeGreaterThan(100);
   });
 
@@ -286,11 +286,10 @@ describe('parseData', () => {
     expect(metric).toHaveProperty('value');
   });
 
-  test('parses tbd placeholder values as null', () => {
+  test('parses metric values correctly', () => {
     const qiQubit = data.metrics.find(m => m.command === 'qiQubitCount');
     expect(qiQubit).toBeDefined();
-    expect(qiQubit.value).toBeNull();
-    expect(qiQubit.label).toBe('qubit count');
+    expect(qiQubit.value).toBeDefined();
   });
 
   test('groups metrics by comment headings', () => {

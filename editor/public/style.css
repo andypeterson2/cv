@@ -100,7 +100,6 @@ select:focus-visible {
 .doc-select {
   padding: 0 10px;
   border: none;
-  border-left: 1px solid var(--border);
 
   background: var(--accent-bg);
   color: var(--text);
@@ -215,8 +214,6 @@ select:focus-visible {
   border-bottom: 1px solid var(--border);
   display: block;
 }
-
-.sidebar-section { }
 
 /* Each sidebar label = bordered row, collapse adjacent borders */
 .sidebar label {
@@ -604,3 +601,24 @@ select:focus-visible {
 /* Sortable ghost/chosen: uses .ui-sortable-ghost / .ui-sortable-chosen from ui-kit */
 
 /* Scrollbars handled by ui-kit base.css */
+
+/* ---- Responsive ---- */
+@media (max-width: 900px) {
+  .pdf-panel { width: 40%; min-width: 250px; }
+}
+
+@media (max-width: 768px) {
+  .layout { flex-direction: column; height: auto; }
+  .sidebar { width: 100%; min-width: 0; max-height: 40vh; border-right: none; border-bottom: 1px solid var(--border); }
+  .content { min-width: 0; }
+  .pdf-panel { width: 100%; min-width: 0; height: 50vh; border-left: none; border-top: 1px solid var(--border); }
+  .topbar { flex-wrap: wrap; height: auto; min-height: 37px; }
+  .actions { flex-wrap: wrap; }
+}
+
+@media (max-width: 480px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .topbar-title { padding: 0 8px; font-size: 13px; }
+  .btn { padding: 0 8px; font-size: 12px; }
+  .doc-select { padding: 0 6px; font-size: 12px; }
+}

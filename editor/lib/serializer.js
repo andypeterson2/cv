@@ -28,10 +28,10 @@ function serializeCventries(data) {
     const e = data.entries[i];
     lines.push(SEP);
     lines.push('  \\cventry');
-    lines.push(`    {${e.position}} `);
-    lines.push(`    {${e.organization}} `);
-    lines.push(`    {${e.location}} `);
-    lines.push(`    {${e.date}} `);
+    lines.push(`    {${e.position}}`);
+    lines.push(`    {${e.organization}}`);
+    lines.push(`    {${e.location}}`);
+    lines.push(`    {${e.date}}`);
 
     if (e.items && e.items.length > 0) {
       lines.push('    {');
@@ -306,6 +306,17 @@ function serializeData(data) {
   return lines.join('\n');
 }
 
+// Helper: replace a single-arg command using brace-aware matching
+function replaceCommand(tex, commandName, replacement) {
+  const { findCommand } = require('./braceExtractor');
+  const cmds = findCommand(tex, commandName, 1);
+  if (cmds.length > 0) {
+    const cmd = cmds[0];
+    return tex.substring(0, cmd.startIndex) + replacement + tex.substring(cmd.endIndex);
+  }
+  return tex;
+}
+
 // ---------------------------------------------------------------------------
 // Cover letter serializer
 // ---------------------------------------------------------------------------
@@ -320,16 +331,16 @@ function serializeCoverletter(tex, data) {
     `\\recipient\n  {${data.recipient.name}}\n  {${data.recipient.address}}`);
 
   // Replace \lettertitle{...}
-  result = result.replace(/\\lettertitle\{[^}]*\}/, `\\lettertitle{${data.title}}`);
+  result = replaceCommand(result, 'lettertitle', `\\lettertitle{${data.title}}`);
 
   // Replace \letteropening{...}
-  result = result.replace(/\\letteropening\{[^}]*\}/, `\\letteropening{${data.opening}}`);
+  result = replaceCommand(result, 'letteropening', `\\letteropening{${data.opening}}`);
 
   // Replace \letterclosing{...}
-  result = result.replace(/\\letterclosing\{[^}]*\}/, `\\letterclosing{${data.closing}}`);
+  result = replaceCommand(result, 'letterclosing', `\\letterclosing{${data.closing}}`);
 
   // Replace \letterenclosure[...]{...}
-  result = result.replace(/\\letterenclosure\[[^\]]*\]\{[^}]*\}/,
+  result = result.replace(/\\letterenclosure\[[^\]]*\]\{[\s\S]*?\}/,
     `\\letterenclosure[${data.enclosure.label}]{${data.enclosure.content}}`);
 
   // Replace letter body (between \begin{cvletter} and \end{cvletter})
