@@ -30,13 +30,4 @@ jobs:
             resume.tex
             coverletter.tex
           latexmk_use_xelatex: true
-          pre_compile: |
-            cat > /etc/fonts/local.conf << 'FONTCONF'
-            <?xml version="1.0"?>
-            <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
-            <fontconfig>
-              <dir>/opt/texlive/texdir/texmf-dist/fonts/opentype</dir>
-              <dir>/opt/texlive/texdir/texmf-dist/fonts/truetype</dir>
-            </fontconfig>
-            FONTCONF
-            fc-cache -f
+          pre_compile: "printf '<?xml version=\"1.0\"?>\\n<fontconfig>\\n<dir>/opt/texlive/texdir/texmf-dist/fonts/opentype</dir>\\n<dir>/opt/texlive/texdir/texmf-dist/fonts/truetype</dir>\\n</fontconfig>' > /etc/fonts/local.conf && fc-cache -f"
