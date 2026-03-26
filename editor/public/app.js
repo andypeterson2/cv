@@ -40,6 +40,7 @@ function app() {
 
     async loadData() {
       const res = await fetch(API_BASE + '/api/data');
+      if (!res.ok) { console.error('Failed to load data:', res.status); return; }
       this.dataModel = await res.json();
     },
 
@@ -164,6 +165,7 @@ function app() {
 
     async loadResumeConfig() {
       const res = await fetch(API_BASE + '/api/resume-config');
+      if (!res.ok) { console.error('Failed to load resume config:', res.status); return; }
       this.resumeConfig = await res.json();
     },
 
@@ -248,6 +250,7 @@ function app() {
 
     async loadDocument(name) {
       const res = await fetch(`${API_BASE}/api/document/${name}`);
+      if (!res.ok) { console.error('Failed to load document:', res.status); return; }
       const doc = await res.json();
       this.docSections = doc.sections.map(s => ({ ...s, _expanded: true, _data: null }));
       this.$nextTick(() => {
@@ -349,6 +352,7 @@ function app() {
         return;
       }
       const res = await fetch(`${API_BASE}/api/section/${sec.file}`);
+      if (!res.ok) { console.error('Failed to load section:', res.status); return; }
       sec._data = await res.json();
       if (sec._data.type === 'cventries') {
         this.initBulletSortables(sec);
