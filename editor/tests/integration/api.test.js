@@ -256,22 +256,28 @@ describe('GET /api/coverletter', () => {
 
 // ---- POST /api/compile/:name ----
 
+const { execFileSync } = require('child_process');
+const hasXelatex = (() => {
+  try { execFileSync('which', ['xelatex']); return true; } catch { return false; }
+})();
+const compileTest = hasXelatex ? test : test.skip;
+
 describe('POST /api/compile/:name', () => {
-  test('compiles CV successfully', async () => {
+  compileTest('compiles CV successfully', async () => {
     const res = await request('POST', '/api/compile/cv');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(fs.existsSync(path.join(PROJECT_ROOT, 'cv.pdf'))).toBe(true);
   }, 30000);
 
-  test('compiles resume successfully', async () => {
+  compileTest('compiles resume successfully', async () => {
     const res = await request('POST', '/api/compile/resume');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(fs.existsSync(path.join(PROJECT_ROOT, 'resume.pdf'))).toBe(true);
   }, 30000);
 
-  test('compiles cover letter successfully', async () => {
+  compileTest('compiles cover letter successfully', async () => {
     const res = await request('POST', '/api/compile/coverletter');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
