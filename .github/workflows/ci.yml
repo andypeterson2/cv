@@ -29,3 +29,4 @@ jobs:
             cv.tex
             resume.tex
             coverletter.tex
+          compiler: xelatex
