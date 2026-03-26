@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
 <body x-data="app()" x-init="init()">
@@ -41,7 +41,7 @@
   <div class="layout">
     <!-- Sidebar: Personal Info -->
     <aside class="sidebar ui-scrollbar-thin" aria-label="Personal information">
-      <h2 class="collapsible" @click="sidebarOpen = !sidebarOpen">
+      <h2 class="collapsible" role="button" tabindex="0" @click="sidebarOpen = !sidebarOpen" @keydown.enter="sidebarOpen = !sidebarOpen" @keydown.space.prevent="sidebarOpen = !sidebarOpen">
         Personal Info <span x-text="sidebarOpen ? '\u25BE' : '\u25B8'" aria-hidden="true"></span>
       </h2>
       <div x-show="sidebarOpen" class="sidebar-section">
@@ -286,7 +286,7 @@
       <!-- Cover Letter view -->
       <template x-if="activeDoc === 'coverletter'">
         <div class="coverletter-editor" x-data="{ cl: null }" x-init="
-          fetch(API_BASE + '/api/coverletter').then(r => r.json()).then(d => cl = d)
+          fetch(API_BASE + '/api/coverletter').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => cl = d).catch(e => console.error('Failed to load cover letter:', e))
         ">
           <template x-if="cl">
             <div>
@@ -330,7 +330,7 @@
 
   <script src="https://andypeterson2.github.io/ui-kit/icons.js"></script>
   <script src="https://andypeterson2.github.io/ui-kit/ui-kit.js"></script>
-  <script>const API_BASE = ServiceConfig.get("cv", "https://localhost:3000");</script>
+  <script>const API_BASE = (typeof ServiceConfig !== 'undefined' && ServiceConfig.get) ? ServiceConfig.get("cv", "https://localhost:3000") : "https://localhost:3000";</script>
   <script src="/app.js"></script>
   <script>
     (function() {

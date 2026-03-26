@@ -33,24 +33,30 @@ function app() {
 
     toggleTheme() {
       this.darkMode = !this.darkMode;
-      window.__setTheme(this.darkMode ? 'dark' : 'light');
+      if (window.__setTheme) window.__setTheme(this.darkMode ? 'dark' : 'light');
     },
 
     // ------ Data (personal info + metrics from data.json) ------
 
     async loadData() {
       const res = await fetch(API_BASE + '/api/data');
+      if (!res.ok) { console.error('Failed to load data:', res.status); return; }
       this.dataModel = await res.json();
     },
 
     async saveData() {
-      const res = await fetch(API_BASE + '/api/data', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.dataModel)
-      });
-      const data = await res.json();
-      this.flash(data.success ? 'Data saved' : 'Save failed', data.success ? 'success' : 'error');
+      try {
+        const res = await fetch(API_BASE + '/api/data', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.dataModel)
+        });
+        if (!res.ok) { this.flash('Save failed', 'error'); return; }
+        const data = await res.json();
+        this.flash(data.success ? 'Data saved' : 'Save failed', data.success ? 'success' : 'error');
+      } catch (e) {
+        this.flash('Save failed', 'error');
+      }
     },
 
     togglePhoto() {
@@ -164,15 +170,21 @@ function app() {
 
     async loadResumeConfig() {
       const res = await fetch(API_BASE + '/api/resume-config');
+      if (!res.ok) { console.error('Failed to load resume config:', res.status); return; }
       this.resumeConfig = await res.json();
     },
 
     async saveResumeConfig() {
-      await fetch(API_BASE + '/api/resume-config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.resumeConfig)
-      });
+      try {
+        const res = await fetch(API_BASE + '/api/resume-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.resumeConfig)
+        });
+        if (!res.ok) { this.flash('Config save failed', 'error'); }
+      } catch (e) {
+        this.flash('Config save failed', 'error');
+      }
     },
 
     ensureSectionConfig(file) {
@@ -248,6 +260,7 @@ function app() {
 
     async loadDocument(name) {
       const res = await fetch(`${API_BASE}/api/document/${name}`);
+      if (!res.ok) { console.error('Failed to load document:', res.status); return; }
       const doc = await res.json();
       this.docSections = doc.sections.map(s => ({ ...s, _expanded: true, _data: null }));
       this.$nextTick(() => {
@@ -322,13 +335,18 @@ function app() {
       const sections = this.docSections.map(s => ({
         file: s.file, enabled: s.enabled, comment: s.comment
       }));
-      const res = await fetch(API_BASE + '/api/document/cv/sections', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections })
-      });
-      const data = await res.json();
-      this.flash(data.success ? 'Section order saved' : 'Save failed', data.success ? 'success' : 'error');
+      try {
+        const res = await fetch(API_BASE + '/api/document/cv/sections', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sections })
+        });
+        if (!res.ok) { this.flash('Save failed', 'error'); return; }
+        const data = await res.json();
+        this.flash(data.success ? 'Section order saved' : 'Save failed', data.success ? 'success' : 'error');
+      } catch (e) {
+        this.flash('Save failed', 'error');
+      }
     },
 
     async toggleSection(index) {
@@ -349,6 +367,7 @@ function app() {
         return;
       }
       const res = await fetch(`${API_BASE}/api/section/${sec.file}`);
+      if (!res.ok) { console.error('Failed to load section:', res.status); return; }
       sec._data = await res.json();
       if (sec._data.type === 'cventries') {
         this.initBulletSortables(sec);
@@ -356,13 +375,18 @@ function app() {
     },
 
     async saveSection(sec) {
-      const res = await fetch(`${API_BASE}/api/section/${sec.file}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sec._data)
-      });
-      const data = await res.json();
-      this.flash(data.success ? 'Section saved' : 'Save failed', data.success ? 'success' : 'error');
+      try {
+        const res = await fetch(`${API_BASE}/api/section/${sec.file}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sec._data)
+        });
+        if (!res.ok) { this.flash('Save failed', 'error'); return; }
+        const data = await res.json();
+        this.flash(data.success ? 'Section saved' : 'Save failed', data.success ? 'success' : 'error');
+      } catch (e) {
+        this.flash('Save failed', 'error');
+      }
     },
 
     addCventry(sec) {
@@ -409,13 +433,18 @@ function app() {
     // ------ Cover letter ------
 
     async saveCoverletter(cl) {
-      const res = await fetch(API_BASE + '/api/coverletter', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cl)
-      });
-      const data = await res.json();
-      this.flash(data.success ? 'Cover letter saved' : 'Save failed', data.success ? 'success' : 'error');
+      try {
+        const res = await fetch(API_BASE + '/api/coverletter', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(cl)
+        });
+        if (!res.ok) { this.flash('Save failed', 'error'); return; }
+        const data = await res.json();
+        this.flash(data.success ? 'Cover letter saved' : 'Save failed', data.success ? 'success' : 'error');
+      } catch (e) {
+        this.flash('Save failed', 'error');
+      }
     },
 
     // ------ Compile & PDF ------
@@ -447,7 +476,8 @@ function app() {
     flash(msg, type) {
       this.statusMsg = msg;
       this.statusType = type === 'success' ? 'ui-alert-success' : type === 'error' ? 'ui-alert-danger' : '';
-      setTimeout(() => { this.statusMsg = ''; }, 3000);
+      clearTimeout(this._flashTimer);
+      this._flashTimer = setTimeout(() => { this.statusMsg = ''; }, 3000);
     }
   };
 }
