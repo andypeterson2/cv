@@ -30,4 +30,7 @@ jobs:
             resume.tex
             coverletter.tex
           latexmk_use_xelatex: true
-          extra_system_packages: "font-source-sans-pro font-roboto"
+          pre_compile: |
+            cp -r /opt/texlive/texdir/texmf-dist/fonts/opentype/google/roboto /usr/share/fonts/roboto 2>/dev/null || true
+            cp -r /opt/texlive/texdir/texmf-dist/fonts/opentype/adobe/sourcesanspro /usr/share/fonts/sourcesanspro 2>/dev/null || true
+            fc-cache -fv
