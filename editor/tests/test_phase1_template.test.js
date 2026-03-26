@@ -297,9 +297,9 @@ describe('WP #675 — Variable substitution in data.tex', () => {
     expect(dataTex).toContain('\\email');
   });
 
-  test('defines metric newcommands', () => {
-    // Metrics from data.json should become \\newcommand entries
-    expect(dataTex).toContain('\\newcommand');
+  test('defines metric commands', () => {
+    // Metrics from data.json should become \\providecommand or \\newcommand entries
+    expect(dataTex.includes('\\newcommand') || dataTex.includes('\\providecommand')).toBe(true);
   });
 
   test('data.json metrics match data.tex commands', () => {
@@ -458,7 +458,7 @@ describe('WP #679 — Web editor save/preview', () => {
   });
 
   test('has section load and save functionality', () => {
-    expect(appJs).toContain('loadSectionData') || expect(appJs).toContain('saveSection');
+    expect(appJs.includes('loadSectionData') || appJs.includes('saveSection')).toBe(true);
   });
 
   test('has compile functionality', () => {

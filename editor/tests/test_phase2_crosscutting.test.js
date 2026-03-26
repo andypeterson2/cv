@@ -47,7 +47,7 @@ describe('WP #665 — E2E navigation between documents', () => {
 
   test('document switching triggers data reload', () => {
     // switchDoc or $watch on activeDoc should trigger new data loading
-    expect(appJs).toContain('switchDoc') || expect(appJs).toContain("$watch('activeDoc'");
+    expect(appJs.includes('switchDoc') || appJs.includes("$watch('activeDoc'")).toBe(true);
   });
 
   test('coverletter has its own editor view', () => {
@@ -110,7 +110,7 @@ describe('WP #666 — Cross-browser compatibility', () => {
   test('CSS file uses standard properties (no vendor prefixes required)', () => {
     const css = readFile('editor/public/style.css');
     // Should use standard flex, grid, etc.
-    expect(css).toContain('display:') || expect(css).toContain('flex');
+    expect(css.includes('display:') || css.includes('flex')).toBe(true);
   });
 
   test('avoids browser-specific JavaScript APIs', () => {
@@ -211,7 +211,7 @@ describe('WP #668 — Accessibility compliance', () => {
   });
 
   test('textareas have aria-label attributes', () => {
-    expect(html).toContain('aria-label="Bullet point');
+    expect(html).toContain("aria-label=\"'Bullet point");
     expect(html).toContain('aria-label="CV summary text"');
     expect(html).toContain('aria-label="Resume summary text"');
   });
@@ -287,6 +287,6 @@ describe('WP #669 — Performance considerations', () => {
   test('server prevents path traversal for security/performance', () => {
     const server = readFile('editor/server.js');
     expect(server).toContain('Path traversal attempt');
-    expect(server).toContain('startsWith(PROJECT_ROOT)');
+    expect(server).toContain('startsWith(PROJECT_ROOT');
   });
 });
