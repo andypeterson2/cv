@@ -29,3 +29,5 @@ jobs:
             cv.tex
             resume.tex
             coverletter.tex
+          latexmk_use_lualatex: true
+          pre_compile: "printf '<?xml version=\"1.0\"?>\\n<fontconfig>\\n<dir>/opt/texlive/texdir/texmf-dist/fonts/opentype</dir>\\n<dir>/opt/texlive/texdir/texmf-dist/fonts/truetype</dir>\\n</fontconfig>' > /etc/fonts/local.conf && fc-cache -f"

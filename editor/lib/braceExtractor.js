@@ -29,6 +29,10 @@ function extractBraceArgs(text, startIndex, count) {
     let contentEnd = -1;
 
     for (; i < text.length; i++) {
+      if (text[i] === '\\' && (text[i + 1] === '{' || text[i + 1] === '}')) {
+        i++; // skip escaped brace
+        continue;
+      }
       if (text[i] === '{') {
         depth++;
       } else if (text[i] === '}') {
