@@ -14,4 +14,4 @@ Necessary fonts: [Roboto](https://fonts.google.com/specimen/Roboto) and [Source 
 
 ## My Cover Letter
 
-TODO
+[Click here for the `.pdf`!](coverletter.pdf)
