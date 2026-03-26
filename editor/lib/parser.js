@@ -22,7 +22,8 @@ function detectSectionType(tex) {
 // ---------------------------------------------------------------------------
 
 function parseSectionTitle(tex) {
-  const m = tex.match(/\\cvsection\{([^}]+)\}/);
+  const cmds = findCommand(tex, 'cvsection', 1);
+  const m = cmds.length > 0 ? { 1: cmds[0].args[0] } : null;
   return m ? m[1] : '';
 }
 
@@ -283,10 +284,14 @@ function parseCoverletter(tex) {
   if (closeCmds.length > 0) result.closing = closeCmds[0].args[0].trim();
 
   // \letterenclosure[label]{content}
-  const encMatch = tex.match(/\\letterenclosure\[([^\]]*)\]\{([^}]*)\}/);
-  if (encMatch) {
-    result.enclosure.label = encMatch[1];
-    result.enclosure.content = encMatch[2];
+  const encLabelMatch = tex.match(/\\letterenclosure\[([^\]]*)\]/);
+  if (encLabelMatch) {
+    result.enclosure.label = encLabelMatch[1];
+    const afterBracket = tex.indexOf(']', tex.indexOf('\\letterenclosure')) + 1;
+    try {
+      const { args } = extractBraceArgs(tex, afterBracket, 1);
+      result.enclosure.content = args[0];
+    } catch (e) { /* skip malformed */ }
   }
 
   // \lettersection{title}\nbody text until next \lettersection or \end{cvletter}

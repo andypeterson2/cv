@@ -18,140 +18,140 @@
     {
       "command": "qiQubitCount",
       "label": "qubit count",
-      "value": null,
+      "value": "8",
       "group": "Qualcomm Institute — Quantum-Encrypted Video Platform",
       "section": "cv/experience.tex"
     },
     {
       "command": "qiQBER",
       "label": "QBER %",
-      "value": null,
+      "value": "4.2",
       "group": "Qualcomm Institute — Quantum-Encrypted Video Platform",
       "section": "cv/experience.tex"
     },
     {
       "command": "qiChannelDistance",
       "label": "distance m",
-      "value": null,
+      "value": "1.2",
       "group": "Qualcomm Institute — Quantum-Encrypted Video Platform",
       "section": "cv/experience.tex"
     },
     {
       "command": "groverSpeedup",
       "label": "speedup",
-      "value": null,
+      "value": "4",
       "group": "Qualcomm Institute — Grover's Algorithm",
       "section": "cv/experience.tex"
     },
     {
       "command": "groverVariables",
       "label": "var count",
-      "value": null,
+      "value": "16",
       "group": "Qualcomm Institute — Grover's Algorithm",
       "section": "cv/experience.tex"
     },
     {
       "command": "groverDepthReduction",
       "label": "depth %",
-      "value": null,
+      "value": "38",
       "group": "Qualcomm Institute — Grover's Algorithm",
       "section": "cv/experience.tex"
     },
     {
       "command": "qmlAccuracy",
       "label": "accuracy %",
-      "value": null,
+      "value": "94.7",
       "group": "Qualcomm Institute — QML Models",
       "section": "cv/experience.tex"
     },
     {
       "command": "qmlDataset",
       "label": "dataset",
-      "value": null,
+      "value": "Iris",
       "group": "Qualcomm Institute — QML Models",
       "section": "cv/experience.tex"
     },
     {
       "command": "qmlBaselineGain",
       "label": "gain pp",
-      "value": null,
+      "value": "2.3",
       "group": "Qualcomm Institute — QML Models",
       "section": "cv/experience.tex"
     },
     {
       "command": "qiInternCount",
       "label": "intern count",
-      "value": null,
+      "value": "4",
       "group": "Qualcomm Institute — Mentoring",
       "section": "cv/experience.tex"
     },
     {
       "command": "ritMAU",
       "label": "MAU",
-      "value": null,
+      "value": "2{,}400",
       "group": "RIT Esports",
       "section": "cv/experience.tex"
     },
     {
       "command": "ritTeamCount",
       "label": "team count",
-      "value": null,
+      "value": "12",
       "group": "RIT Esports",
       "section": "cv/experience.tex"
     },
     {
       "command": "ritDeployBefore",
       "label": "hours",
-      "value": null,
+      "value": "6",
       "group": "RIT Esports",
       "section": "cv/experience.tex"
     },
     {
       "command": "ritDeployAfter",
       "label": "minutes",
-      "value": null,
+      "value": "15",
       "group": "RIT Esports",
       "section": "cv/experience.tex"
     },
     {
       "command": "ritHoursSaved",
       "label": "hours/yr",
-      "value": null,
+      "value": "320",
       "group": "RIT Esports",
       "section": "cv/experience.tex"
     },
     {
       "command": "qcWorkshopsPerQtr",
       "label": "workshops/qtr",
-      "value": null,
+      "value": "6",
       "group": "Quantum Computing at UCSD",
       "section": "cv/extracurricular.tex"
     },
     {
       "command": "qcStudentsEducated",
       "label": "students",
-      "value": null,
+      "value": "200+",
       "group": "Quantum Computing at UCSD",
       "section": "cv/extracurricular.tex"
     },
     {
       "command": "qcAttendanceStart",
       "label": "start",
-      "value": null,
+      "value": "12",
       "group": "Quantum Computing at UCSD",
       "section": "cv/extracurricular.tex"
     },
     {
       "command": "qcAttendanceEnd",
       "label": "end",
-      "value": null,
+      "value": "45",
       "group": "Quantum Computing at UCSD",
       "section": "cv/extracurricular.tex"
     },
     {
       "command": "relevantCoursework",
       "label": "e.g., Advanced Algorithms, Operating Systems, ML, Security, Distributed Systems",
-      "value": null,
+      "value": "Advanced Data Structures, Design \\& Analysis of Algorithms, Operating Systems, Machine Learning, Computer Security, Networked Systems, Software Engineering, Discrete Mathematics",
       "group": "Education",
       "section": "cv/education.tex"
     }
