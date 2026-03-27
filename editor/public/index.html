@@ -34,6 +34,9 @@
       </button>
       <button class="btn theme-toggle" @click="toggleTheme()" :aria-label="darkMode ? 'Switch to light mode' : 'Switch to dark mode'" x-text="darkMode ? 'Light' : 'Dark'"></button>
       <button class="btn" @click="showPdf = !showPdf" x-text="showPdf ? 'Hide PDF' : 'Show PDF'" aria-label="Toggle PDF preview"></button>
+      <button class="btn" @click="exportData()" aria-label="Export data as JSON">Export</button>
+      <button class="btn" @click="importData()" aria-label="Import data from JSON">Import</button>
+      <button class="btn" @click="resetFromServer()" aria-label="Reset data from server">Reset</button>
     </div>
   </header>
 
@@ -97,7 +100,7 @@
                     <span class="ui-badge resume-tag">R</span>
                     <input type="checkbox" :checked="isResumeSection(sec.file)" @change="toggleResumeSection(sec.file)" :aria-label="'Include ' + sectionTitle(sec.file) + ' in resume'">
                   </label>
-                  <button class="btn-sm" @click="sec._expanded = !sec._expanded; if(sec._expanded) loadSectionData(sec)"
+                  <button class="btn-sm" @click="sec._expanded = !sec._expanded"
                     x-text="sec._expanded ? 'Collapse' : 'Expand'"></button>
                 </div>
 
@@ -285,9 +288,7 @@
 
       <!-- Cover Letter view -->
       <template x-if="activeDoc === 'coverletter'">
-        <div class="coverletter-editor" x-data="{ cl: null }" x-init="
-          fetch(API_BASE + '/api/coverletter').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => cl = d).catch(e => console.error('Failed to load cover letter:', e))
-        ">
+        <div class="coverletter-editor" x-data="{ cl: null }" x-init="cl = loadCoverletter()">
           <template x-if="cl">
             <div>
               <div class="ui-alert" x-show="statusMsg" x-text="statusMsg" :class="statusType" role="status"></div>
@@ -331,6 +332,7 @@
   <script src="https://andypeterson2.github.io/ui-kit/icons.js"></script>
   <script src="https://andypeterson2.github.io/ui-kit/ui-kit.js"></script>
   <script>const API_BASE = (typeof ServiceConfig !== 'undefined' && ServiceConfig.get) ? ServiceConfig.get("cv", "https://localhost:3000") : "https://localhost:3000";</script>
+  <script src="/storage.js"></script>
   <script src="/app.js"></script>
   <script>
     (function() {
