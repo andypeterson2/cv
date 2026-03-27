@@ -13,9 +13,9 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 app.use(cors({
   origin: process.env.CV_CORS_ORIGINS
     ? process.env.CV_CORS_ORIGINS.split(',')
-    : ['http://localhost:3001', 'http://127.0.0.1:3001', 'https://andypeterson2.github.io']
+    : ['http://localhost:3001', 'http://127.0.0.1:3001', 'https://andypeterson2.github.io', 'https://andypeterson.dev']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper: resolve a .tex file path safely within the project root
@@ -28,222 +28,91 @@ function texPath(relPath) {
 }
 
 const RESUME_CONFIG_PATH = path.join(PROJECT_ROOT, 'resume-config.json');
-
-function readResumeConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(RESUME_CONFIG_PATH, 'utf-8'));
-  } catch (e) {
-    return { sectionOrder: [], sections: {} };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Documents
-// ---------------------------------------------------------------------------
-
-app.get('/api/documents', (req, res) => {
-  res.json(['cv', 'resume', 'coverletter']);
-});
-
-app.get('/api/document/:name', (req, res) => {
-  const name = req.params.name;
-  if (!['resume', 'cv'].includes(name)) {
-    return res.status(400).json({ error: 'Invalid document name' });
-  }
-  try {
-    const tex = fs.readFileSync(texPath(`${name}.tex`), 'utf-8');
-    const result = parseDocument(tex);
-    result.document = name;
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/document/:name/sections', (req, res) => {
-  const name = req.params.name;
-  if (!['resume', 'cv'].includes(name)) {
-    return res.status(400).json({ error: 'Invalid document name' });
-  }
-  try {
-    const filePath = texPath(`${name}.tex`);
-    const tex = fs.readFileSync(filePath, 'utf-8');
-    const updated = serializeDocumentSections(tex, req.body.sections);
-    fs.writeFileSync(filePath, updated, 'utf-8');
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Sections
-// ---------------------------------------------------------------------------
-
-app.get('/api/section/*', (req, res) => {
-  const relPath = req.params[0];
-  try {
-    const resolved = texPath(relPath);
-    if (!resolved.endsWith('.tex')) {
-      return res.status(400).json({ error: 'Only .tex files allowed' });
-    }
-    const tex = fs.readFileSync(resolved, 'utf-8');
-    const parsed = parseSection(tex);
-    parsed.file = relPath;
-    res.json(parsed);
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/section/*', (req, res) => {
-  const relPath = req.params[0];
-  try {
-    const resolved = texPath(relPath);
-    if (!resolved.endsWith('.tex')) {
-      return res.status(400).json({ error: 'Only .tex files allowed' });
-    }
-    const serialized = serializeSection(req.body);
-    fs.writeFileSync(resolved, serialized + '\n', 'utf-8');
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// data.json (source of truth) → generates data.tex
-// ---------------------------------------------------------------------------
-
 const DATA_JSON_PATH = path.join(PROJECT_ROOT, 'data.json');
 
+function readResumeConfig() {
+  try { return JSON.parse(fs.readFileSync(RESUME_CONFIG_PATH, 'utf-8')); }
+  catch (e) { return { sectionOrder: [], sections: {} }; }
+}
+
 function readDataJson() {
+  try { return JSON.parse(fs.readFileSync(DATA_JSON_PATH, 'utf-8')); }
+  catch (e) { return { personal: {}, metrics: [] }; }
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/seed — parse all .tex files into a single JSON state
+// Called once on first visit (or when user clicks "Reset from server")
+// ---------------------------------------------------------------------------
+
+app.get('/api/seed', (req, res) => {
   try {
-    return JSON.parse(fs.readFileSync(DATA_JSON_PATH, 'utf-8'));
+    // Document structure from cv.tex
+    const cvTex = fs.readFileSync(texPath('cv.tex'), 'utf-8');
+    const document = parseDocument(cvTex);
+
+    // Parse each section file
+    const sectionData = {};
+    for (const sec of document.sections) {
+      try {
+        const secTex = fs.readFileSync(texPath(sec.file), 'utf-8');
+        const parsed = parseSection(secTex);
+        parsed.file = sec.file;
+        sectionData[sec.file] = parsed;
+      } catch (e) {
+        // Section file missing — skip
+      }
+    }
+
+    // Personal data + metrics
+    const data = readDataJson();
+
+    // Resume config
+    const resumeConfig = readResumeConfig();
+
+    // Cover letter
+    let coverletter = null;
+    try {
+      const clTex = fs.readFileSync(texPath('coverletter.tex'), 'utf-8');
+      coverletter = parseCoverletter(clTex);
+    } catch (e) { /* no coverletter.tex */ }
+
+    res.json({ data, resumeConfig, coverletter, document, sectionData });
   } catch (e) {
-    return { personal: {}, metrics: [] };
+    res.status(500).json({ error: 'Seed failed: ' + e.message });
   }
-}
+});
 
-function writeDataJson(data) {
-  fs.writeFileSync(DATA_JSON_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
-}
+// ---------------------------------------------------------------------------
+// POST /api/compile/:name — receive full JSON state, generate .tex, compile
+// ---------------------------------------------------------------------------
 
-function generateDataTex(data) {
+function writeDataTex(data) {
   const serialized = serializeData(data);
   fs.writeFileSync(texPath('data.tex'), serialized + '\n', 'utf-8');
 }
 
-app.get('/api/data', (req, res) => {
-  try {
-    res.json(readDataJson());
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/data', (req, res) => {
-  try {
-    if (!req.body || !req.body.personal || !Array.isArray(req.body.metrics)) {
-      return res.status(400).json({ error: 'Invalid data format' });
-    }
-    const sanitized = { personal: req.body.personal, metrics: req.body.metrics };
-    writeDataJson(sanitized);
-    generateDataTex(sanitized);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Resume config
-// ---------------------------------------------------------------------------
-
-app.get('/api/resume-config', (req, res) => {
-  res.json(readResumeConfig());
-});
-
-app.put('/api/resume-config', (req, res) => {
-  const body = req.body;
-  if (!body || typeof body !== 'object' || !Array.isArray(body.sectionOrder)) {
-    return res.status(400).json({ error: 'Invalid config: sectionOrder array required' });
-  }
-  try {
-    const sanitized = { sectionOrder: body.sectionOrder, sections: body.sections || {} };
-    fs.writeFileSync(RESUME_CONFIG_PATH, JSON.stringify(sanitized, null, 2) + '\n', 'utf-8');
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Cover letter
-// ---------------------------------------------------------------------------
-
-app.get('/api/coverletter', (req, res) => {
-  try {
-    const tex = fs.readFileSync(texPath('coverletter.tex'), 'utf-8');
-    res.json(parseCoverletter(tex));
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/coverletter', (req, res) => {
-  try {
-    const filePath = texPath('coverletter.tex');
-    const tex = fs.readFileSync(filePath, 'utf-8');
-    const updated = serializeCoverletter(tex, req.body);
-    fs.writeFileSync(filePath, updated, 'utf-8');
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Compilation
-// ---------------------------------------------------------------------------
-
-// Generate filtered resume/ files from cv/ master + resume-config
-function generateResumeFiles() {
-  const config = readResumeConfig();
+function generateResumeFiles(state) {
+  const config = state.resumeConfig;
   const resumeDir = path.join(PROJECT_ROOT, 'resume');
 
-  // Ensure resume/ directory exists
   if (!fs.existsSync(resumeDir)) {
     fs.mkdirSync(resumeDir, { recursive: true });
   }
 
-  // Build resume section list from config's sectionOrder
   const resumeSections = [];
   for (const cvFile of (config.sectionOrder || [])) {
     const secConfig = config.sections[cvFile];
     if (!secConfig || secConfig.resume === false) continue;
 
-    // Read and parse the cv/ master file
-    const cvPath = texPath(cvFile);
-    if (!cvPath.endsWith('.tex')) continue;
-    if (!fs.existsSync(cvPath)) continue;
+    const sectionData = state.sectionData[cvFile];
+    if (!sectionData) continue;
 
-    const tex = fs.readFileSync(cvPath, 'utf-8');
-    const parsed = parseSection(tex);
-
-    // Serialize with filtering
-    const filtered = serializeFilteredSection(parsed, secConfig);
-
-    // Write to resume/ directory (cv/foo.tex -> resume/foo.tex)
+    const filtered = serializeFilteredSection(sectionData, secConfig);
     const filename = path.basename(cvFile);
-    const resumeFilePath = path.join(resumeDir, filename);
-    fs.writeFileSync(resumeFilePath, filtered + '\n', 'utf-8');
+    fs.writeFileSync(path.join(resumeDir, filename), filtered + '\n', 'utf-8');
 
-    resumeSections.push({
-      file: `resume/${filename}`,
-      enabled: true,
-      comment: ''
-    });
+    resumeSections.push({ file: `resume/${filename}`, enabled: true, comment: '' });
   }
 
   // Rewrite resume.tex \input lines
@@ -259,16 +128,53 @@ app.post('/api/compile/:name', (req, res) => {
     return res.status(400).json({ error: 'Invalid document name' });
   }
 
-  try {
-    // Always regenerate data.tex from data.json before compiling
-    generateDataTex(readDataJson());
+  const state = req.body;
+  if (!state || !state.data || !state.sectionData) {
+    return res.status(400).json({ error: 'Missing state in request body' });
+  }
 
-    // For resume: generate filtered files first
+  try {
+    // 1. Write data.tex + data.json
+    writeDataTex(state.data);
+    fs.writeFileSync(DATA_JSON_PATH, JSON.stringify(state.data, null, 2) + '\n', 'utf-8');
+
+    // 2. Write section .tex files
+    for (const [file, sectionJson] of Object.entries(state.sectionData)) {
+      try {
+        const resolved = texPath(file);
+        if (!resolved.endsWith('.tex')) continue;
+        const serialized = serializeSection(sectionJson);
+        fs.writeFileSync(resolved, serialized + '\n', 'utf-8');
+      } catch (e) { /* skip invalid paths */ }
+    }
+
+    // 3. Update cv.tex \input lines from document structure
+    if (state.document && state.document.sections) {
+      const cvTexPath = texPath('cv.tex');
+      const cvTex = fs.readFileSync(cvTexPath, 'utf-8');
+      const updatedCv = serializeDocumentSections(cvTex, state.document.sections);
+      fs.writeFileSync(cvTexPath, updatedCv, 'utf-8');
+    }
+
+    // 4. Write resume-config.json
+    if (state.resumeConfig) {
+      fs.writeFileSync(RESUME_CONFIG_PATH, JSON.stringify(state.resumeConfig, null, 2) + '\n', 'utf-8');
+    }
+
+    // 5. For resume: generate filtered resume/ files
     if (name === 'resume') {
-      generateResumeFiles();
+      generateResumeFiles(state);
+    }
+
+    // 6. For coverletter: update coverletter.tex
+    if (name === 'coverletter' && state.coverletter) {
+      const clPath = texPath('coverletter.tex');
+      const clTex = fs.readFileSync(clPath, 'utf-8');
+      const updatedCl = serializeCoverletter(clTex, state.coverletter);
+      fs.writeFileSync(clPath, updatedCl, 'utf-8');
     }
   } catch (e) {
-    return res.status(500).json({ success: false, log: 'Resume generation failed' });
+    return res.status(500).json({ success: false, log: 'File generation failed: ' + e.message });
   }
 
   execFile('xelatex', ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], {
@@ -283,6 +189,10 @@ app.post('/api/compile/:name', (req, res) => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /api/pdf/:name — serve compiled PDF
+// ---------------------------------------------------------------------------
 
 app.get('/api/pdf/:name', (req, res) => {
   const name = req.params.name;
@@ -300,9 +210,8 @@ app.get('/api/pdf/:name', (req, res) => {
 // Start
 // ---------------------------------------------------------------------------
 
-// Only start listening when run directly (not when imported by tests)
 if (require.main === module) {
-  app.listen(PORT, '127.0.0.1', () => {
+  app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
     console.log(`CV Editor running at http://localhost:${PORT}`);
     console.log(`Project root: ${PROJECT_ROOT}`);
   });

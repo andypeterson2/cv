@@ -454,7 +454,7 @@ describe('WP #679 — Web editor save/preview', () => {
 
   test('has data save functionality', () => {
     expect(appJs).toContain('saveData');
-    expect(appJs).toContain("method: 'PUT'");
+    expect(appJs).toContain('persist');
   });
 
   test('has section load and save functionality', () => {
@@ -487,12 +487,9 @@ describe('WP #679 — Web editor save/preview', () => {
     expect(server).toContain('require.main === module');
   });
 
-  test('server has API routes for CRUD operations', () => {
+  test('server has seed, compile, and pdf endpoints', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain("app.get('/api/data'");
-    expect(server).toContain("app.put('/api/data'");
-    expect(server).toContain("app.get('/api/section/");
-    expect(server).toContain("app.put('/api/section/");
+    expect(server).toContain("app.get('/api/seed'");
     expect(server).toContain("app.post('/api/compile/");
     expect(server).toContain("app.get('/api/pdf/");
   });
