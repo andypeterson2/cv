@@ -39,6 +39,7 @@ app.use(cors({
     : [
         'http://localhost:3001', 'http://127.0.0.1:3001',
         'http://localhost:4321', 'http://127.0.0.1:4321',
+        'http://localhost:4322', 'http://127.0.0.1:4322',
         'http://localhost:8000', 'http://127.0.0.1:8000',
         'https://andypeterson2.github.io',
       ]
@@ -368,6 +369,89 @@ app.patch('/api/coverletter/sections/order', validate('reorder'), (req, res) => 
 });
 
 // ---------------------------------------------------------------------------
+// Persons
+// ---------------------------------------------------------------------------
+
+app.get('/api/persons', (req, res) => {
+  try {
+    const persons = getDb().getPersons();
+    const activePersonId = getDb().getActivePersonId();
+    res.json({ persons, activePersonId });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/persons', validate('createPerson'), (req, res) => {
+  try {
+    const id = getDb().createPerson(req.body.name);
+    res.status(201).json({ id });
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Person with that name already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/persons/:id', validate('updatePerson'), (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    getDb().renamePerson(id, req.body.name);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE')) {
+      return res.status(409).json({ error: 'Person with that name already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/persons/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    getDb().deletePerson(id);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message && e.message.includes('Cannot delete')) {
+      return res.status(400).json({ error: e.message });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/persons/:id/switch', (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    getDb().switchPerson(id);
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message && e.message.includes('not found')) {
+      return res.status(404).json({ error: e.message });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Import
+// ---------------------------------------------------------------------------
+
+app.post('/api/import', validate('importData'), (req, res) => {
+  try {
+    getDb().importAll(req.body);
+    // Also update the active person's data blob
+    const activeId = getDb().getActivePersonId();
+    if (activeId) {
+      getDb().savePerson(activeId);
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Compile + PDF
 // ---------------------------------------------------------------------------
 
@@ -444,7 +528,8 @@ app.get('/api/health', (req, res) => {
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
-  app.listen(PORT, '127.0.0.1', () => {
+  const HOST = process.env.HOST || '127.0.0.1';
+  app.listen(PORT, HOST, () => {
     console.log(`CV Editor running at http://localhost:${PORT}`);
     console.log(`Project root: ${PROJECT_ROOT}`);
     console.log(`Database: ${DB_PATH}`);

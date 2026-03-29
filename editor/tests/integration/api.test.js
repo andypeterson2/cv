@@ -120,6 +120,7 @@ function seedDb(db) {
 beforeAll((done) => {
   // Use fresh in-memory DB for each test run
   db = new CvDatabase(':memory:');
+  db.clearAllContent(); // Clear Jane Doe seed data before seeding test data
   seedDb(db);
 
   // Clear require cache so we get a fresh app
@@ -658,5 +659,199 @@ describe('Static file serving', () => {
     const res = await request('GET', '/');
     expect(res.status).toBe(200);
     expect(res.raw).toContain('<html');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Persons API
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('Persons API', () => {
+  test('GET /api/persons returns persons with activePersonId', async () => {
+    const res = await request('GET', '/api/persons');
+    expect(res.status).toBe(200);
+    expect(res.body.persons).toBeInstanceOf(Array);
+    expect(res.body.persons.length).toBeGreaterThan(0);
+    expect(res.body.activePersonId).toBeTruthy();
+    // Jane Doe is seeded by default
+    expect(res.body.persons.some(p => p.name === 'Jane Doe')).toBe(true);
+  });
+
+  test('POST /api/persons creates a new person', async () => {
+    const res = await request('POST', '/api/persons', { name: 'Test Person' });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeGreaterThan(0);
+
+    const list = await request('GET', '/api/persons');
+    expect(list.body.persons.some(p => p.name === 'Test Person')).toBe(true);
+  });
+
+  test('POST /api/persons returns 409 for duplicate name', async () => {
+    await request('POST', '/api/persons', { name: 'Duplicate' });
+    const res = await request('POST', '/api/persons', { name: 'Duplicate' });
+    expect(res.status).toBe(409);
+  });
+
+  test('POST /api/persons returns 400 for missing name', async () => {
+    const res = await request('POST', '/api/persons', {});
+    expect(res.status).toBe(400);
+  });
+
+  test('PUT /api/persons/:id renames a person', async () => {
+    const create = await request('POST', '/api/persons', { name: 'Old Name' });
+    const id = create.body.id;
+
+    const res = await request('PUT', '/api/persons/' + id, { name: 'New Name' });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const list = await request('GET', '/api/persons');
+    expect(list.body.persons.some(p => p.name === 'New Name')).toBe(true);
+    expect(list.body.persons.some(p => p.name === 'Old Name')).toBe(false);
+  });
+
+  test('DELETE /api/persons/:id deletes a non-active person', async () => {
+    const create = await request('POST', '/api/persons', { name: 'To Delete' });
+    const id = create.body.id;
+
+    const res = await request('DELETE', '/api/persons/' + id);
+    expect(res.status).toBe(200);
+
+    const list = await request('GET', '/api/persons');
+    expect(list.body.persons.some(p => p.name === 'To Delete')).toBe(false);
+  });
+
+  test('DELETE /api/persons/:id returns 400 for active person', async () => {
+    const list = await request('GET', '/api/persons');
+    const activeId = list.body.activePersonId;
+
+    const res = await request('DELETE', '/api/persons/' + activeId);
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/persons/:id/switch switches active person', async () => {
+    // Create a new person
+    const create = await request('POST', '/api/persons', { name: 'Switch Target' });
+    const newId = create.body.id;
+
+    // Switch to them
+    const res = await request('POST', '/api/persons/' + newId + '/switch');
+    expect(res.status).toBe(200);
+
+    // Verify active person changed
+    const list = await request('GET', '/api/persons');
+    expect(list.body.activePersonId).toBe(newId);
+
+    // Content should be empty (new person has no data)
+    const sections = await request('GET', '/api/sections');
+    expect(sections.body.length).toBe(0);
+  });
+
+  test('POST /api/persons/:id/switch returns 404 for non-existent person', async () => {
+    const res = await request('POST', '/api/persons/99999/switch');
+    expect(res.status).toBe(404);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Import API
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('Import API', () => {
+  test('POST /api/import imports data', async () => {
+    const importData = {
+      personal: { firstName: 'Imported', lastName: 'User' },
+      sections: [
+        {
+          id: 'work', type: 'cventries', title: 'Work',
+          entries: [
+            {
+              id: 1, section_id: 'work', sort_order: 0, resumeIncluded: true,
+              fields: { position: 'Tester', organization: 'Test Co', location: 'Remote', date: '2024' },
+              items: []
+            }
+          ]
+        }
+      ],
+      metrics: [],
+      documents: { cv: [{ sectionId: 'work', enabled: true, sortOrder: 0 }], resume: [] },
+      coverletter: { recipientName: 'Nobody', sections: [] }
+    };
+
+    const res = await request('POST', '/api/import', importData);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    // Verify data was imported
+    const personal = await request('GET', '/api/settings?prefix=personal');
+    expect(personal.body['personal.firstName']).toBe('Imported');
+
+    const sections = await request('GET', '/api/sections');
+    expect(sections.body.length).toBe(1);
+    expect(sections.body[0].id).toBe('work');
+  });
+
+  test('POST /api/import returns 400 for invalid data', async () => {
+    const res = await request('POST', '/api/import', { invalid: true });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Person Switch Workflow
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('Person switch workflow', () => {
+  test('full round-trip: create, switch, modify, switch back', async () => {
+    // First, set up a known state: import Alice's data as current person
+    const aliceData = {
+      personal: { firstName: 'Alice', lastName: 'Wonder' },
+      sections: [
+        { id: 'work', type: 'cventries', title: 'Work',
+          entries: [{ id: 1, section_id: 'work', sort_order: 0, resumeIncluded: true,
+            fields: { position: 'Dev', organization: 'Co', location: 'NY', date: '2024' }, items: [] }] }
+      ],
+      metrics: [],
+      documents: { cv: [{ sectionId: 'work', enabled: true, sortOrder: 0 }], resume: [] },
+      coverletter: { sections: [] }
+    };
+    await request('POST', '/api/import', aliceData);
+
+    const initial = await request('GET', '/api/persons');
+    const aliceId = initial.body.activePersonId;
+
+    // Create Bob
+    const bob = await request('POST', '/api/persons', { name: 'Bob Builder' });
+    const bobId = bob.body.id;
+
+    // Switch to Bob (saves Alice's data, loads Bob's empty data)
+    await request('POST', '/api/persons/' + bobId + '/switch');
+
+    // Verify Bob is active with empty content
+    let sections = await request('GET', '/api/sections');
+    expect(sections.body.length).toBe(0);
+
+    // Add data to Bob via import
+    await request('POST', '/api/import', {
+      personal: { firstName: 'Bob', lastName: 'Builder' },
+      sections: [],
+      metrics: [],
+      documents: { cv: [], resume: [] },
+      coverletter: { sections: [] }
+    });
+
+    // Switch back to Alice
+    await request('POST', '/api/persons/' + aliceId + '/switch');
+
+    // Verify Alice's data is restored
+    const personal = await request('GET', '/api/settings?prefix=personal');
+    expect(personal.body['personal.firstName']).toBe('Alice');
+    sections = await request('GET', '/api/sections');
+    expect(sections.body.length).toBe(1);
+
+    // Switch back to Bob
+    await request('POST', '/api/persons/' + bobId + '/switch');
+    const bobPersonal = await request('GET', '/api/settings?prefix=personal');
+    expect(bobPersonal.body['personal.firstName']).toBe('Bob');
   });
 });
