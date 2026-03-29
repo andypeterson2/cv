@@ -1,7 +1,8 @@
 services:
   cv-editor:
-    image: node:20-slim
-    command: sh -c "npm install --production && node server.js"
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
     environment:
@@ -11,6 +12,7 @@ services:
       - .:/app
       - cv_node_modules:/app/editor/node_modules
     working_dir: /app/editor
+    command: sh -c "npm install --production && node server.js"
 
 volumes:
   cv_node_modules:
