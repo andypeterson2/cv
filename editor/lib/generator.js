@@ -200,10 +200,11 @@ function generateAll(compileData, buildDir, templatesDir, assetsDir) {
   // Ensure build directory exists
   fs.mkdirSync(buildDir, { recursive: true });
 
-  // Copy awesome-cv.cls
-  const clsSrc = path.join(templatesDir, 'awesome-cv.cls');
-  if (fs.existsSync(clsSrc)) {
-    fs.copyFileSync(clsSrc, path.join(buildDir, 'awesome-cv.cls'));
+  // Copy all template files (awesome-cv.cls, fontawesome6.sty, .otf fonts, accsupp.sty, etc.)
+  if (fs.existsSync(templatesDir)) {
+    for (const file of fs.readdirSync(templatesDir)) {
+      fs.copyFileSync(path.join(templatesDir, file), path.join(buildDir, file));
+    }
   }
 
   // Copy assets directory
