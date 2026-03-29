@@ -201,6 +201,41 @@ const variantSchema = {
 };
 
 // ---------------------------------------------------------------------------
+// Persons
+// ---------------------------------------------------------------------------
+
+const createPersonSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+  },
+  required: ['name'],
+  additionalProperties: false,
+};
+
+const updatePersonSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+  },
+  required: ['name'],
+  additionalProperties: false,
+};
+
+const importDataSchema = {
+  type: 'object',
+  properties: {
+    personal: { type: 'object' },
+    sections: { type: 'array' },
+    metrics: { type: 'array' },
+    documents: { type: 'object' },
+    coverletter: { type: 'object' },
+  },
+  required: ['personal', 'sections'],
+  additionalProperties: false,
+};
+
+// ---------------------------------------------------------------------------
 // Compile and export validators
 // ---------------------------------------------------------------------------
 
@@ -218,6 +253,9 @@ const validators = {
   documentSections: ajv.compile(documentSectionsSchema),
   createCoverletterSection: ajv.compile(createCoverletterSectionSchema),
   updateCoverletterSection: ajv.compile(updateCoverletterSectionSchema),
+  createPerson: ajv.compile(createPersonSchema),
+  updatePerson: ajv.compile(updatePersonSchema),
+  importData: ajv.compile(importDataSchema),
 };
 
 /**
@@ -265,5 +303,8 @@ module.exports = {
     documentSections: documentSectionsSchema,
     createCoverletterSection: createCoverletterSectionSchema,
     updateCoverletterSection: updateCoverletterSectionSchema,
+    createPerson: createPersonSchema,
+    updatePerson: updatePersonSchema,
+    importData: importDataSchema,
   },
 };

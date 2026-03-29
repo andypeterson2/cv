@@ -93,6 +93,7 @@ function seedDb(db) {
 
 beforeAll((done) => {
   db = new CvDatabase(':memory:');
+  db.clearAllContent(); // Clear Jane Doe seed data before seeding test data
   seedDb(db);
 
   delete require.cache[require.resolve('../../server')];
