@@ -3,18 +3,17 @@
  *
  * Covers:
  *   - Responsive layout and interactive elements (index.html / editor UI)
- *   - Content accuracy (data.json, resume-config.json)
- *   - LaTeX template structure, variable substitution, formatting
+ *   - LaTeX template structure, formatting
  *   - ATS parsing readiness
- *   - One-page constraint for resume
  *   - UI-kit rendering and web editor save/preview
+ *
+ * Updated for SQLite-backed architecture.
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
-const EDITOR_ROOT = path.join(PROJECT_ROOT, 'editor');
 
 // Helper: read a project file
 function readFile(relPath) {
@@ -59,7 +58,7 @@ describe('WP #670 — Responsive layout and HTML structure', () => {
     expect(html).toContain('aria-label="Toggle PDF preview"');
   });
 
-  test('has a document selector with resume, cv, and coverletter options', () => {
+  test('has a document selector with cv, resume, and coverletter options', () => {
     expect(html).toContain('<option value="resume">');
     expect(html).toContain('<option value="cv">');
     expect(html).toContain('<option value="coverletter">');
@@ -91,8 +90,12 @@ describe('WP #671 — Interactive elements in editor UI', () => {
     expect(html).toContain('pdf-iframe');
   });
 
-  test('has save section button', () => {
-    expect(html).toContain('saveSection');
+  test('has autosave functionality (no manual save button needed)', () => {
+    // New architecture uses debounced autosave instead of manual save buttons
+    const appJs = readFile('editor/public/app.js');
+    expect(appJs).toContain('autoSaveEntry');
+    expect(appJs).toContain('autoSaveItem');
+    expect(appJs).toContain('debounce');
   });
 
   test('has add/remove entry buttons', () => {
@@ -101,10 +104,9 @@ describe('WP #671 — Interactive elements in editor UI', () => {
     expect(html).toContain('Remove');
   });
 
-  test('has resume toggle checkboxes per section and entry', () => {
-    expect(html).toContain('toggleResumeSection');
+  test('has resume toggle checkboxes per entry and item', () => {
     expect(html).toContain('toggleResumeEntry');
-    expect(html).toContain('toggleResumeBullet');
+    expect(html).toContain('toggleResumeItem');
   });
 
   test('has collapsible sidebar', () => {
@@ -116,115 +118,44 @@ describe('WP #671 — Interactive elements in editor UI', () => {
     expect(html).toContain('sortablejs');
     expect(html).toContain('ui-drag-handle');
   });
-});
 
-// ---------------------------------------------------------------------------
-// WP #672 — Content accuracy: data.json
-// ---------------------------------------------------------------------------
-
-describe('WP #672 — Content accuracy in data.json', () => {
-  let data;
-
-  beforeAll(() => {
-    data = JSON.parse(readFile('data.json'));
-  });
-
-  test('has personal information', () => {
-    expect(data.personal).toBeDefined();
-    expect(data.personal.firstName).toBeTruthy();
-    expect(data.personal.lastName).toBeTruthy();
-    expect(data.personal.email).toBeTruthy();
-  });
-
-  test('personal info contains valid email format', () => {
-    expect(data.personal.email).toMatch(/@/);
-  });
-
-  test('personal info contains valid phone number', () => {
-    expect(data.personal.mobile).toMatch(/\d{3}/);
-  });
-
-  test('has GitHub and LinkedIn identifiers', () => {
-    expect(data.personal.github).toBeTruthy();
-    expect(data.personal.linkedin).toBeTruthy();
-  });
-
-  test('has metrics array with entries', () => {
-    expect(Array.isArray(data.metrics)).toBe(true);
-    expect(data.metrics.length).toBeGreaterThan(0);
-  });
-
-  test('each metric has required fields', () => {
-    for (const m of data.metrics) {
-      expect(m).toHaveProperty('command');
-      expect(m).toHaveProperty('label');
-      expect(m).toHaveProperty('group');
-      expect(m).toHaveProperty('value');
-      expect(m).toHaveProperty('section');
-    }
-  });
-
-  test('metric commands are unique', () => {
-    const commands = data.metrics.map(m => m.command);
-    const unique = new Set(commands);
-    expect(unique.size).toBe(commands.length);
-  });
-
-  test('metric sections reference valid .tex files', () => {
-    for (const m of data.metrics) {
-      expect(m.section).toMatch(/\.tex$/);
-      expect(fileExists(m.section)).toBe(true);
-    }
+  test('uses modal dialogs instead of prompt()', () => {
+    expect(html).toContain('modal-overlay');
+    expect(html).toContain('modal-dialog');
+    expect(html).toContain('submitModal');
+    expect(html).toContain('cancelModal');
+    // Should NOT use prompt()
+    const appJs = readFile('editor/public/app.js');
+    expect(appJs).not.toContain('prompt(');
   });
 });
 
 // ---------------------------------------------------------------------------
-// WP #673 — Resume config structure
+// WP #672 — Content accuracy: SQLite database
 // ---------------------------------------------------------------------------
 
-describe('WP #673 — Resume config structure and integrity', () => {
-  let config;
-
-  beforeAll(() => {
-    config = JSON.parse(readFile('resume-config.json'));
+describe('WP #672 — Content stored in SQLite database', () => {
+  test('migration file exists with proper schema', () => {
+    const sql = readFile('editor/migrations/001_initial.sql');
+    expect(sql).toContain('CREATE TABLE');
+    expect(sql).toContain('settings');
+    expect(sql).toContain('sections');
+    expect(sql).toContain('entries');
+    expect(sql).toContain('items');
+    expect(sql).toContain('metrics');
   });
 
-  test('has sectionOrder array', () => {
-    expect(Array.isArray(config.sectionOrder)).toBe(true);
-    expect(config.sectionOrder.length).toBeGreaterThan(0);
+  test('database access layer exists', () => {
+    expect(fileExists('editor/lib/db.js')).toBe(true);
+    const db = readFile('editor/lib/db.js');
+    expect(db).toContain('class CvDatabase');
+    expect(db).toContain('getSettings');
+    expect(db).toContain('getSections');
+    expect(db).toContain('getAllForCompile');
   });
 
-  test('sectionOrder references real .tex files', () => {
-    for (const file of config.sectionOrder) {
-      expect(fileExists(file)).toBe(true);
-    }
-  });
-
-  test('has sections object', () => {
-    expect(typeof config.sections).toBe('object');
-  });
-
-  test('each section in sectionOrder has a config entry', () => {
-    for (const file of config.sectionOrder) {
-      expect(config.sections[file]).toBeDefined();
-    }
-  });
-
-  test('section configs have resume boolean', () => {
-    for (const [, sec] of Object.entries(config.sections)) {
-      expect(typeof sec.resume).toBe('boolean');
-    }
-  });
-
-  test('section configs with entries have per-entry resume flags', () => {
-    for (const [, sec] of Object.entries(config.sections)) {
-      if (sec.entries) {
-        expect(Array.isArray(sec.entries)).toBe(true);
-        for (const entry of sec.entries) {
-          expect(typeof entry.resume).toBe('boolean');
-        }
-      }
-    }
+  test('migration script exists', () => {
+    expect(fileExists('migrate.cjs')).toBe(true);
   });
 });
 
@@ -255,20 +186,12 @@ describe('WP #674 — LaTeX template structure', () => {
     expect(readFile('resume.tex')).toContain('\\input{data.tex}');
   });
 
-  test('cv.tex inputs cv/ section files', () => {
-    const tex = readFile('cv.tex');
-    expect(tex).toContain('\\input{cv/experience.tex}');
-    expect(tex).toContain('\\input{cv/education.tex}');
-    expect(tex).toContain('\\input{cv/skills.tex}');
-  });
-
-  test('resume.tex inputs resume/ section files', () => {
-    const tex = readFile('resume.tex');
-    expect(tex).toContain('\\input{resume/');
-  });
-
   test('awesome-cv.cls class file exists', () => {
     expect(fileExists('awesome-cv.cls')).toBe(true);
+  });
+
+  test('awesome-cv.cls also exists in templates/', () => {
+    expect(fileExists('templates/awesome-cv.cls')).toBe(true);
   });
 
   test('coverletter.tex exists', () => {
@@ -298,16 +221,7 @@ describe('WP #675 — Variable substitution in data.tex', () => {
   });
 
   test('defines metric commands', () => {
-    // Metrics from data.json should become \\providecommand or \\newcommand entries
     expect(dataTex.includes('\\newcommand') || dataTex.includes('\\providecommand')).toBe(true);
-  });
-
-  test('data.json metrics match data.tex commands', () => {
-    const data = JSON.parse(readFile('data.json'));
-    for (const m of data.metrics) {
-      // Each metric command should be defined in data.tex
-      expect(dataTex).toContain(m.command);
-    }
   });
 });
 
@@ -316,39 +230,14 @@ describe('WP #675 — Variable substitution in data.tex', () => {
 // ---------------------------------------------------------------------------
 
 describe('WP #676 — ATS parsing readiness', () => {
-  test('resume uses standard section headings', () => {
-    // Verify sections use recognizable titles for ATS
-    const config = JSON.parse(readFile('resume-config.json'));
-    const sectionFiles = config.sectionOrder;
-
-    const expectedSections = ['experience', 'education', 'skills'];
-    for (const expected of expectedSections) {
-      const found = sectionFiles.some(f => f.toLowerCase().includes(expected));
-      expect(found).toBe(true);
-    }
-  });
-
   test('cv.tex uses standard geometry margins', () => {
     const tex = readFile('cv.tex');
     expect(tex).toContain('\\geometry{');
   });
 
   test('resume does not use multi-column layout in content', () => {
-    // Multi-column layouts can confuse ATS parsers
     const tex = readFile('resume.tex');
     expect(tex).not.toContain('\\begin{multicols}');
-  });
-
-  test('no images embedded in resume content sections', () => {
-    // ATS parsers cannot read images; only the optional header photo should exist
-    const resumeDir = path.join(PROJECT_ROOT, 'resume');
-    if (fs.existsSync(resumeDir)) {
-      const files = fs.readdirSync(resumeDir).filter(f => f.endsWith('.tex'));
-      for (const f of files) {
-        const content = fs.readFileSync(path.join(resumeDir, f), 'utf-8');
-        expect(content).not.toContain('\\includegraphics');
-      }
-    }
   });
 });
 
@@ -360,35 +249,13 @@ describe('WP #677 — One-page constraint for resume', () => {
   test('resume.tex does not include too many sections', () => {
     const tex = readFile('resume.tex');
     const inputLines = tex.match(/^\\input{resume\//gm) || [];
-    // A one-page resume should have at most ~8 sections
     expect(inputLines.length).toBeLessThanOrEqual(8);
-  });
-
-  test('resume-config filters entries to reduce content', () => {
-    const config = JSON.parse(readFile('resume-config.json'));
-    let hasFiltering = false;
-    for (const [, sec] of Object.entries(config.sections)) {
-      if (sec.resume === false) {
-        hasFiltering = true;
-        break;
-      }
-      if (sec.entries) {
-        for (const entry of sec.entries) {
-          if (entry.resume === false) {
-            hasFiltering = true;
-            break;
-          }
-        }
-      }
-    }
-    expect(hasFiltering).toBe(true);
   });
 
   test('resume margins are tight for space efficiency', () => {
     const tex = readFile('resume.tex');
     const geometryMatch = tex.match(/\\geometry\{([^}]+)\}/);
     expect(geometryMatch).not.toBeNull();
-    // Margins should be specified (not default wide margins)
     expect(geometryMatch[1]).toContain('cm');
   });
 });
@@ -452,13 +319,17 @@ describe('WP #679 — Web editor save/preview', () => {
     expect(appJs).toContain('function app()');
   });
 
-  test('has data save functionality', () => {
-    expect(appJs).toContain('saveData');
+  test('has granular API save functionality', () => {
+    expect(appJs).toContain('autoSavePersonal');
+    expect(appJs).toContain('autoSaveEntry');
+    expect(appJs).toContain('autoSaveItem');
+    expect(appJs).toContain("method: 'PATCH'");
     expect(appJs).toContain("method: 'PUT'");
   });
 
-  test('has section load and save functionality', () => {
-    expect(appJs.includes('loadSectionData') || appJs.includes('saveSection')).toBe(true);
+  test('has section data loading', () => {
+    expect(appJs).toContain('loadSectionData');
+    expect(appJs).toContain('loadDocumentSections');
   });
 
   test('has compile functionality', () => {
@@ -468,6 +339,7 @@ describe('WP #679 — Web editor save/preview', () => {
 
   test('has document switching', () => {
     expect(appJs).toContain('activeDoc');
+    expect(appJs).toContain('switchDoc');
   });
 
   test('has theme toggle support', () => {
@@ -487,13 +359,27 @@ describe('WP #679 — Web editor save/preview', () => {
     expect(server).toContain('require.main === module');
   });
 
-  test('server has API routes for CRUD operations', () => {
+  test('server has RESTful API routes', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain("app.get('/api/data'");
-    expect(server).toContain("app.put('/api/data'");
-    expect(server).toContain("app.get('/api/section/");
-    expect(server).toContain("app.put('/api/section/");
+    expect(server).toContain("app.get('/api/settings'");
+    expect(server).toContain("app.patch('/api/settings'");
+    expect(server).toContain("app.get('/api/sections'");
+    expect(server).toContain("app.post('/api/sections'");
     expect(server).toContain("app.post('/api/compile/");
     expect(server).toContain("app.get('/api/pdf/");
+    expect(server).toContain("app.get('/api/metrics'");
+    expect(server).toContain("app.get('/api/export'");
+  });
+
+  test('server uses SQLite database', () => {
+    const server = readFile('editor/server.js');
+    expect(server).toContain('CvDatabase');
+    expect(server).toContain('getDb()');
+  });
+
+  test('API validation via ajv schemas', () => {
+    expect(fileExists('editor/lib/schema.js')).toBe(true);
+    const server = readFile('editor/server.js');
+    expect(server).toContain('validate(');
   });
 });

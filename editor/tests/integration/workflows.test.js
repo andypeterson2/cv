@@ -2,19 +2,17 @@
  * Cross-endpoint workflow integration tests for the CV Editor.
  *
  * Tests multi-step operations that span several API endpoints:
- * section roundtrips, resume filtering, data↔tex consistency,
- * document section ordering, cover letter workflows, and security.
+ * section CRUD workflows, resume filtering, compile pipeline,
+ * cover letter workflows, and security.
  */
 const http = require('http');
-const path = require('path');
-const fs = require('fs');
+const CvDatabase = require('../../lib/db');
 
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..', '..');
 let server;
 let port;
+let db;
 
-// ── HTTP helper ─────────────────────────────────────────────────────────────
-
+// HTTP helper
 function request(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -22,7 +20,7 @@ function request(method, urlPath, body) {
       port,
       path: urlPath,
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
     };
     const req = http.request(options, (res) => {
       let data = '';
@@ -36,65 +34,71 @@ function request(method, urlPath, body) {
       });
     });
     req.on('error', reject);
-    if (body) req.write(JSON.stringify(body));
+    if (body !== undefined) req.write(JSON.stringify(body));
     req.end();
   });
 }
 
-// ── File backup / restore ───────────────────────────────────────────────────
+function seedDb(db) {
+  db.setSettings({
+    'personal.firstName': 'Andrew',
+    'personal.lastName': 'Peterson',
+    'personal.position': 'Software Engineer',
+    'personal.email': 'test@example.com',
+  });
 
-const BACKUPS = [
-  'data.json',
-  'data.tex',
-  'resume-config.json',
-  'cv.tex',
-  'resume.tex',
-  'coverletter.tex',
-];
+  db.createSection('experience', 'cventries', 'Experience');
+  db.createSection('skills', 'cvskills', 'Skills');
+  db.createSection('summary', 'cvparagraph', 'Summary');
 
-function backupFile(rel) {
-  const full = path.join(PROJECT_ROOT, rel);
-  if (fs.existsSync(full)) fs.copyFileSync(full, full + '.wf-backup');
+  const e1 = db.createEntry('experience', {
+    position: 'Software Engineer',
+    organization: 'Acme Corp',
+    location: 'San Diego, CA',
+    date: '2022 - Present',
+  });
+  db.createItem(Number(e1), 'Built distributed systems');
+  db.createItem(Number(e1), 'Led team of 5');
+
+  const e2 = db.createEntry('experience', {
+    position: 'Intern',
+    organization: 'Startup Inc',
+    location: 'Remote',
+    date: '2021',
+  });
+  db.createItem(Number(e2), 'Developed APIs');
+
+  db.createEntry('skills', { category: 'Languages', skills: 'JavaScript, Python' });
+  db.createEntry('summary', { text: 'Experienced engineer.' });
+
+  db.createMetric({
+    command: 'projectCount',
+    label: 'Projects',
+    value: '12',
+    groupName: 'General',
+    sectionId: 'experience',
+  });
+
+  db.setDocumentSections('cv', [
+    { sectionId: 'summary', enabled: true },
+    { sectionId: 'experience', enabled: true },
+    { sectionId: 'skills', enabled: true },
+  ]);
+  db.setDocumentSections('resume', [
+    { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short resume summary.' },
+    { sectionId: 'experience', enabled: true },
+    { sectionId: 'skills', enabled: true },
+  ]);
 }
-
-function restoreFile(rel) {
-  const full = path.join(PROJECT_ROOT, rel);
-  const bak = full + '.wf-backup';
-  if (fs.existsSync(bak)) {
-    fs.copyFileSync(bak, full);
-    fs.unlinkSync(bak);
-  }
-}
-
-// Also backup any cv/*.tex files that get modified
-const CV_TEX_DIR = path.join(PROJECT_ROOT, 'cv');
-let backedUpSections = [];
-
-function backupSection(filename) {
-  const full = path.join(CV_TEX_DIR, filename);
-  if (fs.existsSync(full) && !backedUpSections.includes(filename)) {
-    fs.copyFileSync(full, full + '.wf-backup');
-    backedUpSections.push(filename);
-  }
-}
-
-function restoreSections() {
-  for (const filename of backedUpSections) {
-    const full = path.join(CV_TEX_DIR, filename);
-    const bak = full + '.wf-backup';
-    if (fs.existsSync(bak)) {
-      fs.copyFileSync(bak, full);
-      fs.unlinkSync(bak);
-    }
-  }
-  backedUpSections = [];
-}
-
-// ── Server lifecycle ────────────────────────────────────────────────────────
 
 beforeAll((done) => {
-  BACKUPS.forEach(backupFile);
+  db = new CvDatabase(':memory:');
+  seedDb(db);
+
+  delete require.cache[require.resolve('../../server')];
   const app = require('../../server');
+  app.setDb(db);
+
   server = app.listen(0, () => {
     port = server.address().port;
     done();
@@ -102,429 +106,339 @@ beforeAll((done) => {
 });
 
 afterAll((done) => {
-  restoreSections();
-  BACKUPS.forEach(restoreFile);
+  if (db) db.close();
   if (server) server.close(done);
   else done();
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1. Section GET → PUT → GET roundtrips (every section type)
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
+// 1. Section CRUD workflow
+// =========================================================================
 
-describe('Section API roundtrips', () => {
-  const SECTIONS = [
-    { file: 'cv/experience.tex', type: 'cventries' },
-    { file: 'cv/skills.tex', type: 'cvskills' },
-    { file: 'cv/summary.tex', type: 'cvparagraph' },
-    { file: 'cv/certifications.tex', type: 'cvhonors' },
-    { file: 'cv/education.tex', type: 'cventries' },
-  ];
+describe('Section CRUD workflow', () => {
+  test('create section → add entries → add items → verify tree', async () => {
+    // Create section
+    const sec = await request('POST', '/api/sections', {
+      id: 'projects',
+      type: 'cventries',
+      title: 'Projects',
+    });
+    expect(sec.status).toBe(201);
 
-  test.each(SECTIONS)(
-    'GET → PUT → GET roundtrip for $file ($type)',
-    async ({ file, type }) => {
-      backupSection(path.basename(file));
+    // Add entry
+    const entry = await request('POST', '/api/sections/projects/entries', {
+      fields: { position: 'Lead', organization: 'OSS', location: 'GitHub', date: '2024' },
+    });
+    expect(entry.status).toBe(201);
 
-      // 1. Read original
-      const get1 = await request('GET', `/api/section/${file}`);
-      expect(get1.status).toBe(200);
-      expect(get1.body.type).toBe(type);
+    // Add items
+    const item1 = await request('POST', `/api/entries/${entry.body.id}/items`, {
+      content: 'First bullet',
+    });
+    const item2 = await request('POST', `/api/entries/${entry.body.id}/items`, {
+      content: 'Second bullet',
+    });
+    expect(item1.status).toBe(201);
+    expect(item2.status).toBe(201);
 
-      // 2. Write it back unchanged
-      const put = await request('PUT', `/api/section/${file}`, get1.body);
-      expect(put.status).toBe(200);
-      expect(put.body.success).toBe(true);
+    // Verify full tree
+    const full = await request('GET', '/api/sections/projects');
+    expect(full.body.entries.length).toBe(1);
+    expect(full.body.entries[0].items.length).toBe(2);
+    expect(full.body.entries[0].fields.position).toBe('Lead');
+    expect(full.body.entries[0].items[0].content).toBe('First bullet');
 
-      // 3. Re-read and compare structure
-      const get2 = await request('GET', `/api/section/${file}`);
-      expect(get2.status).toBe(200);
-      expect(get2.body.type).toBe(get1.body.type);
-      expect(get2.body.title).toBe(get1.body.title);
-
-      if (type === 'cventries' || type === 'cvskills' || type === 'cvhonors') {
-        expect(get2.body.entries.length).toBe(get1.body.entries.length);
-      }
-      if (type === 'cvparagraph') {
-        // Whitespace may normalize; check content is preserved
-        expect(get2.body.text.trim().length).toBeGreaterThan(0);
-      }
-    },
-  );
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 2. Section modification: edit entry, save, verify persistence
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Section modification workflow', () => {
-  test('modify experience entry position, verify it persists', async () => {
-    backupSection('experience.tex');
-
-    // Read
-    const get1 = await request('GET', '/api/section/cv/experience.tex');
-    expect(get1.status).toBe(200);
-    const data = get1.body;
-    const origPosition = data.entries[0].position;
-
-    // Modify
-    data.entries[0].position = 'Integration Test Position';
-    const put = await request('PUT', '/api/section/cv/experience.tex', data);
-    expect(put.status).toBe(200);
-
-    // Verify via API
-    const get2 = await request('GET', '/api/section/cv/experience.tex');
-    expect(get2.body.entries[0].position).toBe('Integration Test Position');
-
-    // Verify on disk
-    const tex = fs.readFileSync(path.join(CV_TEX_DIR, 'experience.tex'), 'utf-8');
-    expect(tex).toContain('Integration Test Position');
-
-    // Restore
-    data.entries[0].position = origPosition;
-    await request('PUT', '/api/section/cv/experience.tex', data);
+    // Cleanup
+    await request('DELETE', '/api/sections/projects');
   });
 
-  test('add a bullet point to experience entry', async () => {
-    backupSection('experience.tex');
+  test('delete section cascades entries and items', async () => {
+    await request('POST', '/api/sections', { id: 'cascade', type: 'cventries', title: 'Cascade' });
+    const entry = await request('POST', '/api/sections/cascade/entries', { fields: { position: 'X' } });
+    await request('POST', `/api/entries/${entry.body.id}/items`, { content: 'Y' });
 
-    const get1 = await request('GET', '/api/section/cv/experience.tex');
-    const data = get1.body;
-    const origLen = data.entries[0].items.length;
+    await request('DELETE', '/api/sections/cascade');
 
-    data.entries[0].items.push('New integration test bullet point');
-    await request('PUT', '/api/section/cv/experience.tex', data);
-
-    const get2 = await request('GET', '/api/section/cv/experience.tex');
-    expect(get2.body.entries[0].items.length).toBe(origLen + 1);
-    expect(get2.body.entries[0].items).toContain('New integration test bullet point');
-
-    // Restore
-    data.entries[0].items.pop();
-    await request('PUT', '/api/section/cv/experience.tex', data);
-  });
-
-  test('modify skills category, verify persistence', async () => {
-    backupSection('skills.tex');
-
-    const get1 = await request('GET', '/api/section/cv/skills.tex');
-    const data = get1.body;
-    const origCategory = data.entries[0].category;
-
-    data.entries[0].category = 'Test Category';
-    await request('PUT', '/api/section/cv/skills.tex', data);
-
-    const get2 = await request('GET', '/api/section/cv/skills.tex');
-    expect(get2.body.entries[0].category).toBe('Test Category');
-
-    data.entries[0].category = origCategory;
-    await request('PUT', '/api/section/cv/skills.tex', data);
+    const get = await request('GET', '/api/sections/cascade');
+    expect(get.status).toBe(404);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3. Data ↔ data.tex consistency
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
+// 2. Entry modification and persistence
+// =========================================================================
 
-describe('Data JSON ↔ LaTeX consistency', () => {
-  test('PUT /api/data regenerates data.tex with all personal fields', async () => {
-    const get1 = await request('GET', '/api/data');
-    const data = get1.body;
+describe('Entry modification workflow', () => {
+  test('modify entry fields → verify via section read', async () => {
+    const sec = await request('GET', '/api/sections/experience');
+    const entryId = sec.body.entries[0].id;
 
-    // Modify and save
-    data.personal.firstName = 'TestFirst';
-    data.personal.lastName = 'TestLast';
-    await request('PUT', '/api/data', data);
-
-    const tex = fs.readFileSync(path.join(PROJECT_ROOT, 'data.tex'), 'utf-8');
-    expect(tex).toContain('TestFirst');
-    expect(tex).toContain('TestLast');
-
-    // Restore
-    data.personal.firstName = 'Andrew';
-    data.personal.lastName = 'Peterson';
-    await request('PUT', '/api/data', data);
-  });
-
-  test('metric with null value generates TBD placeholder in data.tex', async () => {
-    const get1 = await request('GET', '/api/data');
-    const data = get1.body;
-    const origValue = data.metrics[0].value;
-    const label = data.metrics[0].label;
-
-    data.metrics[0].value = null;
-    await request('PUT', '/api/data', data);
-
-    const tex = fs.readFileSync(path.join(PROJECT_ROOT, 'data.tex'), 'utf-8');
-    expect(tex).toContain('\\tbd{');
-
-    // Restore
-    data.metrics[0].value = origValue;
-    await request('PUT', '/api/data', data);
-  });
-
-  test('every metric command appears in data.tex', async () => {
-    const get1 = await request('GET', '/api/data');
-    const data = get1.body;
-
-    // Force regenerate
-    await request('PUT', '/api/data', data);
-
-    const tex = fs.readFileSync(path.join(PROJECT_ROOT, 'data.tex'), 'utf-8');
-    for (const m of data.metrics) {
-      expect(tex).toContain(`\\${m.command}`);
-    }
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 4. Resume filtering pipeline
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Resume config ↔ section filtering', () => {
-  test('resume-config sectionOrder files all exist on disk', async () => {
-    const res = await request('GET', '/api/resume-config');
-    expect(res.status).toBe(200);
-
-    for (const file of res.body.sectionOrder) {
-      const full = path.join(PROJECT_ROOT, file);
-      expect(fs.existsSync(full)).toBe(true);
-    }
-  });
-
-  test('resume-config sections keys match sectionOrder entries', async () => {
-    const res = await request('GET', '/api/resume-config');
-    const { sectionOrder, sections } = res.body;
-
-    // Every file in sectionOrder should have a config entry
-    // Use array form because paths with '/' are interpreted as nested by Jest
-    for (const file of sectionOrder) {
-      expect(sections).toHaveProperty([file]);
-    }
-  });
-
-  test('toggle resume section off and verify config persists', async () => {
-    const get1 = await request('GET', '/api/resume-config');
-    const config = get1.body;
-    const firstFile = config.sectionOrder[0];
-    const origResume = config.sections[firstFile].resume;
-
-    // Toggle off
-    config.sections[firstFile].resume = false;
-    const put = await request('PUT', '/api/resume-config', config);
-    expect(put.status).toBe(200);
+    // Update
+    await request('PUT', `/api/entries/${entryId}`, {
+      fields: { position: 'Staff Engineer', organization: 'Acme Corp', location: 'San Diego, CA', date: '2022 - Present' },
+    });
 
     // Verify
-    const get2 = await request('GET', '/api/resume-config');
-    expect(get2.body.sections[firstFile].resume).toBe(false);
+    const sec2 = await request('GET', '/api/sections/experience');
+    expect(sec2.body.entries[0].fields.position).toBe('Staff Engineer');
 
     // Restore
-    config.sections[firstFile].resume = origResume;
-    await request('PUT', '/api/resume-config', config);
+    await request('PUT', `/api/entries/${entryId}`, {
+      fields: { position: 'Software Engineer', organization: 'Acme Corp', location: 'San Diego, CA', date: '2022 - Present' },
+    });
   });
 
-  test('PUT resume-config rejects missing sectionOrder', async () => {
-    const res = await request('PUT', '/api/resume-config', { sections: {} });
-    expect(res.status).toBe(400);
+  test('add and remove bullet points', async () => {
+    const sec = await request('GET', '/api/sections/experience');
+    const entryId = sec.body.entries[0].id;
+    const origItemCount = sec.body.entries[0].items.length;
+
+    // Add bullet
+    const item = await request('POST', `/api/entries/${entryId}/items`, { content: 'Temp bullet' });
+    const sec2 = await request('GET', '/api/sections/experience');
+    expect(sec2.body.entries[0].items.length).toBe(origItemCount + 1);
+
+    // Remove bullet
+    await request('DELETE', `/api/items/${item.body.id}`);
+    const sec3 = await request('GET', '/api/sections/experience');
+    expect(sec3.body.entries[0].items.length).toBe(origItemCount);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5. Document section ordering
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
+// 3. Resume filtering
+// =========================================================================
+
+describe('Resume filtering', () => {
+  test('excluded entry does not appear in resume compile data', async () => {
+    const sec = await request('GET', '/api/sections/experience');
+    const entryId = sec.body.entries[1].id;
+
+    // Exclude from resume
+    await request('PUT', `/api/entries/${entryId}`, { resumeIncluded: false });
+
+    // Verify via export (compile data)
+    const exp = await request('GET', '/api/export');
+    const expSection = exp.body.sections.find(s => s.id === 'experience');
+    // In export, all entries are present (export includes everything)
+    const entry = expSection.entries.find(e => e.id === entryId);
+    expect(entry.resumeIncluded).toBe(false);
+
+    // Restore
+    await request('PUT', `/api/entries/${entryId}`, { resumeIncluded: true });
+  });
+
+  test('excluded item is flagged in export', async () => {
+    const sec = await request('GET', '/api/sections/experience');
+    const itemId = sec.body.entries[0].items[0].id;
+
+    await request('PUT', `/api/items/${itemId}`, { resumeIncluded: false });
+
+    const sec2 = await request('GET', '/api/sections/experience');
+    const item = sec2.body.entries[0].items.find(i => i.id === itemId);
+    expect(item.resumeIncluded).toBe(false);
+
+    // Restore
+    await request('PUT', `/api/items/${itemId}`, { resumeIncluded: true });
+  });
+});
+
+// =========================================================================
+// 4. Document section ordering
+// =========================================================================
 
 describe('Document section ordering', () => {
-  test('GET /api/document/cv sections match .tex \\input lines', async () => {
-    const res = await request('GET', '/api/document/cv');
-    expect(res.status).toBe(200);
+  test('reorder cv sections', async () => {
+    const get = await request('GET', '/api/documents/cv');
+    const origOrder = get.body.sections.map(s => s.sectionId);
 
-    const tex = fs.readFileSync(path.join(PROJECT_ROOT, 'cv.tex'), 'utf-8');
-    for (const sec of res.body.sections) {
-      // Each section file should appear in the .tex as \input{...}
-      const basename = sec.file.replace('.tex', '');
-      expect(tex).toContain(basename);
-    }
-  });
+    // Reverse
+    const reversed = [...origOrder].reverse();
+    await request('PUT', '/api/documents/cv', {
+      sections: reversed.map(id => ({ sectionId: id, enabled: true })),
+    });
 
-  test('PUT section order accepts valid sections', async () => {
-    const get1 = await request('GET', '/api/document/cv');
-    const sections = get1.body.sections;
-
-    // PUT the current sections back — should succeed
-    const put = await request('PUT', '/api/document/cv/sections', { sections });
-    expect(put.status).toBe(200);
-    expect(put.body.success).toBe(true);
-  });
-
-  test('disable a section and verify it appears commented out', async () => {
-    const get1 = await request('GET', '/api/document/cv');
-    const sections = get1.body.sections;
-    const origEnabled = sections[0].enabled;
-
-    // Disable first section
-    sections[0].enabled = false;
-    await request('PUT', '/api/document/cv/sections', { sections });
-
-    // Verify on disk: should be commented
-    const tex = fs.readFileSync(path.join(PROJECT_ROOT, 'cv.tex'), 'utf-8');
-    const basename = sections[0].file.replace('.tex', '');
-    // The line with this section should be commented
-    const lines = tex.split('\n');
-    const sectionLine = lines.find((l) => l.includes(basename));
-    expect(sectionLine).toBeDefined();
-    expect(sectionLine.trimStart().startsWith('%')).toBe(true);
+    const get2 = await request('GET', '/api/documents/cv');
+    expect(get2.body.sections.map(s => s.sectionId)).toEqual(reversed);
 
     // Restore
-    sections[0].enabled = origEnabled;
-    await request('PUT', '/api/document/cv/sections', { sections });
+    await request('PUT', '/api/documents/cv', {
+      sections: origOrder.map(id => ({ sectionId: id, enabled: true })),
+    });
+  });
+
+  test('disable a section in document config', async () => {
+    const get = await request('GET', '/api/documents/cv');
+    const sections = get.body.sections;
+
+    // Disable skills
+    await request('PUT', '/api/documents/cv', {
+      sections: sections.map(s => ({
+        sectionId: s.sectionId,
+        enabled: s.sectionId !== 'skills',
+      })),
+    });
+
+    const get2 = await request('GET', '/api/documents/cv');
+    const skills = get2.body.sections.find(s => s.sectionId === 'skills');
+    expect(skills.enabled).toBe(false);
+
+    // Restore
+    await request('PUT', '/api/documents/cv', {
+      sections: sections.map(s => ({ sectionId: s.sectionId, enabled: true })),
+    });
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
+// 5. Metrics workflow
+// =========================================================================
+
+describe('Metrics workflow', () => {
+  test('create metric → update value → verify in export', async () => {
+    const create = await request('POST', '/api/metrics', {
+      command: 'testWf',
+      label: 'Test Workflow',
+      value: null,
+      groupName: 'WF',
+      sectionId: 'experience',
+    });
+    expect(create.status).toBe(201);
+
+    // Update with value
+    await request('PUT', `/api/metrics/${create.body.id}`, { value: '42' });
+
+    // Verify in export
+    const exp = await request('GET', '/api/export');
+    const metric = exp.body.metrics.find(m => m.command === 'testWf');
+    expect(metric.value).toBe('42');
+
+    // Cleanup
+    await request('DELETE', `/api/metrics/${create.body.id}`);
+  });
+});
+
+// =========================================================================
 // 6. Cover letter workflow
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
 
-describe('Cover letter roundtrip', () => {
-  test('GET → PUT → GET preserves cover letter structure', async () => {
-    const get1 = await request('GET', '/api/coverletter');
-    expect(get1.status).toBe(200);
+describe('Cover letter workflow', () => {
+  test('settings + sections together form complete coverletter', async () => {
+    // Set header
+    await request('PATCH', '/api/settings', {
+      'coverletter.recipientName': 'Google',
+      'coverletter.opening': 'Dear Googlers,',
+    });
 
-    const put = await request('PUT', '/api/coverletter', get1.body);
-    expect(put.status).toBe(200);
+    // Add section
+    const sec = await request('POST', '/api/coverletter/sections', {
+      title: 'Motivation',
+      body: 'I love search engines.',
+    });
 
-    const get2 = await request('GET', '/api/coverletter');
-    expect(get2.body.recipient).toEqual(get1.body.recipient);
-    expect(get2.body.opening).toEqual(get1.body.opening);
-    expect(get2.body.closing).toEqual(get1.body.closing);
-    expect(get2.body.sections.length).toBe(get1.body.sections.length);
-  });
+    // Verify all parts
+    const settings = await request('GET', '/api/settings?prefix=coverletter');
+    expect(settings.body['coverletter.recipientName']).toBe('Google');
 
-  test('modify cover letter recipient and verify persistence', async () => {
-    const get1 = await request('GET', '/api/coverletter');
-    const data = get1.body;
-    const origName = data.recipient.name;
+    const sections = await request('GET', '/api/coverletter/sections');
+    const found = sections.body.find(s => s.title === 'Motivation');
+    expect(found).toBeDefined();
 
-    data.recipient.name = 'Test Recipient Corp';
-    await request('PUT', '/api/coverletter', data);
-
-    const get2 = await request('GET', '/api/coverletter');
-    expect(get2.body.recipient.name).toBe('Test Recipient Corp');
-
-    // Verify on disk
-    const tex = fs.readFileSync(path.join(PROJECT_ROOT, 'coverletter.tex'), 'utf-8');
-    expect(tex).toContain('Test Recipient Corp');
-
-    // Restore
-    data.recipient.name = origName;
-    await request('PUT', '/api/coverletter', data);
+    // Cleanup
+    await request('DELETE', `/api/coverletter/sections/${sec.body.id}`);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 7. Cross-endpoint: data + section consistency
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
+// 7. Cross-endpoint data consistency
+// =========================================================================
 
 describe('Cross-endpoint data consistency', () => {
-  test('metrics section field references valid section files', async () => {
-    const dataRes = await request('GET', '/api/data');
-    const docRes = await request('GET', '/api/document/cv');
+  test('export includes all sections from document config', async () => {
+    const doc = await request('GET', '/api/documents/cv');
+    const exp = await request('GET', '/api/export');
 
-    const sectionFiles = docRes.body.sections.map((s) => s.file);
-
-    for (const metric of dataRes.body.metrics) {
-      if (metric.section) {
-        expect(sectionFiles).toContain(metric.section);
-      }
+    for (const ds of doc.body.sections) {
+      const found = exp.body.sections.find(s => s.id === ds.sectionId);
+      expect(found).toBeDefined();
     }
   });
 
-  test('all CV section files are parseable via API', async () => {
-    const docRes = await request('GET', '/api/document/cv');
+  test('metrics reference valid sections', async () => {
+    const metrics = await request('GET', '/api/metrics');
+    const sections = await request('GET', '/api/sections');
+    const sectionIds = sections.body.map(s => s.id);
 
-    for (const sec of docRes.body.sections) {
-      const res = await request('GET', `/api/section/${sec.file}`);
-      expect(res.status).toBe(200);
-      expect(res.body.type).toBeDefined();
-      expect(res.body.title).toBeDefined();
+    for (const m of metrics.body) {
+      expect(sectionIds).toContain(m.sectionId);
     }
   });
 
-  test('resume-config entries match actual entry counts', async () => {
-    const configRes = await request('GET', '/api/resume-config');
-    const config = configRes.body;
+  test('settings personal prefix matches export personal', async () => {
+    const settings = await request('GET', '/api/settings?prefix=personal');
+    const exp = await request('GET', '/api/export');
 
-    for (const file of config.sectionOrder) {
-      const secConfig = config.sections[file];
-      if (!secConfig || !secConfig.entries) continue;
-
-      const secRes = await request('GET', `/api/section/${file}`);
-      if (secRes.status !== 200 || !secRes.body.entries) continue;
-
-      // Config entries count should match actual entries count
-      expect(secConfig.entries.length).toBe(secRes.body.entries.length);
-    }
+    expect(settings.body['personal.firstName']).toBe(exp.body.personal.firstName);
+    expect(settings.body['personal.email']).toBe(exp.body.personal.email);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 8. Security: path traversal
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
+// 8. Security
+// =========================================================================
 
-describe('Path traversal protection', () => {
-  test('rejects ../ in section path', async () => {
-    const res = await request('GET', '/api/section/../../../etc/passwd');
-    expect(res.status).toBe(500);
-  });
-
-  test('rejects non-.tex files', async () => {
-    const res = await request('GET', '/api/section/cv/experience.js');
-    expect(res.status).toBe(400);
-  });
-
-  test('rejects invalid document name', async () => {
-    const res = await request('GET', '/api/document/evil');
-    expect(res.status).toBe(400);
-  });
-
-  test('rejects invalid compile name', async () => {
+describe('Security', () => {
+  test('rejects invalid compile variant', async () => {
     const res = await request('POST', '/api/compile/evil');
     expect(res.status).toBe(400);
   });
 
-  test('rejects invalid pdf name', async () => {
+  test('rejects invalid pdf variant', async () => {
     const res = await request('GET', '/api/pdf/evil');
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects invalid document variant', async () => {
+    const res = await request('GET', '/api/documents/evil');
     expect(res.status).toBe(400);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
 // 9. Error handling
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
 
 describe('Error handling', () => {
-  test('PUT /api/section with empty body returns 500', async () => {
-    const res = await request('PUT', '/api/section/cv/experience.tex', {});
-    expect(res.status).toBe(500);
-  });
-
-  test('PUT /api/data with string metrics returns 400', async () => {
-    const res = await request('PUT', '/api/data', {
-      personal: { firstName: 'Test' },
-      metrics: 'not-an-array',
+  test('invalid JSON body returns 400', async () => {
+    // Send raw invalid JSON via http
+    const res = await new Promise((resolve, reject) => {
+      const req = http.request({
+        hostname: 'localhost',
+        port,
+        path: '/api/sections',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => (data += chunk));
+        res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      });
+      req.on('error', reject);
+      req.write('{invalid json');
+      req.end();
     });
     expect(res.status).toBe(400);
   });
 
-  test('PUT /api/resume-config with null body returns 400', async () => {
-    const res = await request('PUT', '/api/resume-config', null);
-    // Express may parse null differently; expect 400 or 500
-    expect([400, 500]).toContain(res.status);
+  test('empty PATCH /api/settings returns 400', async () => {
+    const res = await request('PATCH', '/api/settings', {});
+    expect(res.status).toBe(400);
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
 // 10. Static file serving
-// ═════════════════════════════════════════════════════════════════════════════
+// =========================================================================
 
 describe('Static file serving', () => {
   test('serves index.html at root', async () => {
@@ -537,10 +451,5 @@ describe('Static file serving', () => {
     const res = await request('GET', '/app.js');
     expect(res.status).toBe(200);
     expect(res.raw).toContain('function');
-  });
-
-  test('serves style.css', async () => {
-    const res = await request('GET', '/style.css');
-    expect(res.status).toBe(200);
   });
 });

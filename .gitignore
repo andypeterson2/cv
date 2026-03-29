@@ -11,5 +11,13 @@
 *.fdb_latexmk
 *.synctex.gz
 
+# SQLite database (source of truth, not committed)
+cv.db
+cv.db-wal
+cv.db-shm
+
+# Generated build output
+build/
+
 # Editor dependencies
 editor/node_modules/

@@ -3,12 +3,35 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const { execFile } = require('child_process');
-const { parseSection, parseDocument, parseCoverletter } = require('./lib/parser');
-const { serializeSection, serializeFilteredSection, serializeDocumentSections, serializeData, serializeCoverletter } = require('./lib/serializer');
+const CvDatabase = require('./lib/db');
+const { validate, isValidVariant } = require('./lib/schema');
+const { generateAll } = require('./lib/generator');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const PROJECT_ROOT = path.resolve(__dirname, '..');
+const TEMPLATES_DIR = path.join(PROJECT_ROOT, 'templates');
+const ASSETS_DIR = path.join(PROJECT_ROOT, 'assets');
+
+// Database: use env var, test override, or default location
+const DB_PATH = process.env.CV_DB_PATH || path.join(PROJECT_ROOT, 'cv.db');
+let db;
+
+function getDb() {
+  if (!db) {
+    db = new CvDatabase(DB_PATH);
+  }
+  return db;
+}
+
+// Allow tests to inject an in-memory DB
+app.setDb = function (testDb) {
+  db = testDb;
+};
+
+app.getDb = function () {
+  return getDb();
+};
 
 app.use(cors({
   origin: process.env.CV_CORS_ORIGINS
@@ -18,58 +41,22 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Helper: resolve a .tex file path safely within the project root
-function texPath(relPath) {
-  const resolved = path.resolve(PROJECT_ROOT, relPath);
-  if (!resolved.startsWith(PROJECT_ROOT + path.sep) && resolved !== PROJECT_ROOT) {
-    throw new Error('Path traversal attempt');
-  }
-  return resolved;
-}
-
-const RESUME_CONFIG_PATH = path.join(PROJECT_ROOT, 'resume-config.json');
-
-function readResumeConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(RESUME_CONFIG_PATH, 'utf-8'));
-  } catch (e) {
-    return { sectionOrder: [], sections: {} };
-  }
-}
-
 // ---------------------------------------------------------------------------
-// Documents
+// Settings (personal info, coverletter header)
 // ---------------------------------------------------------------------------
 
-app.get('/api/documents', (req, res) => {
-  res.json(['cv', 'resume', 'coverletter']);
-});
-
-app.get('/api/document/:name', (req, res) => {
-  const name = req.params.name;
-  if (!['resume', 'cv'].includes(name)) {
-    return res.status(400).json({ error: 'Invalid document name' });
-  }
+app.get('/api/settings', (req, res) => {
   try {
-    const tex = fs.readFileSync(texPath(`${name}.tex`), 'utf-8');
-    const result = parseDocument(tex);
-    result.document = name;
-    res.json(result);
+    const prefix = req.query.prefix;
+    res.json(getDb().getSettings(prefix));
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.put('/api/document/:name/sections', (req, res) => {
-  const name = req.params.name;
-  if (!['resume', 'cv'].includes(name)) {
-    return res.status(400).json({ error: 'Invalid document name' });
-  }
+app.patch('/api/settings', validate('settings'), (req, res) => {
   try {
-    const filePath = texPath(`${name}.tex`);
-    const tex = fs.readFileSync(filePath, 'utf-8');
-    const updated = serializeDocumentSections(tex, req.body.sections);
-    fs.writeFileSync(filePath, updated, 'utf-8');
+    getDb().setSettings(req.body);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -80,31 +67,52 @@ app.put('/api/document/:name/sections', (req, res) => {
 // Sections
 // ---------------------------------------------------------------------------
 
-app.get('/api/section/*', (req, res) => {
-  const relPath = req.params[0];
+app.get('/api/sections', (req, res) => {
   try {
-    const resolved = texPath(relPath);
-    if (!resolved.endsWith('.tex')) {
-      return res.status(400).json({ error: 'Only .tex files allowed' });
+    res.json(getDb().getSections());
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/sections/:id', (req, res) => {
+  try {
+    const section = getDb().getSection(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Section not found' });
+    res.json(section);
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/sections', validate('createSection'), (req, res) => {
+  try {
+    getDb().createSection(req.body.id, req.body.type, req.body.title);
+    res.status(201).json({ id: req.body.id });
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'Section already exists' });
     }
-    const tex = fs.readFileSync(resolved, 'utf-8');
-    const parsed = parseSection(tex);
-    parsed.file = relPath;
-    res.json(parsed);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/sections/:id', validate('updateSection'), (req, res) => {
+  try {
+    const section = getDb().getSection(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Section not found' });
+    getDb().updateSection(req.params.id, { title: req.body.title });
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.put('/api/section/*', (req, res) => {
-  const relPath = req.params[0];
+app.delete('/api/sections/:id', (req, res) => {
   try {
-    const resolved = texPath(relPath);
-    if (!resolved.endsWith('.tex')) {
-      return res.status(400).json({ error: 'Only .tex files allowed' });
-    }
-    const serialized = serializeSection(req.body);
-    fs.writeFileSync(resolved, serialized + '\n', 'utf-8');
+    const section = getDb().getSection(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Section not found' });
+    getDb().deleteSection(req.params.id);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
@@ -112,184 +120,292 @@ app.put('/api/section/*', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// data.json (source of truth) → generates data.tex
+// Entries
 // ---------------------------------------------------------------------------
 
-const DATA_JSON_PATH = path.join(PROJECT_ROOT, 'data.json');
-
-function readDataJson() {
+app.post('/api/sections/:id/entries', validate('createEntry'), (req, res) => {
   try {
-    return JSON.parse(fs.readFileSync(DATA_JSON_PATH, 'utf-8'));
-  } catch (e) {
-    return { personal: {}, metrics: [] };
-  }
-}
-
-function writeDataJson(data) {
-  fs.writeFileSync(DATA_JSON_PATH, JSON.stringify(data, null, 2) + '\n', 'utf-8');
-}
-
-function generateDataTex(data) {
-  const serialized = serializeData(data);
-  fs.writeFileSync(texPath('data.tex'), serialized + '\n', 'utf-8');
-}
-
-app.get('/api/data', (req, res) => {
-  try {
-    res.json(readDataJson());
+    const section = getDb().getSection(req.params.id);
+    if (!section) return res.status(404).json({ error: 'Section not found' });
+    const entryId = getDb().createEntry(req.params.id, req.body.fields);
+    res.status(201).json({ id: Number(entryId) });
   } catch (e) {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.put('/api/data', (req, res) => {
+app.put('/api/entries/:id', validate('updateEntry'), (req, res) => {
   try {
-    if (!req.body || !req.body.personal || !Array.isArray(req.body.metrics)) {
-      return res.status(400).json({ error: 'Invalid data format' });
-    }
-    const sanitized = { personal: req.body.personal, metrics: req.body.metrics };
-    writeDataJson(sanitized);
-    generateDataTex(sanitized);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Resume config
-// ---------------------------------------------------------------------------
-
-app.get('/api/resume-config', (req, res) => {
-  res.json(readResumeConfig());
-});
-
-app.put('/api/resume-config', (req, res) => {
-  const body = req.body;
-  if (!body || typeof body !== 'object' || !Array.isArray(body.sectionOrder)) {
-    return res.status(400).json({ error: 'Invalid config: sectionOrder array required' });
-  }
-  try {
-    const sanitized = { sectionOrder: body.sectionOrder, sections: body.sections || {} };
-    fs.writeFileSync(RESUME_CONFIG_PATH, JSON.stringify(sanitized, null, 2) + '\n', 'utf-8');
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Cover letter
-// ---------------------------------------------------------------------------
-
-app.get('/api/coverletter', (req, res) => {
-  try {
-    const tex = fs.readFileSync(texPath('coverletter.tex'), 'utf-8');
-    res.json(parseCoverletter(tex));
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.put('/api/coverletter', (req, res) => {
-  try {
-    const filePath = texPath('coverletter.tex');
-    const tex = fs.readFileSync(filePath, 'utf-8');
-    const updated = serializeCoverletter(tex, req.body);
-    fs.writeFileSync(filePath, updated, 'utf-8');
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Compilation
-// ---------------------------------------------------------------------------
-
-// Generate filtered resume/ files from cv/ master + resume-config
-function generateResumeFiles() {
-  const config = readResumeConfig();
-  const resumeDir = path.join(PROJECT_ROOT, 'resume');
-
-  // Ensure resume/ directory exists
-  if (!fs.existsSync(resumeDir)) {
-    fs.mkdirSync(resumeDir, { recursive: true });
-  }
-
-  // Build resume section list from config's sectionOrder
-  const resumeSections = [];
-  for (const cvFile of (config.sectionOrder || [])) {
-    const secConfig = config.sections[cvFile];
-    if (!secConfig || secConfig.resume === false) continue;
-
-    // Read and parse the cv/ master file
-    const cvPath = texPath(cvFile);
-    if (!cvPath.endsWith('.tex')) continue;
-    if (!fs.existsSync(cvPath)) continue;
-
-    const tex = fs.readFileSync(cvPath, 'utf-8');
-    const parsed = parseSection(tex);
-
-    // Serialize with filtering
-    const filtered = serializeFilteredSection(parsed, secConfig);
-
-    // Write to resume/ directory (cv/foo.tex -> resume/foo.tex)
-    const filename = path.basename(cvFile);
-    const resumeFilePath = path.join(resumeDir, filename);
-    fs.writeFileSync(resumeFilePath, filtered + '\n', 'utf-8');
-
-    resumeSections.push({
-      file: `resume/${filename}`,
-      enabled: true,
-      comment: ''
+    const id = parseInt(req.params.id, 10);
+    getDb().updateEntry(id, {
+      fields: req.body.fields,
+      resumeIncluded: req.body.resumeIncluded,
     });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
   }
+});
 
-  // Rewrite resume.tex \input lines
-  const resumeTexPath = texPath('resume.tex');
-  const resumeTex = fs.readFileSync(resumeTexPath, 'utf-8');
-  const updated = serializeDocumentSections(resumeTex, resumeSections);
-  fs.writeFileSync(resumeTexPath, updated, 'utf-8');
-}
+app.delete('/api/entries/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    getDb().deleteEntry(id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
-app.post('/api/compile/:name', (req, res) => {
-  const name = req.params.name;
-  if (!['resume', 'cv', 'coverletter'].includes(name)) {
-    return res.status(400).json({ error: 'Invalid document name' });
+app.patch('/api/sections/:id/entries/order', validate('reorder'), (req, res) => {
+  try {
+    getDb().reorderEntries(req.params.id, req.body.ids);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Items (bullet points)
+// ---------------------------------------------------------------------------
+
+app.post('/api/entries/:id/items', validate('createItem'), (req, res) => {
+  try {
+    const entryId = parseInt(req.params.id, 10);
+    const itemId = getDb().createItem(entryId, req.body.content);
+    res.status(201).json({ id: Number(itemId) });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/items/:id', validate('updateItem'), (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    getDb().updateItem(id, {
+      content: req.body.content,
+      resumeIncluded: req.body.resumeIncluded,
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/items/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    getDb().deleteItem(id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.patch('/api/entries/:id/items/order', validate('reorder'), (req, res) => {
+  try {
+    const entryId = parseInt(req.params.id, 10);
+    getDb().reorderItems(entryId, req.body.ids);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Metrics
+// ---------------------------------------------------------------------------
+
+app.get('/api/metrics', (req, res) => {
+  try {
+    const sectionId = req.query.section || null;
+    res.json(getDb().getMetrics(sectionId));
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/metrics', validate('createMetric'), (req, res) => {
+  try {
+    const id = getDb().createMetric({
+      command: req.body.command,
+      label: req.body.label || '',
+      value: req.body.value ?? null,
+      groupName: req.body.groupName || '',
+      sectionId: req.body.sectionId,
+    });
+    res.status(201).json({ id: Number(id) });
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'Metric command already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/metrics/:id', validate('updateMetric'), (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = getDb().getMetrics().find(m => m.id === id);
+    if (!existing) return res.status(404).json({ error: 'Metric not found' });
+    getDb().updateMetric(id, {
+      command: req.body.command ?? existing.command,
+      label: req.body.label ?? existing.label,
+      value: req.body.value !== undefined ? req.body.value : existing.value,
+      groupName: req.body.groupName ?? existing.groupName,
+    });
+    res.json({ success: true });
+  } catch (e) {
+    if (e.message && e.message.includes('UNIQUE constraint')) {
+      return res.status(409).json({ error: 'Metric command already exists' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/metrics/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    getDb().deleteMetric(id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Documents (per-variant section ordering)
+// ---------------------------------------------------------------------------
+
+app.get('/api/documents', (req, res) => {
+  res.json(['cv', 'resume', 'coverletter']);
+});
+
+app.get('/api/documents/:variant', (req, res) => {
+  const { variant } = req.params;
+  if (!isValidVariant(variant)) {
+    return res.status(400).json({ error: 'Invalid variant' });
+  }
+  try {
+    res.json({ variant, sections: getDb().getDocumentSections(variant) });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/documents/:variant', validate('documentSections'), (req, res) => {
+  const { variant } = req.params;
+  if (!isValidVariant(variant)) {
+    return res.status(400).json({ error: 'Invalid variant' });
+  }
+  try {
+    getDb().setDocumentSections(variant, req.body.sections);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Cover letter sections
+// ---------------------------------------------------------------------------
+
+app.get('/api/coverletter/sections', (req, res) => {
+  try {
+    res.json(getDb().getCoverletterSections());
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/coverletter/sections', validate('createCoverletterSection'), (req, res) => {
+  try {
+    const id = getDb().createCoverletterSection(req.body.title, req.body.body);
+    res.status(201).json({ id: Number(id) });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.put('/api/coverletter/sections/:id', validate('updateCoverletterSection'), (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const existing = getDb().getCoverletterSections().find(s => s.id === id);
+    if (!existing) return res.status(404).json({ error: 'Section not found' });
+    getDb().updateCoverletterSection(id, {
+      title: req.body.title ?? existing.title,
+      body: req.body.body ?? existing.body,
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/coverletter/sections/:id', (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    getDb().deleteCoverletterSection(id);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.patch('/api/coverletter/sections/order', validate('reorder'), (req, res) => {
+  try {
+    getDb().reorderCoverletterSections(req.body.ids);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Compile + PDF
+// ---------------------------------------------------------------------------
+
+app.post('/api/compile/:variant', (req, res) => {
+  const { variant } = req.params;
+  if (!isValidVariant(variant)) {
+    return res.status(400).json({ error: 'Invalid variant' });
   }
 
   try {
-    // Always regenerate data.tex from data.json before compiling
-    generateDataTex(readDataJson());
+    const compileData = getDb().getAllForCompile(variant);
+    const buildDir = path.join(PROJECT_ROOT, 'build', variant);
+    const mainTexFile = generateAll(compileData, buildDir, TEMPLATES_DIR, ASSETS_DIR);
 
-    // For resume: generate filtered files first
-    if (name === 'resume') {
-      generateResumeFiles();
-    }
-  } catch (e) {
-    return res.status(500).json({ success: false, log: 'Resume generation failed' });
-  }
-
-  execFile('xelatex', ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', `${name}.tex`], {
-    cwd: PROJECT_ROOT,
-    timeout: 30000
-  }, (error, stdout, stderr) => {
-    const pdfExists = fs.existsSync(path.join(PROJECT_ROOT, `${name}.pdf`));
-    res.json({
-      success: !error && pdfExists,
-      log: stdout + (stderr ? '\n' + stderr : ''),
-      pdfPath: pdfExists ? `/api/pdf/${name}` : null
+    execFile('xelatex', [
+      '--no-shell-escape',
+      '-interaction=nonstopmode',
+      '-halt-on-error',
+      path.basename(mainTexFile),
+    ], {
+      cwd: buildDir,
+      timeout: 30000,
+    }, (error, stdout, stderr) => {
+      const pdfName = path.basename(mainTexFile, '.tex') + '.pdf';
+      const pdfPath = path.join(buildDir, pdfName);
+      const pdfExists = fs.existsSync(pdfPath);
+      res.json({
+        success: !error && pdfExists,
+        log: stdout + (stderr ? '\n' + stderr : ''),
+        pdfPath: pdfExists ? `/api/pdf/${variant}` : null,
+      });
     });
-  });
+  } catch (e) {
+    res.status(500).json({ success: false, log: 'Generation failed: ' + e.message });
+  }
 });
 
-app.get('/api/pdf/:name', (req, res) => {
-  const name = req.params.name;
-  if (!['resume', 'cv', 'coverletter'].includes(name)) {
-    return res.status(400).json({ error: 'Invalid document name' });
+app.get('/api/pdf/:variant', (req, res) => {
+  const { variant } = req.params;
+  if (!isValidVariant(variant)) {
+    return res.status(400).json({ error: 'Invalid variant' });
   }
-  const pdfPath = path.join(PROJECT_ROOT, `${name}.pdf`);
+  const pdfPath = path.join(PROJECT_ROOT, 'build', variant, `${variant}.pdf`);
   if (!fs.existsSync(pdfPath)) {
     return res.status(404).json({ error: 'PDF not found. Compile first.' });
   }
@@ -297,14 +413,36 @@ app.get('/api/pdf/:name', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Export + Health
+// ---------------------------------------------------------------------------
+
+app.get('/api/export', (req, res) => {
+  try {
+    res.json(getDb().getAllForExport());
+  } catch (e) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.get('/api/health', (req, res) => {
+  try {
+    // Simple DB health check — run a trivial query
+    getDb().getSections();
+    res.json({ status: 'ok' });
+  } catch (e) {
+    res.status(500).json({ status: 'error', error: e.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
 
-// Only start listening when run directly (not when imported by tests)
 if (require.main === module) {
   app.listen(PORT, '127.0.0.1', () => {
     console.log(`CV Editor running at http://localhost:${PORT}`);
     console.log(`Project root: ${PROJECT_ROOT}`);
+    console.log(`Database: ${DB_PATH}`);
   });
 }
 
