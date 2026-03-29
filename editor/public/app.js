@@ -1,9 +1,11 @@
 function app() {
   return {
-    activeDoc: 'resume',
+    activeDoc: 'cv',
+    sections: [],
     docSections: [],
-    dataModel: null,
-    resumeConfig: { sectionOrder: [], sections: {} },
+    personal: {},
+    metrics: [],
+    coverletter: { settings: {}, sections: [] },
     showPdf: false,
     compiling: false,
     compiledPdfs: { resume: '', cv: '', coverletter: '' },
@@ -13,15 +15,24 @@ function app() {
     sortable: null,
     darkMode: true,
     sidebarOpen: true,
+    _saveTimers: {},
+
+    // Modal state
+    modal: { open: false, title: '', fields: [], resolve: null },
 
     async init() {
       this.darkMode = document.documentElement.dataset.theme !== 'light';
       await Promise.all([
-        this.loadData(),
-        this.loadResumeConfig()
+        this.loadPersonal(),
+        this.loadMetrics(),
+        this.loadSections(),
+        this.loadDocumentSections('cv'),
+        this.loadCoverletter(),
       ]);
-      await this.loadDocument('cv');
       this.$watch('activeDoc', (val) => {
+        if (val !== 'coverletter') {
+          this.loadDocumentSections(val);
+        }
         if (this.compiledPdfs[val]) {
           this.pdfUrl = this.compiledPdfs[val];
           this.showPdf = true;
@@ -36,247 +47,214 @@ function app() {
       if (window.__setTheme) window.__setTheme(this.darkMode ? 'dark' : 'light');
     },
 
-    // ------ Data (personal info + metrics from data.json) ------
+    // ------ Modal system ------
 
-    async loadData() {
-      const res = await fetch(API_BASE + '/api/data');
-      if (!res.ok) { console.error('Failed to load data:', res.status); return; }
-      this.dataModel = await res.json();
+    openModal(title, fields) {
+      return new Promise((resolve) => {
+        this.modal = { open: true, title, fields: fields.map(f => ({ ...f, value: f.value || '' })), resolve };
+      });
     },
 
-    async saveData() {
-      try {
-        const res = await fetch(API_BASE + '/api/data', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.dataModel)
-        });
-        if (!res.ok) { this.flash('Save failed', 'error'); return; }
-        const data = await res.json();
-        this.flash(data.success ? 'Data saved' : 'Save failed', data.success ? 'success' : 'error');
-      } catch (e) {
-        this.flash('Save failed', 'error');
+    submitModal() {
+      const result = {};
+      for (const f of this.modal.fields) {
+        result[f.name] = f.value;
       }
+      this.modal.resolve(result);
+      this.modal = { open: false, title: '', fields: [], resolve: null };
+    },
+
+    cancelModal() {
+      this.modal.resolve(null);
+      this.modal = { open: false, title: '', fields: [], resolve: null };
+    },
+
+    // ------ Debounced autosave ------
+
+    debounce(key, fn, delay = 500) {
+      clearTimeout(this._saveTimers[key]);
+      this._saveTimers[key] = setTimeout(fn, delay);
+    },
+
+    // ------ Personal info ------
+
+    async loadPersonal() {
+      const res = await fetch(API_BASE + '/api/settings?prefix=personal');
+      if (!res.ok) return;
+      const data = await res.json();
+      const p = {};
+      for (const [key, value] of Object.entries(data)) {
+        p[key.replace('personal.', '')] = value;
+      }
+      this.personal = p;
+    },
+
+    autoSavePersonal(field) {
+      this.debounce('personal.' + field, async () => {
+        await fetch(API_BASE + '/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ['personal.' + field]: this.personal[field] || '' }),
+        });
+        this.flash('Saved', 'success');
+      });
     },
 
     togglePhoto() {
-      if (!this.dataModel.personal.photo) {
-        this.dataModel.personal.photo = { enabled: true, file: 'profile' };
-      } else {
-        this.dataModel.personal.photo.enabled = !this.dataModel.personal.photo.enabled;
-      }
-      this.saveData();
+      const enabled = this.personal.photoEnabled === '1' ? '0' : '1';
+      this.personal.photoEnabled = enabled;
+      fetch(API_BASE + '/api/settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 'personal.photoEnabled': enabled }),
+      });
     },
 
-    metricsForSection(file) {
-      if (!this.dataModel) return [];
-      return this.dataModel.metrics.filter(m => m.section === file);
+    // ------ Metrics ------
+
+    async loadMetrics() {
+      const res = await fetch(API_BASE + '/api/metrics');
+      if (!res.ok) return;
+      this.metrics = await res.json();
     },
 
-    metricGroupsForSection(file) {
-      const metrics = this.metricsForSection(file);
+    metricsForSection(sectionId) {
+      return this.metrics.filter(m => m.sectionId === sectionId);
+    },
+
+    metricGroupsForSection(sectionId) {
+      const metrics = this.metricsForSection(sectionId);
       const groups = {};
       for (const m of metrics) {
-        const g = m.group || 'Ungrouped';
+        const g = m.groupName || 'Ungrouped';
         if (!groups[g]) groups[g] = [];
         groups[g].push(m);
       }
       return Object.entries(groups);
     },
 
-    updateMetric(command, value) {
-      const metric = this.dataModel.metrics.find(m => m.command === command);
-      if (metric) {
-        metric.value = value === '' ? null : value;
-        this.saveData();
-      }
-    },
-
-    addMetric(section, group) {
-      const command = prompt('Variable command name (e.g., myMetric):');
-      if (!command || !command.trim()) return;
-      const cmd = command.trim();
-      if (this.dataModel.metrics.some(m => m.command === cmd)) {
-        this.flash('Variable command already exists', 'error');
-        return;
-      }
-      const label = prompt('Placeholder label (shown when empty):', cmd) || cmd;
-      this.dataModel.metrics.push({
-        command: cmd,
-        label: label.trim(),
-        value: null,
-        group: group,
-        section: section
-      });
-      this.saveData();
-    },
-
-    removeMetric(command) {
-      const idx = this.dataModel.metrics.findIndex(m => m.command === command);
-      if (idx !== -1) {
-        this.dataModel.metrics.splice(idx, 1);
-        this.saveData();
-      }
-    },
-
-    addMetricGroup(section) {
-      const name = prompt('New variable group name:');
-      if (!name || !name.trim()) return;
-      this.dataModel.metrics.push({
-        command: '',
-        label: '',
-        value: null,
-        group: name.trim(),
-        section: section
-      });
-      const command = prompt('First variable command name:');
-      if (command && command.trim()) {
-        const cmd = command.trim();
-        if (this.dataModel.metrics.some(m => m.command === cmd)) {
-          this.flash('Variable command already exists', 'error');
-          this.dataModel.metrics.pop();
-          return;
-        }
-        const label = prompt('Placeholder label:', cmd) || cmd;
-        const last = this.dataModel.metrics[this.dataModel.metrics.length - 1];
-        last.command = cmd;
-        last.label = label.trim();
-      } else {
-        this.dataModel.metrics.pop();
-        return;
-      }
-      this.saveData();
-    },
-
-    removeMetricGroup(section, group) {
-      this.dataModel.metrics = this.dataModel.metrics.filter(
-        m => !(m.section === section && m.group === group)
-      );
-      this.saveData();
-    },
-
-    renameMetricGroup(section, oldGroup) {
-      const newName = prompt('Rename group:', oldGroup);
-      if (!newName || !newName.trim() || newName.trim() === oldGroup) return;
-      for (const m of this.dataModel.metrics) {
-        if (m.section === section && m.group === oldGroup) {
-          m.group = newName.trim();
-        }
-      }
-      this.saveData();
-    },
-
-    // ------ Resume Config ------
-
-    async loadResumeConfig() {
-      const res = await fetch(API_BASE + '/api/resume-config');
-      if (!res.ok) { console.error('Failed to load resume config:', res.status); return; }
-      this.resumeConfig = await res.json();
-    },
-
-    async saveResumeConfig() {
-      try {
-        const res = await fetch(API_BASE + '/api/resume-config', {
+    autoSaveMetric(metric) {
+      this.debounce('metric.' + metric.id, async () => {
+        await fetch(API_BASE + '/api/metrics/' + metric.id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.resumeConfig)
+          body: JSON.stringify({ value: metric.value === '' ? null : metric.value }),
         });
-        if (!res.ok) { this.flash('Config save failed', 'error'); }
-      } catch (e) {
-        this.flash('Config save failed', 'error');
+        this.flash('Saved', 'success');
+      });
+    },
+
+    async addMetric(sectionId, groupName) {
+      const result = await this.openModal('Add Variable', [
+        { name: 'command', label: 'Command name (e.g., myMetric)', value: '' },
+        { name: 'label', label: 'Placeholder label', value: '' },
+      ]);
+      if (!result || !result.command.trim()) return;
+      const res = await fetch(API_BASE + '/api/metrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: result.command.trim(),
+          label: result.label.trim() || result.command.trim(),
+          value: null,
+          groupName,
+          sectionId,
+        }),
+      });
+      if (res.status === 409) { this.flash('Command already exists', 'error'); return; }
+      if (!res.ok) { this.flash('Failed to add', 'error'); return; }
+      await this.loadMetrics();
+    },
+
+    async removeMetric(metricId) {
+      await fetch(API_BASE + '/api/metrics/' + metricId, { method: 'DELETE' });
+      await this.loadMetrics();
+    },
+
+    async addMetricGroup(sectionId) {
+      const result = await this.openModal('New Variable Group', [
+        { name: 'groupName', label: 'Group name', value: '' },
+        { name: 'command', label: 'First variable command name', value: '' },
+        { name: 'label', label: 'Placeholder label', value: '' },
+      ]);
+      if (!result || !result.groupName.trim() || !result.command.trim()) return;
+      const res = await fetch(API_BASE + '/api/metrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: result.command.trim(),
+          label: result.label.trim() || result.command.trim(),
+          value: null,
+          groupName: result.groupName.trim(),
+          sectionId,
+        }),
+      });
+      if (res.status === 409) { this.flash('Command already exists', 'error'); return; }
+      if (!res.ok) { this.flash('Failed to add', 'error'); return; }
+      await this.loadMetrics();
+    },
+
+    async removeMetricGroup(sectionId, groupName) {
+      const toRemove = this.metrics.filter(m => m.sectionId === sectionId && m.groupName === groupName);
+      for (const m of toRemove) {
+        await fetch(API_BASE + '/api/metrics/' + m.id, { method: 'DELETE' });
       }
+      await this.loadMetrics();
     },
 
-    ensureSectionConfig(file) {
-      if (!this.resumeConfig.sections[file]) {
-        this.resumeConfig.sections[file] = { resume: true, entries: [] };
+    async renameMetricGroup(sectionId, oldGroup) {
+      const result = await this.openModal('Rename Group', [
+        { name: 'groupName', label: 'New group name', value: oldGroup },
+      ]);
+      if (!result || !result.groupName.trim() || result.groupName.trim() === oldGroup) return;
+      const toRename = this.metrics.filter(m => m.sectionId === sectionId && m.groupName === oldGroup);
+      for (const m of toRename) {
+        await fetch(API_BASE + '/api/metrics/' + m.id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ groupName: result.groupName.trim() }),
+        });
       }
-      return this.resumeConfig.sections[file];
+      await this.loadMetrics();
     },
 
-    isResumeSection(file) {
-      const cfg = this.resumeConfig.sections[file];
-      return cfg ? cfg.resume !== false : true;
+    // ------ Sections + Document config ------
+
+    async loadSections() {
+      const res = await fetch(API_BASE + '/api/sections');
+      if (!res.ok) return;
+      this.sections = await res.json();
     },
 
-    toggleResumeSection(file) {
-      const cfg = this.ensureSectionConfig(file);
-      cfg.resume = !cfg.resume;
-      if (cfg.resume) {
-        if (!this.resumeConfig.sectionOrder.includes(file)) {
-          this.resumeConfig.sectionOrder.push(file);
-        }
-      } else {
-        this.resumeConfig.sectionOrder = this.resumeConfig.sectionOrder.filter(f => f !== file);
+    async loadDocumentSections(variant) {
+      const res = await fetch(API_BASE + '/api/documents/' + variant);
+      if (!res.ok) return;
+      const data = await res.json();
+      // Merge with full section data
+      this.docSections = [];
+      for (const ds of data.sections) {
+        const sec = this.sections.find(s => s.id === ds.sectionId);
+        if (!sec) continue;
+        this.docSections.push({
+          ...sec,
+          enabled: ds.enabled,
+          resumeParagraphText: ds.resumeParagraphText,
+          _expanded: true,
+          _data: null,
+        });
       }
-      this.saveResumeConfig();
-    },
-
-    isResumeEntry(file, ei) {
-      const cfg = this.resumeConfig.sections[file];
-      if (!cfg || !cfg.entries || !cfg.entries[ei]) return true;
-      return cfg.entries[ei].resume !== false;
-    },
-
-    toggleResumeEntry(file, ei) {
-      const cfg = this.ensureSectionConfig(file);
-      while (cfg.entries.length <= ei) {
-        cfg.entries.push({ resume: true, items: [] });
-      }
-      cfg.entries[ei].resume = !cfg.entries[ei].resume;
-      this.saveResumeConfig();
-    },
-
-    isResumeBullet(file, ei, ii) {
-      const cfg = this.resumeConfig.sections[file];
-      if (!cfg || !cfg.entries || !cfg.entries[ei] || !cfg.entries[ei].items) return true;
-      return cfg.entries[ei].items[ii] !== false;
-    },
-
-    toggleResumeBullet(file, ei, ii) {
-      const cfg = this.ensureSectionConfig(file);
-      while (cfg.entries.length <= ei) {
-        cfg.entries.push({ resume: true, items: [] });
-      }
-      while (cfg.entries[ei].items.length <= ii) {
-        cfg.entries[ei].items.push(true);
-      }
-      cfg.entries[ei].items[ii] = !cfg.entries[ei].items[ii];
-      this.saveResumeConfig();
-    },
-
-    getResumeText(file) {
-      const cfg = this.resumeConfig.sections[file];
-      return cfg ? (cfg.resumeText || '') : '';
-    },
-
-    setResumeText(file, text) {
-      const cfg = this.ensureSectionConfig(file);
-      cfg.resumeText = text;
-      this.saveResumeConfig();
-    },
-
-    // ------ Document (section list) ------
-
-    async loadDocument(name) {
-      const res = await fetch(`${API_BASE}/api/document/${name}`);
-      if (!res.ok) { console.error('Failed to load document:', res.status); return; }
-      const doc = await res.json();
-      this.docSections = doc.sections.map(s => ({ ...s, _expanded: true, _data: null }));
       this.$nextTick(() => {
         this.initSortable();
         for (const sec of this.docSections) {
-          if (sec.enabled || this.isResumeSection(sec.file)) this.loadSectionData(sec);
+          if (sec.enabled) this.loadSectionData(sec);
         }
       });
     },
 
     async switchDoc(name) {
-      const wasCV = this.activeDoc !== 'coverletter';
-      const isCV = name !== 'coverletter';
       this.activeDoc = name;
-      if (!wasCV && isCV) {
-        await this.loadDocument('cv');
+      if (name !== 'coverletter') {
+        await this.loadDocumentSections(name);
       }
       if (this.compiledPdfs[name]) {
         this.pdfUrl = this.compiledPdfs[name];
@@ -296,16 +274,47 @@ function app() {
         onEnd: (evt) => {
           const item = this.docSections.splice(evt.oldIndex, 1)[0];
           this.docSections.splice(evt.newIndex, 0, item);
-          this.saveSectionOrder();
-        }
+          this.saveDocumentSections();
+        },
       });
+    },
+
+    async saveDocumentSections() {
+      const variant = this.activeDoc;
+      const sections = this.docSections.map(s => ({
+        sectionId: s.id,
+        enabled: s.enabled,
+        resumeParagraphText: s.resumeParagraphText || null,
+      }));
+      await fetch(API_BASE + '/api/documents/' + variant, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections }),
+      });
+      this.flash('Order saved', 'success');
+    },
+
+    toggleSection(index) {
+      this.docSections[index].enabled = !this.docSections[index].enabled;
+      this.saveDocumentSections();
+    },
+
+    // ------ Section data (entries + items) ------
+
+    async loadSectionData(sec) {
+      if (sec._data) return;
+      const res = await fetch(API_BASE + '/api/sections/' + sec.id);
+      if (!res.ok) return;
+      sec._data = await res.json();
+      if (sec._data.type === 'cventries') {
+        this.$nextTick(() => this.initBulletSortables(sec));
+      }
     },
 
     initBulletSortables(sec) {
       this.$nextTick(() => {
-        const allLists = document.querySelectorAll('.items-list[data-entry-idx]');
+        const allLists = document.querySelectorAll(`.items-list[data-sec-id="${sec.id}"]`);
         allLists.forEach(list => {
-          if (list.dataset.secFile !== sec.file) return;
           if (list._sortable) { list._sortable.destroy(); list._sortable = null; }
           list._sortable = Sortable.create(list, {
             handle: '.ui-drag-handle',
@@ -314,137 +323,189 @@ function app() {
             draggable: '.item-row',
             animation: 100,
             onEnd: (evt) => {
-              const ei = parseInt(list.dataset.entryIdx);
-              const entry = sec._data.entries[ei];
+              const entryId = parseInt(list.dataset.entryId);
+              const entry = sec._data.entries.find(e => e.id === entryId);
               if (!entry) return;
               const item = entry.items.splice(evt.oldIndex, 1)[0];
               entry.items.splice(evt.newIndex, 0, item);
-              const cfg = this.resumeConfig.sections[sec.file];
-              if (cfg && cfg.entries && cfg.entries[ei] && cfg.entries[ei].items) {
-                const flag = cfg.entries[ei].items.splice(evt.oldIndex, 1)[0];
-                cfg.entries[ei].items.splice(evt.newIndex, 0, flag !== undefined ? flag : true);
-                this.saveResumeConfig();
-              }
-            }
+              const ids = entry.items.map(i => i.id);
+              fetch(API_BASE + '/api/entries/' + entryId + '/items/order', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids }),
+              });
+            },
           });
         });
       });
     },
 
-    async saveSectionOrder() {
-      const sections = this.docSections.map(s => ({
-        file: s.file, enabled: s.enabled, comment: s.comment
-      }));
-      try {
-        const res = await fetch(API_BASE + '/api/document/cv/sections', {
+    // ------ Entry CRUD ------
+
+    autoSaveEntry(entry) {
+      this.debounce('entry.' + entry.id, async () => {
+        await fetch(API_BASE + '/api/entries/' + entry.id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sections })
+          body: JSON.stringify({ fields: entry.fields }),
         });
-        if (!res.ok) { this.flash('Save failed', 'error'); return; }
-        const data = await res.json();
-        this.flash(data.success ? 'Section order saved' : 'Save failed', data.success ? 'success' : 'error');
-      } catch (e) {
-        this.flash('Save failed', 'error');
-      }
-    },
-
-    async toggleSection(index) {
-      this.docSections[index].enabled = !this.docSections[index].enabled;
-      await this.saveSectionOrder();
-    },
-
-    sectionTitle(file) {
-      const name = file.split('/').pop().replace('.tex', '');
-      return name.charAt(0).toUpperCase() + name.slice(1);
-    },
-
-    // ------ Section editing ------
-
-    async loadSectionData(sec) {
-      if (sec._data) {
-        if (sec._data.type === 'cventries') this.initBulletSortables(sec);
-        return;
-      }
-      const res = await fetch(`${API_BASE}/api/section/${sec.file}`);
-      if (!res.ok) { console.error('Failed to load section:', res.status); return; }
-      sec._data = await res.json();
-      if (sec._data.type === 'cventries') {
-        this.initBulletSortables(sec);
-      }
-    },
-
-    async saveSection(sec) {
-      try {
-        const res = await fetch(`${API_BASE}/api/section/${sec.file}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(sec._data)
-        });
-        if (!res.ok) { this.flash('Save failed', 'error'); return; }
-        const data = await res.json();
-        this.flash(data.success ? 'Section saved' : 'Save failed', data.success ? 'success' : 'error');
-      } catch (e) {
-        this.flash('Save failed', 'error');
-      }
-    },
-
-    addCventry(sec) {
-      sec._data.entries.push({
-        position: '',
-        organization: '',
-        location: '',
-        date: '',
-        items: ['']
+        this.flash('Saved', 'success');
       });
-      const cfg = this.ensureSectionConfig(sec.file);
-      cfg.entries.push({ resume: true, items: [true] });
-      this.saveResumeConfig();
     },
 
-    removeEntry(sec, index) {
-      sec._data.entries.splice(index, 1);
-      const cfg = this.resumeConfig.sections[sec.file];
-      if (cfg && cfg.entries) {
-        cfg.entries.splice(index, 1);
-        this.saveResumeConfig();
+    async addEntry(sec) {
+      const defaults = {};
+      if (sec.type === 'cventries') {
+        Object.assign(defaults, { position: '', organization: '', location: '', date: '' });
+      } else if (sec.type === 'cvskills') {
+        Object.assign(defaults, { category: '', skills: '' });
+      } else if (sec.type === 'cvhonors') {
+        Object.assign(defaults, { award: '', issuer: '', location: '', date: '' });
+      } else if (sec.type === 'cvreferences') {
+        Object.assign(defaults, { name: '', relation: '', phone: '', email: '' });
+      } else if (sec.type === 'cvparagraph') {
+        Object.assign(defaults, { text: '' });
       }
+      const res = await fetch(API_BASE + '/api/sections/' + sec.id + '/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: defaults }),
+      });
+      if (!res.ok) { this.flash('Failed to add', 'error'); return; }
+      // Reload section data
+      sec._data = null;
+      await this.loadSectionData(sec);
     },
 
-    addBullet(sec, entry, ei) {
-      entry.items.push('');
-      const cfg = this.ensureSectionConfig(sec.file);
-      while (cfg.entries.length <= ei) {
-        cfg.entries.push({ resume: true, items: [] });
-      }
-      cfg.entries[ei].items.push(true);
-      this.saveResumeConfig();
+    async removeEntry(sec, entryId) {
+      await fetch(API_BASE + '/api/entries/' + entryId, { method: 'DELETE' });
+      sec._data.entries = sec._data.entries.filter(e => e.id !== entryId);
     },
 
-    removeBullet(sec, entry, ei, ii) {
-      entry.items.splice(ii, 1);
-      const cfg = this.resumeConfig.sections[sec.file];
-      if (cfg && cfg.entries && cfg.entries[ei] && cfg.entries[ei].items) {
-        cfg.entries[ei].items.splice(ii, 1);
-        this.saveResumeConfig();
-      }
+    toggleResumeEntry(entry) {
+      entry.resumeIncluded = !entry.resumeIncluded;
+      fetch(API_BASE + '/api/entries/' + entry.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeIncluded: entry.resumeIncluded }),
+      });
+    },
+
+    // ------ Item (bullet) CRUD ------
+
+    autoSaveItem(item) {
+      this.debounce('item.' + item.id, async () => {
+        await fetch(API_BASE + '/api/items/' + item.id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: item.content }),
+        });
+        this.flash('Saved', 'success');
+      });
+    },
+
+    async addItem(entry) {
+      const res = await fetch(API_BASE + '/api/entries/' + entry.id + '/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: '' }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      entry.items.push({ id: data.id, content: '', resumeIncluded: true, sort_order: entry.items.length, entry_id: entry.id });
+    },
+
+    async removeItem(entry, itemId) {
+      await fetch(API_BASE + '/api/items/' + itemId, { method: 'DELETE' });
+      entry.items = entry.items.filter(i => i.id !== itemId);
+    },
+
+    toggleResumeItem(item) {
+      item.resumeIncluded = !item.resumeIncluded;
+      fetch(API_BASE + '/api/items/' + item.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resumeIncluded: item.resumeIncluded }),
+      });
+    },
+
+    // ------ cvparagraph: autosave text + resume text ------
+
+    autoSaveParagraph(sec) {
+      const entry = sec._data.entries[0];
+      if (!entry) return;
+      this.debounce('para.' + entry.id, async () => {
+        await fetch(API_BASE + '/api/entries/' + entry.id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: entry.fields }),
+        });
+        this.flash('Saved', 'success');
+      });
+    },
+
+    autoSaveResumeParagraphText(sec) {
+      this.debounce('rpt.' + sec.id, async () => {
+        this.saveDocumentSections();
+      });
     },
 
     // ------ Cover letter ------
 
-    async saveCoverletter(cl) {
-      try {
-        const res = await fetch(API_BASE + '/api/coverletter', {
+    async loadCoverletter() {
+      const [settingsRes, sectionsRes] = await Promise.all([
+        fetch(API_BASE + '/api/settings?prefix=coverletter'),
+        fetch(API_BASE + '/api/coverletter/sections'),
+      ]);
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        const s = {};
+        for (const [key, value] of Object.entries(data)) {
+          s[key.replace('coverletter.', '')] = value;
+        }
+        this.coverletter.settings = s;
+      }
+      if (sectionsRes.ok) {
+        this.coverletter.sections = await sectionsRes.json();
+      }
+    },
+
+    autoSaveCoverletterSetting(field) {
+      this.debounce('cl.' + field, async () => {
+        await fetch(API_BASE + '/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ['coverletter.' + field]: this.coverletter.settings[field] || '' }),
+        });
+        this.flash('Saved', 'success');
+      });
+    },
+
+    async addCoverletterSection() {
+      const res = await fetch(API_BASE + '/api/coverletter/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: '', body: '' }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      this.coverletter.sections.push({ id: data.id, title: '', body: '', sort_order: this.coverletter.sections.length });
+    },
+
+    autoSaveCoverletterSection(sec) {
+      this.debounce('clsec.' + sec.id, async () => {
+        await fetch(API_BASE + '/api/coverletter/sections/' + sec.id, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(cl)
+          body: JSON.stringify({ title: sec.title, body: sec.body }),
         });
-        if (!res.ok) { this.flash('Save failed', 'error'); return; }
-        const data = await res.json();
-        this.flash(data.success ? 'Cover letter saved' : 'Save failed', data.success ? 'success' : 'error');
-      } catch (e) {
-        this.flash('Save failed', 'error');
-      }
+        this.flash('Saved', 'success');
+      });
+    },
+
+    async removeCoverletterSection(secId) {
+      await fetch(API_BASE + '/api/coverletter/sections/' + secId, { method: 'DELETE' });
+      this.coverletter.sections = this.coverletter.sections.filter(s => s.id !== secId);
     },
 
     // ------ Compile & PDF ------
@@ -453,11 +514,11 @@ function app() {
       this.compiling = true;
       const name = this.activeDoc;
       try {
-        const res = await fetch(`${API_BASE}/api/compile/${name}`, { method: 'POST' });
+        const res = await fetch(API_BASE + '/api/compile/' + name, { method: 'POST' });
         const data = await res.json();
         if (data.success) {
-          this.flash(`${name.charAt(0).toUpperCase() + name.slice(1)} compiled`, 'success');
-          const url = `${API_BASE}/api/pdf/${name}?t=${Date.now()}`;
+          this.flash(name.charAt(0).toUpperCase() + name.slice(1) + ' compiled', 'success');
+          const url = API_BASE + '/api/pdf/' + name + '?t=' + Date.now();
           this.compiledPdfs[name] = url;
           this.pdfUrl = url;
           this.showPdf = true;
@@ -478,6 +539,6 @@ function app() {
       this.statusType = type === 'success' ? 'ui-alert-success' : type === 'error' ? 'ui-alert-danger' : '';
       clearTimeout(this._flashTimer);
       this._flashTimer = setTimeout(() => { this.statusMsg = ''; }, 3000);
-    }
+    },
   };
 }
