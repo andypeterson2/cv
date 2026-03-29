@@ -1,12 +1,16 @@
 services:
   cv-editor:
     image: node:20-slim
-    command: node server.js
+    command: sh -c "npm install --production && node server.js"
     ports:
       - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
     environment:
       PORT: ${PORT:-3001}
+      HOST: 0.0.0.0
     volumes:
-      - .:/app:ro
-      - /app/editor/node_modules
+      - .:/app
+      - cv_node_modules:/app/editor/node_modules
     working_dir: /app/editor
+
+volumes:
+  cv_node_modules:
