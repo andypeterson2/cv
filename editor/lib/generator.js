@@ -21,23 +21,18 @@ const {
  * Reuses the existing serializeData() which expects { personal, metrics }.
  */
 function generateDataTex(personal, metrics) {
-  // Map DB format to serializer's expected format
+  // Map DB format to serializer's expected format.
+  // Pass all personal fields through — the serializer decides which to emit.
+  const p = Object.assign({}, personal);
+  // Transform photo fields into the nested object the serializer expects
+  p.photo = p.photoEnabled === '1'
+    ? { enabled: true, file: p.photoFile || 'profile' }
+    : null;
+  delete p.photoEnabled;
+  delete p.photoFile;
+
   const data = {
-    personal: {
-      firstName: personal.firstName || '',
-      lastName: personal.lastName || '',
-      position: personal.position || '',
-      address: personal.address || '',
-      mobile: personal.mobile || '',
-      email: personal.email || '',
-      github: personal.github || '',
-      linkedin: personal.linkedin || '',
-      homepage: personal.homepage || '',
-      quote: personal.quote || '',
-      photo: personal.photoEnabled === '1'
-        ? { enabled: true, file: personal.photoFile || 'profile' }
-        : null,
-    },
+    personal: p,
     metrics: metrics.map(m => ({
       command: m.command,
       label: m.label,
