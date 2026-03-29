@@ -36,7 +36,12 @@ app.getDb = function () {
 app.use(cors({
   origin: process.env.CV_CORS_ORIGINS
     ? process.env.CV_CORS_ORIGINS.split(',')
-    : ['http://localhost:3001', 'http://127.0.0.1:3001', 'https://andypeterson2.github.io']
+    : [
+        'http://localhost:3001', 'http://127.0.0.1:3001',
+        'http://localhost:4321', 'http://127.0.0.1:4321',
+        'http://localhost:8000', 'http://127.0.0.1:8000',
+        'https://andypeterson2.github.io',
+      ]
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -427,10 +432,10 @@ app.get('/api/export', (req, res) => {
 app.get('/api/health', (req, res) => {
   try {
     // Simple DB health check — run a trivial query
-    getDb().getSections();
-    res.json({ status: 'ok' });
+    const sections = getDb().getSections();
+    res.json({ status: 'ok', service: 'cv', sections: sections.length });
   } catch (e) {
-    res.status(500).json({ status: 'error', error: e.message });
+    res.status(500).json({ status: 'error', service: 'cv', error: e.message });
   }
 });
 
