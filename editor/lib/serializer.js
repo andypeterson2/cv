@@ -270,12 +270,45 @@ function serializeData(data) {
   lines.push(`\\name{${p.firstName || ''}}{${p.lastName || ''}} % Legal`);
   if (p.position) lines.push(`\\position{${p.position}}`);
   if (p.address) lines.push(`\\address{${p.address}}`);
+  if (p.dateofbirth) lines.push(`\\dateofbirth{${p.dateofbirth}}`);
   lines.push('');
+
+  // Contact
   if (p.mobile) lines.push(`\\mobile{${p.mobile}}`);
   if (p.email) lines.push(`\\email{${p.email}}`);
+  if (p.whatsapp) lines.push(`\\whatsapp{${p.whatsapp}}`);
+  if (p.skype) lines.push(`\\skype{${p.skype}}`);
+  if (p.telegram) lines.push(`\\telegram{${p.telegram}}`);
+  lines.push('');
+
+  // Web & code
+  if (p.homepage) lines.push(`\\homepage{${p.homepage}}`);
   if (p.github) lines.push(`\\github{${p.github}}`);
   if (p.linkedin) lines.push(`\\linkedin{${p.linkedin}}`);
-  if (p.homepage) lines.push(`\\homepage{${p.homepage}}`);
+  if (p.gitlab) lines.push(`\\gitlab{${p.gitlab}}`);
+  if (p.bitbucket) lines.push(`\\bitbucket{${p.bitbucket}}`);
+  lines.push('');
+
+  // Social
+  if (p.twitter) lines.push(`\\twitter{${p.twitter}}`);
+  if (p.x) lines.push(`\\x{${p.x}}`);
+  if (p.reddit) lines.push(`\\reddit{${p.reddit}}`);
+  if (p.medium) lines.push(`\\medium{${p.medium}}`);
+  if (p.xing) lines.push(`\\xing{${p.xing}}`);
+  if (p.mastodonInstance && p.mastodonName) lines.push(`\\mastodon{${p.mastodonInstance}}{${p.mastodonName}}`);
+  lines.push('');
+
+  // Academic
+  if (p.orcid) lines.push(`\\orcid{${p.orcid}}`);
+  if (p.researchgate) lines.push(`\\researchgate{${p.researchgate}}`);
+  if (p.kaggle) lines.push(`\\kaggle{${p.kaggle}}`);
+  if (p.hackerrank) lines.push(`\\hackerrank{${p.hackerrank}}`);
+  if (p.stackoverflowId) lines.push(`\\stackoverflow{${p.stackoverflowId}}{${p.stackoverflowName || ''}}`);
+  if (p.googlescholarId) lines.push(`\\googlescholar{${p.googlescholarId}}{${p.googlescholarName || ''}}`);
+  lines.push('');
+
+  // Other
+  if (p.extrainfo) lines.push(`\\extrainfo{${p.extrainfo}}`);
   if (p.quote) lines.push('\\quote{``' + p.quote + "''"  + '}');
   lines.push('');
 
