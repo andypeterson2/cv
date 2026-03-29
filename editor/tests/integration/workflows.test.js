@@ -454,3 +454,212 @@ describe('Static file serving', () => {
     expect(res.raw).toContain('function');
   });
 });
+
+// =========================================================================
+// 11. Full resume build workflow (person → data → export → verify)
+// =========================================================================
+
+describe('Full resume build workflow', () => {
+  test('create person, fill out resume, export, verify completeness', async () => {
+    // 1. Create a new person
+    const person = await request('POST', '/api/persons', { name: 'Workflow Test' });
+    expect(person.status).toBe(201);
+    const personId = person.body.id;
+
+    // 2. Switch to the new person
+    const sw = await request('POST', `/api/persons/${personId}/switch`);
+    expect(sw.status).toBe(200);
+
+    // 3. Verify blank slate
+    let sections = await request('GET', '/api/sections');
+    expect(sections.body.length).toBe(0);
+
+    // 4. Fill personal info (including social fields)
+    await request('PATCH', '/api/settings', {
+      'personal.firstName': 'Test',
+      'personal.lastName': 'User',
+      'personal.position': 'Engineer',
+      'personal.email': 'test@example.com',
+      'personal.github': 'testuser',
+      'personal.linkedin': 'testuser',
+      'personal.twitter': 'testuser',
+      'personal.orcid': '0000-0001-0000-0001',
+      'personal.homepage': 'testuser.dev',
+    });
+
+    // 5. Create sections
+    await request('POST', '/api/sections', { id: 'summary', type: 'cvparagraph', title: 'Summary' });
+    await request('POST', '/api/sections', { id: 'experience', type: 'cventries', title: 'Experience' });
+    await request('POST', '/api/sections', { id: 'skills', type: 'cvskills', title: 'Skills' });
+
+    // 6. Add entries
+    const summaryEntry = await request('POST', '/api/sections/summary/entries', {
+      fields: { text: 'Experienced engineer specializing in distributed systems.' },
+    });
+    expect(summaryEntry.status).toBe(201);
+
+    const expEntry = await request('POST', '/api/sections/experience/entries', {
+      fields: { position: 'Senior Engineer', organization: 'BigCo', location: 'Remote', date: '2020 -- Present' },
+    });
+    expect(expEntry.status).toBe(201);
+
+    // 7. Add bullet points
+    const bullet1 = await request('POST', `/api/entries/${expEntry.body.id}/items`, {
+      content: 'Led architecture of core platform',
+    });
+    const bullet2 = await request('POST', `/api/entries/${expEntry.body.id}/items`, {
+      content: 'Reduced latency by 40\\%',
+    });
+    expect(bullet1.status).toBe(201);
+    expect(bullet2.status).toBe(201);
+
+    // 8. Add skills
+    await request('POST', '/api/sections/skills/entries', {
+      fields: { category: 'Languages', skills: 'Go, Rust, TypeScript' },
+    });
+
+    // 9. Add metrics
+    const metric = await request('POST', '/api/metrics', {
+      command: 'wfLatency', label: 'p99 Latency', value: '12ms',
+      groupName: 'Performance', sectionId: 'experience',
+    });
+    expect(metric.status).toBe(201);
+
+    // 10. Set document section ordering
+    await request('PUT', '/api/documents/cv', {
+      sections: [
+        { sectionId: 'summary', enabled: true },
+        { sectionId: 'experience', enabled: true },
+        { sectionId: 'skills', enabled: true },
+      ],
+    });
+    await request('PUT', '/api/documents/resume', {
+      sections: [
+        { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short summary for resume.' },
+        { sectionId: 'experience', enabled: true },
+        { sectionId: 'skills', enabled: true },
+      ],
+    });
+
+    // 11. Export and verify completeness
+    const exp = await request('GET', '/api/export');
+    expect(exp.status).toBe(200);
+
+    // Personal info
+    expect(exp.body.personal.firstName).toBe('Test');
+    expect(exp.body.personal.lastName).toBe('User');
+    expect(exp.body.personal.github).toBe('testuser');
+    expect(exp.body.personal.twitter).toBe('testuser');
+    expect(exp.body.personal.orcid).toBe('0000-0001-0000-0001');
+    expect(exp.body.personal.homepage).toBe('testuser.dev');
+
+    // Sections
+    expect(exp.body.sections.length).toBe(3);
+    const expSec = exp.body.sections.find(s => s.id === 'experience');
+    expect(expSec.entries.length).toBe(1);
+    expect(expSec.entries[0].fields.position).toBe('Senior Engineer');
+    expect(expSec.entries[0].items.length).toBe(2);
+
+    const skillSec = exp.body.sections.find(s => s.id === 'skills');
+    expect(skillSec.entries[0].fields.category).toBe('Languages');
+
+    // Metrics
+    expect(exp.body.metrics.find(m => m.command === 'wfLatency').value).toBe('12ms');
+
+    // Document config
+    expect(exp.body.documents.cv.length).toBe(3);
+    expect(exp.body.documents.resume.length).toBe(3);
+    const resumeSummary = exp.body.documents.resume.find(d => d.sectionId === 'summary');
+    expect(resumeSummary.resumeParagraphText).toBe('Short summary for resume.');
+
+    // 12. Verify health endpoint still works
+    const health = await request('GET', '/api/health');
+    expect(health.status).toBe(200);
+    expect(health.body.status).toBe('ok');
+
+    // 13. Switch back to original person to not pollute other tests
+    const persons = await request('GET', '/api/persons');
+    const janeId = persons.body.persons.find(p => p.name === 'Jane Doe').id;
+    await request('POST', `/api/persons/${janeId}/switch`);
+  });
+});
+
+// =========================================================================
+// 12. Import/Export round-trip
+// =========================================================================
+
+describe('Import/Export round-trip', () => {
+  test('export → import into new person → export → data matches', async () => {
+    // Export current data (Andrew from seedDb)
+    const exp1 = await request('GET', '/api/export');
+    expect(exp1.status).toBe(200);
+
+    // Create a new person and switch
+    const person = await request('POST', '/api/persons', { name: 'Round Trip' });
+    await request('POST', `/api/persons/${person.body.id}/switch`);
+
+    // Import the exported data
+    const imp = await request('POST', '/api/import', exp1.body);
+    expect(imp.status).toBe(200);
+
+    // Export from the new person
+    const exp2 = await request('GET', '/api/export');
+    expect(exp2.status).toBe(200);
+
+    // Verify key data matches
+    expect(exp2.body.personal.firstName).toBe(exp1.body.personal.firstName);
+    expect(exp2.body.personal.lastName).toBe(exp1.body.personal.lastName);
+    expect(exp2.body.personal.email).toBe(exp1.body.personal.email);
+    expect(exp2.body.sections.length).toBe(exp1.body.sections.length);
+    expect(exp2.body.metrics.length).toBe(exp1.body.metrics.length);
+
+    // Verify section content matches
+    for (const origSec of exp1.body.sections) {
+      const imported = exp2.body.sections.find(s => s.id === origSec.id);
+      expect(imported).toBeDefined();
+      expect(imported.type).toBe(origSec.type);
+      expect(imported.title).toBe(origSec.title);
+      expect(imported.entries.length).toBe(origSec.entries.length);
+    }
+
+    // Verify document config matches
+    expect(exp2.body.documents.cv.length).toBe(exp1.body.documents.cv.length);
+    expect(exp2.body.documents.resume.length).toBe(exp1.body.documents.resume.length);
+
+    // Verify coverletter sections match
+    expect(exp2.body.coverletter.sections.length).toBe(exp1.body.coverletter.sections.length);
+
+    // Switch back
+    const persons = await request('GET', '/api/persons');
+    const janeId = persons.body.persons.find(p => p.name === 'Jane Doe').id;
+    await request('POST', `/api/persons/${janeId}/switch`);
+  });
+
+  test('import with social fields preserves them in export', async () => {
+    const data = {
+      personal: {
+        firstName: 'Social', lastName: 'Test',
+        twitter: 'socialtest', orcid: '0000-0000-0000-1234',
+        mastodonInstance: 'fosstodon.org', mastodonName: 'socialtest',
+        googlescholarId: 'abc123', googlescholarName: 'S. Test',
+        stackoverflowId: '12345', stackoverflowName: 'socialtest',
+        homepage: 'social.test',
+      },
+      sections: [],
+      metrics: [],
+      documents: { cv: [], resume: [] },
+      coverletter: { sections: [] },
+    };
+
+    await request('POST', '/api/import', data);
+
+    const exp = await request('GET', '/api/export');
+    expect(exp.body.personal.twitter).toBe('socialtest');
+    expect(exp.body.personal.orcid).toBe('0000-0000-0000-1234');
+    expect(exp.body.personal.mastodonInstance).toBe('fosstodon.org');
+    expect(exp.body.personal.mastodonName).toBe('socialtest');
+    expect(exp.body.personal.googlescholarId).toBe('abc123');
+    expect(exp.body.personal.stackoverflowId).toBe('12345');
+    expect(exp.body.personal.homepage).toBe('social.test');
+  });
+});
