@@ -21,6 +21,11 @@ function app() {
     pdfUrl: '',
     sortable: null,
     darkMode: true,
+    dirty: false,
+    serverConnected: false,
+    isJaneDoe: false,
+    persons: [],
+    activePersonId: null,
     _saveTimers: {},
 
     // Modal state
@@ -35,7 +40,9 @@ function app() {
         this.loadDocumentSections('cv'),
         this.loadCoverletter(),
         this.loadStyle(),
+        this.loadPersons(),
       ]);
+      this.serverConnected = true;
 
       // Init resize handle
       this.$nextTick(() => {
@@ -274,6 +281,65 @@ function app() {
         });
       }
       await this.loadMetrics();
+    },
+
+    // ------ Section CRUD ------
+
+    async createNewSection() {
+      var result = await this.openModal('New Section', [
+        { name: 'title', label: 'Section title', value: '' },
+        { name: 'type', label: 'Type (cventries, cvskills, cvhonors, cvreferences, cvparagraph)', value: 'cventries' },
+      ]);
+      if (!result || !result.title.trim()) return;
+      var id = result.title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      if (!id) { this.flash('Invalid title', 'error'); return; }
+      var validTypes = ['cventries', 'cvskills', 'cvhonors', 'cvreferences', 'cvparagraph'];
+      var type = result.type.trim();
+      if (validTypes.indexOf(type) === -1) { this.flash('Invalid type', 'error'); return; }
+      var res = await fetch(API_BASE + '/api/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, type: type, title: result.title.trim() }),
+      });
+      if (!res.ok) { this.flash('Failed to create section', 'error'); return; }
+      // Add to document sections
+      await this.loadSections();
+      var docSections = this.docSections.map(function(s) {
+        return { sectionId: s.id, enabled: s.enabled, resumeParagraphText: s.resumeParagraphText || null };
+      });
+      docSections.push({ sectionId: id, enabled: true });
+      await fetch(API_BASE + '/api/documents/cv', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: docSections }),
+      });
+      await this.loadDocumentSections('cv');
+      this.flash('Section created', 'success');
+    },
+
+    async deleteSection(sectionId) {
+      if (!confirm('Delete this section and all its entries?')) return;
+      var res = await fetch(API_BASE + '/api/sections/' + sectionId, { method: 'DELETE' });
+      if (!res.ok) { this.flash('Failed to delete', 'error'); return; }
+      await this.loadSections();
+      await this.loadDocumentSections('cv');
+      await this.loadMetrics();
+      this.flash('Section deleted', 'success');
+    },
+
+    async renameSection(sectionId) {
+      var sec = this.docSections.find(function(s) { return s.id === sectionId; });
+      var result = await this.openModal('Rename Section', [
+        { name: 'title', label: 'New title', value: sec ? sec.title : '' },
+      ]);
+      if (!result || !result.title.trim()) return;
+      await fetch(API_BASE + '/api/sections/' + sectionId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: result.title.trim() }),
+      });
+      await this.loadSections();
+      await this.loadDocumentSections('cv');
     },
 
     // ------ Sections + Document config ------
@@ -575,6 +641,115 @@ function app() {
         this.flash('Compilation error', 'error');
       }
       this.compiling = false;
+    },
+
+    // ------ Person management ------
+
+    async loadPersons() {
+      try {
+        var res = await fetch(API_BASE + '/api/persons');
+        if (!res.ok) return;
+        var data = await res.json();
+        this.persons = data.persons || [];
+        this.activePersonId = data.activePersonId;
+      } catch (e) { /* offline */ }
+    },
+
+    async handlePersonSelect(value) {
+      if (value === '__new__') {
+        await this.createPerson();
+        return;
+      }
+      var id = parseInt(value);
+      if (!isNaN(id)) {
+        await this.switchPerson(id);
+      }
+    },
+
+    async createPerson() {
+      var result = await this.openModal('New Person', [
+        { name: 'name', label: 'Person name', value: '' },
+      ]);
+      if (!result || !result.name.trim()) return;
+      var res = await fetch(API_BASE + '/api/persons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: result.name.trim() }),
+      });
+      if (res.status === 409) { this.flash('Name already exists', 'error'); return; }
+      if (!res.ok) { this.flash('Failed to create', 'error'); return; }
+      var data = await res.json();
+      await this.loadPersons();
+      await this.switchPerson(data.id);
+    },
+
+    async switchPerson(id) {
+      if (id === this.activePersonId) return;
+      if (this.dirty && !confirm('You have unsaved changes. Switch anyway?')) return;
+      var res = await fetch(API_BASE + '/api/persons/' + id + '/switch', { method: 'POST' });
+      if (!res.ok) { this.flash('Failed to switch', 'error'); return; }
+      this.activePersonId = id;
+      await this.init();
+      this.dirty = false;
+    },
+
+    // ------ Save ------
+
+    async save() {
+      try {
+        var data = await fetch(API_BASE + '/api/export');
+        if (!data.ok) throw new Error('Export failed');
+        // Re-import triggers a full reload
+        this.dirty = false;
+        this.flash('Saved', 'success');
+      } catch (e) {
+        this.flash('Save failed', 'error');
+      }
+    },
+
+    // ------ Import / Export ------
+
+    async exportData() {
+      try {
+        var res = await fetch(API_BASE + '/api/export');
+        if (!res.ok) throw new Error('Export failed');
+        var data = await res.json();
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (this.personal.firstName || 'export') + '-cv-data.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        this.flash('Exported', 'success');
+      } catch (e) {
+        this.flash('Export failed', 'error');
+      }
+    },
+
+    async importData() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = async () => {
+        var file = input.files[0];
+        if (!file) return;
+        try {
+          var text = await file.text();
+          var data = JSON.parse(text);
+          var res = await fetch(API_BASE + '/api/import', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          if (!res.ok) throw new Error('Import failed');
+          await this.init();
+          this.flash('Imported', 'success');
+        } catch (e) {
+          this.flash('Import failed: ' + e.message, 'error');
+        }
+      };
+      input.click();
     },
 
     // ------ UI helpers ------

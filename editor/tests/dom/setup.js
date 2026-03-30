@@ -139,6 +139,38 @@ export function setupFetchMock(overrides = {}) {
       return mockResponse(responses[id] || { error: 'Not found' }, responses[id] ? 200 : 404);
     }
 
+    // Create section
+    if (urlStr.match(/\/api\/sections$/) && options.method === 'POST') {
+      const body = JSON.parse(options.body || '{}');
+      return mockResponse({ id: body.id || 'new-section' }, 201);
+    }
+
+    // Update section (rename)
+    if (sectionMatch && options.method === 'PUT') {
+      return mockResponse({ success: true });
+    }
+
+    // Delete section
+    if (sectionMatch && options.method === 'DELETE') {
+      return mockResponse({ success: true });
+    }
+
+    // Persons
+    if (urlStr.includes('/api/persons') && !options.method) {
+      return mockResponse({ persons: [{ id: 1, name: 'Jane Doe' }], activePersonId: 1 });
+    }
+    if (urlStr.includes('/api/persons') && options.method === 'POST' && !urlStr.includes('/switch')) {
+      return mockResponse({ id: 2 }, 201);
+    }
+    if (urlStr.includes('/switch') && options.method === 'POST') {
+      return mockResponse({ success: true });
+    }
+
+    // Style settings
+    if (urlStr.includes('prefix=style')) {
+      return mockResponse({});
+    }
+
     // Create entry
     if (urlStr.includes('/entries') && options.method === 'POST') {
       return mockResponse({ id: 99 }, 201);
