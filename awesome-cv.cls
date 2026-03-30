@@ -81,7 +81,7 @@
 \defaultfontfeatures{
   Renderer=HarfBuzz,
 }
-\setmainfont{Source Sans Pro}[
+\setmainfont{Source Sans 3}[
   UprightFont=*,
   ItalicFont=* Italic,
   BoldFont=* Bold,
@@ -89,7 +89,7 @@
   FontFace={l}{n}{Font=* Light},
   FontFace={l}{it}{Font=* Light Italic},
 ]
-\setsansfont{Source Sans Pro}[
+\setsansfont{Source Sans 3}[
   UprightFont=*,
   ItalicFont=* Italic,
   BoldFont=* Bold,

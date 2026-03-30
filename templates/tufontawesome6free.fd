@@ -1,0 +1,5 @@
+\ProvidesFile{tufontawesome6free.fd}[Font Awesome 6 Free font definitions]
+\DeclareFontFamily{TU}{fontawesome6free}{}
+\DeclareFontShape{TU}{fontawesome6free}{solid}{n}{<-> "[FontAwesome6Free-Solid-900.otf]"}{}
+\DeclareFontShape{TU}{fontawesome6free}{regular}{n}{<-> "[FontAwesome6Free-Regular-400.otf]"}{}
+\DeclareFontShape{TU}{fontawesome6free}{m}{n}{<-> "[FontAwesome6Free-Regular-400.otf]"}{}

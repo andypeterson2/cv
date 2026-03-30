@@ -74,42 +74,95 @@ function generateSectionTex(section) {
 }
 
 // ---------------------------------------------------------------------------
-// Document .tex generation (cv.tex, resume.tex)
+// Style defaults & preamble builder
 // ---------------------------------------------------------------------------
 
-const DOC_PREAMBLE = `%!TEX TS-program = xelatex
-%!TEX encoding = UTF-8 Unicode
+const STYLE_DEFAULTS = {
+  pageSize: 'letterpaper',
+  fontSize: '11pt',
+  accentColor: 'spinel',
+  fontFamily: 'source-sans-3',
+};
 
-\\documentclass[11pt, letterpaper]{awesome-cv}
+const PRESET_COLORS = [
+  'awesome-emerald', 'awesome-skyblue', 'awesome-red', 'awesome-pink',
+  'awesome-orange', 'awesome-nephritis', 'awesome-concrete', 'awesome-darknight',
+  'spinel',
+];
 
-\\geometry{left=1.4cm, top=.8cm, right=1.4cm, bottom=1.8cm, footskip=.5cm}
+function buildPreamble(style) {
+  const s = Object.assign({}, STYLE_DEFAULTS, style);
+  const lines = [];
+  lines.push('%!TEX TS-program = xelatex');
+  lines.push('%!TEX encoding = UTF-8 Unicode');
+  lines.push('');
+  lines.push(`\\documentclass[${s.fontSize}, ${s.pageSize}]{awesome-cv}`);
+  lines.push('');
+  lines.push('\\geometry{left=1.4cm, top=.8cm, right=1.4cm, bottom=1.8cm, footskip=.5cm}');
+  lines.push('');
 
-\\colorlet{awesome}{spinel}
+  // Accent color
+  if (PRESET_COLORS.includes(s.accentColor)) {
+    lines.push(`\\colorlet{awesome}{${s.accentColor}}`);
+  } else {
+    // Custom hex — strip leading # if present
+    const hex = s.accentColor.replace(/^#/, '');
+    lines.push(`\\definecolor{awesome}{HTML}{${hex}}`);
+  }
+  lines.push('');
 
-\\setbool{acvSectionColorHighlight}{true}
+  lines.push('\\setbool{acvSectionColorHighlight}{true}');
+  lines.push('');
+  lines.push('\\renewcommand{\\acvHeaderSocialSep}{\\quad\\textbar\\quad}');
+  lines.push('');
 
-\\renewcommand{\\acvHeaderSocialSep}{\\quad\\textbar\\quad}
+  // Font override
+  if (s.fontFamily === 'roboto') {
+    lines.push('\\setmainfont{Roboto}[');
+    lines.push('  UprightFont=*,');
+    lines.push('  ItalicFont=*-Italic,');
+    lines.push('  BoldFont=*-Bold,');
+    lines.push('  BoldItalicFont=*-BoldItalic,');
+    lines.push('  FontFace={l}{n}{Font=*-Light},');
+    lines.push('  FontFace={l}{it}{Font=*-LightItalic},');
+    lines.push(']');
+    lines.push('\\setsansfont{Roboto}[');
+    lines.push('  UprightFont=*,');
+    lines.push('  ItalicFont=*-Italic,');
+    lines.push('  BoldFont=*-Bold,');
+    lines.push('  BoldItalicFont=*-BoldItalic,');
+    lines.push('  FontFace={l}{n}{Font=*-Light},');
+    lines.push('  FontFace={l}{it}{Font=*-LightItalic},');
+    lines.push(']');
+    lines.push('');
+  }
 
-\\input{data.tex}
+  lines.push('\\input{data.tex}');
+  lines.push('');
+  return lines.join('\n');
+}
 
-
-\\begin{document}
-
-\\makecvheader
-
-\\makecvfooter
-  {}
-  {}
-  {}
-
-`;
+// ---------------------------------------------------------------------------
+// Document .tex generation (cv.tex, resume.tex)
+// ---------------------------------------------------------------------------
 
 const DOC_POSTAMBLE = `
 
 \\end{document}`;
 
-function generateDocumentTex(variant, sectionFiles) {
-  const lines = [DOC_PREAMBLE];
+function generateDocumentTex(variant, sectionFiles, style) {
+  const lines = [];
+  lines.push(buildPreamble(style));
+  lines.push('');
+  lines.push('\\begin{document}');
+  lines.push('');
+  lines.push('\\makecvheader');
+  lines.push('');
+  lines.push('\\makecvfooter');
+  lines.push('  {}');
+  lines.push('  {}');
+  lines.push('  {}');
+  lines.push('');
   for (const file of sectionFiles) {
     lines.push(`\\input{${file}}`);
   }
@@ -121,22 +174,9 @@ function generateDocumentTex(variant, sectionFiles) {
 // Cover letter .tex generation
 // ---------------------------------------------------------------------------
 
-function generateCoverletterTex(personal, coverletter) {
+function generateCoverletterTex(personal, coverletter, style) {
   const lines = [];
-  lines.push('%!TEX TS-program = xelatex');
-  lines.push('%!TEX encoding = UTF-8 Unicode');
-  lines.push('');
-  lines.push('\\documentclass[11pt, letterpaper]{awesome-cv}');
-  lines.push('');
-  lines.push('\\geometry{left=1.4cm, top=.8cm, right=1.4cm, bottom=1.8cm, footskip=.5cm}');
-  lines.push('');
-  lines.push('\\colorlet{awesome}{spinel}');
-  lines.push('');
-  lines.push('\\setbool{acvSectionColorHighlight}{true}');
-  lines.push('');
-  lines.push('\\renewcommand{\\acvHeaderSocialSep}{\\quad\\textbar\\quad}');
-  lines.push('');
-  lines.push('\\input{data.tex}');
+  lines.push(buildPreamble(style));
   lines.push('');
   lines.push('');
   lines.push('\\recipient');
@@ -195,7 +235,7 @@ function generateCoverletterTex(personal, coverletter) {
  * @returns {string} Path to the main .tex file for compilation
  */
 function generateAll(compileData, buildDir, templatesDir, assetsDir) {
-  const { personal, metrics, sections, coverletter, variant } = compileData;
+  const { personal, metrics, sections, coverletter, variant, style } = compileData;
 
   // Ensure build directory exists
   fs.mkdirSync(buildDir, { recursive: true });
@@ -222,7 +262,7 @@ function generateAll(compileData, buildDir, templatesDir, assetsDir) {
 
   if (variant === 'coverletter') {
     // Generate coverletter.tex
-    const clTex = generateCoverletterTex(personal, coverletter);
+    const clTex = generateCoverletterTex(personal, coverletter, style);
     fs.writeFileSync(path.join(buildDir, 'coverletter.tex'), clTex + '\n', 'utf-8');
     return path.join(buildDir, 'coverletter.tex');
   }
@@ -238,7 +278,7 @@ function generateAll(compileData, buildDir, templatesDir, assetsDir) {
 
   // Generate main document .tex
   const mainFilename = `${variant}.tex`;
-  const docTex = generateDocumentTex(variant, sectionFiles);
+  const docTex = generateDocumentTex(variant, sectionFiles, style);
   fs.writeFileSync(path.join(buildDir, mainFilename), docTex + '\n', 'utf-8');
 
   return path.join(buildDir, mainFilename);
@@ -250,4 +290,5 @@ module.exports = {
   generateDocumentTex,
   generateCoverletterTex,
   generateAll,
+  STYLE_DEFAULTS,
 };
