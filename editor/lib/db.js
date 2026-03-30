@@ -685,7 +685,14 @@ class CvDatabase {
         coverletter = cl;
       }
 
-      return { personal, metrics, sections, coverletter, variant };
+      // Style settings
+      const styleSettings = this.getSettings('style');
+      const style = {};
+      for (const [key, value] of Object.entries(styleSettings)) {
+        style[key.replace('style.', '')] = value;
+      }
+
+      return { personal, metrics, sections, coverletter, variant, style };
     })();
   }
 
