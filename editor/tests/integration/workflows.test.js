@@ -663,3 +663,180 @@ describe('Import/Export round-trip', () => {
     expect(exp.body.personal.homepage).toBe('social.test');
   });
 });
+
+// =========================================================================
+// 7. New person → create sections → add entries → compile workflow
+// =========================================================================
+
+describe('New person full lifecycle', () => {
+  let newPersonId;
+
+  test('create a new person', async () => {
+    const res = await request('POST', '/api/persons', { name: 'Fresh Person' });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+    newPersonId = res.body.id;
+  });
+
+  test('switch to the new person', async () => {
+    const res = await request('POST', `/api/persons/${newPersonId}/switch`);
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('new person starts with no sections', async () => {
+    const res = await request('GET', '/api/sections');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  test('new person starts with empty document config', async () => {
+    const res = await request('GET', '/api/documents/cv');
+    expect(res.status).toBe(200);
+    expect(res.body.sections).toEqual([]);
+  });
+
+  test('create a cventries section', async () => {
+    const res = await request('POST', '/api/sections', {
+      id: 'work', type: 'cventries', title: 'Work Experience',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBe('work');
+  });
+
+  test('create a cvskills section', async () => {
+    const res = await request('POST', '/api/sections', {
+      id: 'tech', type: 'cvskills', title: 'Technical Skills',
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test('create a cvparagraph section', async () => {
+    const res = await request('POST', '/api/sections', {
+      id: 'about', type: 'cvparagraph', title: 'About Me',
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test('sections now appear in listing', async () => {
+    const res = await request('GET', '/api/sections');
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBe(3);
+    expect(res.body.map(s => s.id).sort()).toEqual(['about', 'tech', 'work']);
+  });
+
+  test('add sections to document config', async () => {
+    const res = await request('PUT', '/api/documents/cv', {
+      sections: [
+        { sectionId: 'about', enabled: true },
+        { sectionId: 'work', enabled: true },
+        { sectionId: 'tech', enabled: true },
+      ],
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test('add an entry to the cventries section', async () => {
+    const res = await request('POST', '/api/sections/work/entries', {
+      fields: {
+        position: 'Engineer', organization: 'NewCo',
+        location: 'Remote', date: '2025 - Present',
+      },
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+  });
+
+  test('add a bullet item to the entry', async () => {
+    const sec = await request('GET', '/api/sections/work');
+    const entryId = sec.body.entries[0].id;
+    const res = await request('POST', `/api/entries/${entryId}/items`, {
+      content: 'Built amazing things',
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test('add a skill entry', async () => {
+    const res = await request('POST', '/api/sections/tech/entries', {
+      fields: { category: 'Languages', skills: 'JavaScript, Python' },
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test('add a paragraph entry', async () => {
+    const res = await request('POST', '/api/sections/about/entries', {
+      fields: { text: 'I am a software engineer.' },
+    });
+    expect(res.status).toBe(201);
+  });
+
+  test('set personal info for the new person', async () => {
+    const res = await request('PATCH', '/api/settings', {
+      'personal.firstName': 'Fresh',
+      'personal.lastName': 'Person',
+      'personal.email': 'fresh@example.com',
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test('export contains all created data', async () => {
+    const res = await request('GET', '/api/export');
+    expect(res.status).toBe(200);
+    expect(res.body.personal.firstName).toBe('Fresh');
+    expect(res.body.sections.length).toBe(3);
+
+    const work = res.body.sections.find(s => s.id === 'work');
+    expect(work.entries.length).toBe(1);
+    expect(work.entries[0].fields.position).toBe('Engineer');
+    expect(work.entries[0].items.length).toBe(1);
+    expect(work.entries[0].items[0].content).toBe('Built amazing things');
+
+    const tech = res.body.sections.find(s => s.id === 'tech');
+    expect(tech.entries[0].fields.category).toBe('Languages');
+
+    const about = res.body.sections.find(s => s.id === 'about');
+    expect(about.entries[0].fields.text).toBe('I am a software engineer.');
+  });
+
+  test('document config has all three sections enabled', async () => {
+    const res = await request('GET', '/api/documents/cv');
+    expect(res.status).toBe(200);
+    expect(res.body.sections.length).toBe(3);
+    expect(res.body.sections.every(s => s.enabled)).toBe(true);
+  });
+
+  test('delete a section cascades', async () => {
+    const res = await request('DELETE', '/api/sections/tech');
+    expect(res.status).toBe(200);
+
+    const sections = await request('GET', '/api/sections');
+    expect(sections.body.length).toBe(2);
+    expect(sections.body.find(s => s.id === 'tech')).toBeUndefined();
+
+    const docs = await request('GET', '/api/documents/cv');
+    expect(docs.body.sections.find(s => s.sectionId === 'tech')).toBeUndefined();
+  });
+
+  test('switch back to original person preserves data', async () => {
+    // Find original person
+    const persons = await request('GET', '/api/persons');
+    const origId = persons.body.persons.find(p => p.name !== 'Fresh Person' && p.name !== 'Jane Doe');
+    if (origId) {
+      await request('POST', `/api/persons/${origId.id}/switch`);
+    }
+  });
+
+  test('cleanup: delete the test person', async () => {
+    // Switch away first if still on Fresh Person
+    const persons = await request('GET', '/api/persons');
+    const freshId = persons.body.persons.find(p => p.name === 'Fresh Person');
+    if (freshId && persons.body.activePersonId === freshId.id) {
+      const otherId = persons.body.persons.find(p => p.id !== freshId.id).id;
+      await request('POST', `/api/persons/${otherId}/switch`);
+    }
+    if (freshId) {
+      const res = await request('DELETE', `/api/persons/${freshId.id}`);
+      expect(res.status).toBe(200);
+    }
+  });
+});
