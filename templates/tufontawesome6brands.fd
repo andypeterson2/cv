@@ -1,0 +1,4 @@
+\ProvidesFile{tufontawesome6brands.fd}[Font Awesome 6 Brands font definitions]
+\DeclareFontFamily{TU}{fontawesome6brands}{}
+\DeclareFontShape{TU}{fontawesome6brands}{regular}{n}{<-> "[FontAwesome6Brands-Regular-400.otf]"}{}
+\DeclareFontShape{TU}{fontawesome6brands}{m}{n}{<-> "[FontAwesome6Brands-Regular-400.otf]"}{}

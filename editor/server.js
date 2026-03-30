@@ -466,6 +466,8 @@ app.post('/api/compile/:variant', (req, res) => {
     const buildDir = path.join(PROJECT_ROOT, 'build', variant);
     const mainTexFile = generateAll(compileData, buildDir, TEMPLATES_DIR, ASSETS_DIR);
 
+    // Refresh fontconfig cache so xelatex can find fonts in the build directory
+    execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
     execFile('xelatex', [
       '--no-shell-escape',
       '-interaction=nonstopmode',
@@ -484,6 +486,7 @@ app.post('/api/compile/:variant', (req, res) => {
         pdfPath: pdfExists ? `/api/pdf/${variant}` : null,
       });
     });
+    }); // fc-cache callback
   } catch (e) {
     res.status(500).json({ success: false, log: 'Generation failed: ' + e.message });
   }
