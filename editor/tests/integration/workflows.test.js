@@ -91,7 +91,7 @@ function seedDb(db) {
   ]);
 }
 
-beforeAll((done) => {
+beforeAll(() => {
   db = new CvDatabase(':memory:');
   db.clearAllContent(); // Clear Jane Doe seed data before seeding test data
   seedDb(db);
@@ -100,16 +100,20 @@ beforeAll((done) => {
   const app = require('../../server');
   app.setDb(db);
 
-  server = app.listen(0, () => {
-    port = server.address().port;
-    done();
+  return new Promise((resolve) => {
+    server = app.listen(0, () => {
+      port = server.address().port;
+      resolve();
+    });
   });
 });
 
-afterAll((done) => {
+afterAll(() => {
   if (db) db.close();
-  if (server) server.close(done);
-  else done();
+  return new Promise((resolve) => {
+    if (server) server.close(resolve);
+    else resolve();
+  });
 });
 
 // =========================================================================

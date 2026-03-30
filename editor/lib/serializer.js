@@ -6,6 +6,23 @@
 const SEP = '%---------------------------------------------------------';
 const FULL_SEP = '%-------------------------------------------------------------------------------';
 
+/**
+ * Escape bare LaTeX special characters in user-provided text.
+ * Preserves intentional LaTeX commands (e.g. \textbf{...}) while escaping
+ * bare special characters that would break compilation.
+ */
+function escTex(str) {
+  if (!str) return str;
+  return String(str)
+    .replace(/(?<!\\)&/g, '\\&')
+    .replace(/(?<!\\)%/g, '\\%')
+    .replace(/(?<!\\)\$/g, '\\$')
+    .replace(/(?<!\\)#/g, '\\#')
+    .replace(/(?<!\\)_/g, '\\_')
+    .replace(/(?<!\\)~/g, '\\textasciitilde{}')
+    .replace(/(?<!\\)\^/g, '\\textasciicircum{}');
+}
+
 // ---------------------------------------------------------------------------
 // cventries (experience, education, extracurricular)
 // ---------------------------------------------------------------------------
@@ -15,7 +32,7 @@ function serializeCventries(data) {
   lines.push(FULL_SEP);
   lines.push('% SECTION TITLE');
   lines.push(FULL_SEP);
-  lines.push(`\\cvsection{${data.title}}`);
+  lines.push(`\\cvsection{${escTex(data.title)}}`);
   lines.push('');
   lines.push('');
   lines.push(FULL_SEP);
@@ -28,16 +45,16 @@ function serializeCventries(data) {
     const e = data.entries[i];
     lines.push(SEP);
     lines.push('  \\cventry');
-    lines.push(`    {${e.position}}`);
-    lines.push(`    {${e.organization}}`);
-    lines.push(`    {${e.location}}`);
-    lines.push(`    {${e.date}}`);
+    lines.push(`    {${escTex(e.position)}}`);
+    lines.push(`    {${escTex(e.organization)}}`);
+    lines.push(`    {${escTex(e.location)}}`);
+    lines.push(`    {${escTex(e.date)}}`);
 
     if (e.items && e.items.length > 0) {
       lines.push('    {');
       lines.push('      \\begin{cvitems}');
       for (const item of e.items) {
-        lines.push(`        \\item {${item}}`);
+        lines.push(`        \\item {${escTex(item)}}`);
       }
       lines.push('      \\end{cvitems}');
       lines.push('    }');
@@ -67,7 +84,7 @@ function serializeCvskills(data) {
   lines.push('% SECTION TITLE');
   lines.push(SEP);
   lines.push('');
-  lines.push(`\\cvsection{${data.title}}`);
+  lines.push(`\\cvsection{${escTex(data.title)}}`);
   lines.push('');
   lines.push(SEP);
   lines.push('% CONTENT');
@@ -79,8 +96,8 @@ function serializeCvskills(data) {
     const e = data.entries[i];
     lines.push(SEP);
     lines.push('  \\cvskill');
-    lines.push(`    {${e.category}}`);
-    lines.push(`    {${e.skills}}`);
+    lines.push(`    {${escTex(e.category)}}`);
+    lines.push(`    {${escTex(e.skills)}}`);
     lines.push('');
   }
 
@@ -100,7 +117,7 @@ function serializeCvhonors(data) {
   lines.push(FULL_SEP);
   lines.push('%\tSECTION TITLE');
   lines.push(FULL_SEP);
-  lines.push(`\\cvsection{${data.title}}`);
+  lines.push(`\\cvsection{${escTex(data.title)}}`);
   lines.push('');
   lines.push('');
   lines.push(FULL_SEP);
@@ -112,10 +129,10 @@ function serializeCvhonors(data) {
   for (const e of data.entries) {
     lines.push(SEP);
     lines.push('  \\cvhonor');
-    lines.push(`    {${e.award}} % Name`);
-    lines.push(`    {${e.issuer}} % Issuer`);
-    lines.push(`    {${e.location}} % Credential ID`);
-    lines.push(`    {${e.date}} % Date(s)`);
+    lines.push(`    {${escTex(e.award)}} % Name`);
+    lines.push(`    {${escTex(e.issuer)}} % Issuer`);
+    lines.push(`    {${escTex(e.location)}} % Credential ID`);
+    lines.push(`    {${escTex(e.date)}} % Date(s)`);
     lines.push('');
   }
 
@@ -134,7 +151,7 @@ function serializeCvreferences(data) {
   lines.push(FULL_SEP);
   lines.push('%\tSECTION TITLE');
   lines.push(FULL_SEP);
-  lines.push(`\\cvsection{${data.title}}`);
+  lines.push(`\\cvsection{${escTex(data.title)}}`);
   lines.push('');
   lines.push('');
   lines.push(FULL_SEP);
@@ -144,10 +161,10 @@ function serializeCvreferences(data) {
 
   for (const e of data.entries) {
     lines.push('  \\cvreference');
-    lines.push(`    {${e.name}}`);
-    lines.push(`    {${e.relation}}`);
-    lines.push(`    {${e.phone}}`);
-    lines.push(`    {${e.email}}`);
+    lines.push(`    {${escTex(e.name)}}`);
+    lines.push(`    {${escTex(e.relation)}}`);
+    lines.push(`    {${escTex(e.phone)}}`);
+    lines.push(`    {${escTex(e.email)}}`);
     lines.push('');
   }
 
@@ -165,7 +182,7 @@ function serializeCvparagraph(data) {
   lines.push(FULL_SEP);
   lines.push('% SECTION TITLE');
   lines.push(FULL_SEP);
-  lines.push(`\\cvsection{${data.title}}`);
+  lines.push(`\\cvsection{${escTex(data.title)}}`);
   lines.push('');
   lines.push('');
   lines.push(FULL_SEP);
@@ -267,10 +284,10 @@ function serializeData(data) {
   if (p.photo && p.photo.enabled && p.photo.file) {
     lines.push(`\\photo[circle,noedge,left]{${p.photo.file}}`);
   }
-  lines.push(`\\name{${p.firstName || ''}}{${p.lastName || ''}} % Legal`);
-  if (p.position) lines.push(`\\position{${p.position}}`);
-  if (p.address) lines.push(`\\address{${p.address}}`);
-  if (p.dateofbirth) lines.push(`\\dateofbirth{${p.dateofbirth}}`);
+  lines.push(`\\name{${escTex(p.firstName || '')}}{${escTex(p.lastName || '')}} % Legal`);
+  if (p.position) lines.push(`\\position{${escTex(p.position)}}`);
+  if (p.address) lines.push(`\\address{${escTex(p.address)}}`);
+  if (p.dateofbirth) lines.push(`\\dateofbirth{${escTex(p.dateofbirth)}}`);
   lines.push('');
 
   // Contact
@@ -361,24 +378,24 @@ function serializeCoverletter(tex, data) {
   // Replace \recipient{...}{...}
   const recipientPattern = /\\recipient\s*\n?\s*\{[\s\S]*?\}\s*\n?\s*\{[\s\S]*?\}/;
   result = result.replace(recipientPattern,
-    `\\recipient\n  {${data.recipient.name}}\n  {${data.recipient.address}}`);
+    `\\recipient\n  {${escTex(data.recipient.name)}}\n  {${escTex(data.recipient.address)}}`);
 
   // Replace \lettertitle{...}
-  result = replaceCommand(result, 'lettertitle', `\\lettertitle{${data.title}}`);
+  result = replaceCommand(result, 'lettertitle', `\\lettertitle{${escTex(data.title)}}`);
 
   // Replace \letteropening{...}
-  result = replaceCommand(result, 'letteropening', `\\letteropening{${data.opening}}`);
+  result = replaceCommand(result, 'letteropening', `\\letteropening{${escTex(data.opening)}}`);
 
   // Replace \letterclosing{...}
-  result = replaceCommand(result, 'letterclosing', `\\letterclosing{${data.closing}}`);
+  result = replaceCommand(result, 'letterclosing', `\\letterclosing{${escTex(data.closing)}}`);
 
   // Replace \letterenclosure[...]{...}
   result = result.replace(/\\letterenclosure\[[^\]]*\]\{[\s\S]*?\}/,
-    `\\letterenclosure[${data.enclosure.label}]{${data.enclosure.content}}`);
+    `\\letterenclosure[${escTex(data.enclosure.label)}]{${escTex(data.enclosure.content)}}`);
 
   // Replace letter body (between \begin{cvletter} and \end{cvletter})
   const bodyContent = data.sections.map(s =>
-    `\\lettersection{${s.title}}\n${s.body}`
+    `\\lettersection{${escTex(s.title)}}\n${s.body}`
   ).join('\n\n');
 
   result = result.replace(
@@ -434,6 +451,7 @@ function serializeFilteredSection(sectionData, configEntry) {
 }
 
 module.exports = {
+  escTex,
   serializeSection,
   serializeFilteredSection,
   serializeDocumentSections,

@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 /**
  * DOM tests for section creation, deletion, and renaming.
  */

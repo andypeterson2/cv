@@ -334,8 +334,8 @@ describe('validate middleware', () => {
   it('calls next on valid body', () => {
     const middleware = validate('createSection');
     const req = { body: { id: 'test', type: 'cventries', title: 'Test' } };
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    const next = jest.fn();
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
     middleware(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
@@ -344,8 +344,8 @@ describe('validate middleware', () => {
   it('returns 400 on invalid body', () => {
     const middleware = validate('createSection');
     const req = { body: {} };
-    const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
-    const next = jest.fn();
+    const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+    const next = vi.fn();
     middleware(req, res, next);
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(400);
