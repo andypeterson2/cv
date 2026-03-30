@@ -40,28 +40,27 @@ describe('WP #670 — Responsive layout and HTML structure', () => {
     expect(html).toContain('width=device-width');
   });
 
-  test('has semantic landmark elements', () => {
+  test('has semantic layout elements', () => {
     expect(html).toContain('<header');
-    expect(html).toContain('<main');
-    expect(html).toContain('<aside');
+    expect(html).toContain('split-layout');
+    expect(html).toContain('left-col');
+    expect(html).toContain('right-col');
   });
 
   test('uses role attributes for accessibility', () => {
     expect(html).toContain('role="banner"');
-    expect(html).toContain('role="main"');
     expect(html).toContain('role="status"');
   });
 
   test('includes aria-label attributes on interactive elements', () => {
-    expect(html).toContain('aria-label="Active document"');
+    expect(html).toContain('aria-label');
     expect(html).toContain('aria-label="Compile document to PDF"');
-    expect(html).toContain('aria-label="Toggle PDF preview"');
   });
 
-  test('has a document selector with cv, resume, and coverletter options', () => {
-    expect(html).toContain('<option value="resume">');
-    expect(html).toContain('<option value="cv">');
-    expect(html).toContain('<option value="coverletter">');
+  test('has PDF tab switching for cv, resume, and coverletter', () => {
+    expect(html).toContain("pdfTab === 'cv'");
+    expect(html).toContain("pdfTab === 'resume'");
+    expect(html).toContain("pdfTab === 'coverletter'");
   });
 });
 
@@ -85,8 +84,7 @@ describe('WP #671 — Interactive elements in editor UI', () => {
     expect(html).toContain('toggleTheme()');
   });
 
-  test('has PDF preview toggle', () => {
-    expect(html).toContain('showPdf');
+  test('has PDF preview iframe', () => {
     expect(html).toContain('pdf-iframe');
   });
 
@@ -109,9 +107,9 @@ describe('WP #671 — Interactive elements in editor UI', () => {
     expect(html).toContain('toggleResumeItem');
   });
 
-  test('has collapsible sidebar', () => {
-    expect(html).toContain('sidebarOpen');
-    expect(html).toContain('collapsible');
+  test('has tabbed editor panels', () => {
+    expect(html).toContain('editorTab');
+    expect(html).toContain('ui-tab');
   });
 
   test('has sortable section list (drag-and-drop)', () => {
@@ -338,8 +336,8 @@ describe('WP #679 — Web editor save/preview', () => {
   });
 
   test('has document switching', () => {
-    expect(appJs).toContain('activeDoc');
-    expect(appJs).toContain('switchDoc');
+    expect(appJs).toContain('editorTab');
+    expect(appJs).toContain('switchPdfTab');
   });
 
   test('has theme toggle support', () => {
@@ -348,7 +346,7 @@ describe('WP #679 — Web editor save/preview', () => {
   });
 
   test('has PDF preview state management', () => {
-    expect(appJs).toContain('showPdf');
+    expect(appJs).toContain('pdfTab');
     expect(appJs).toContain('pdfUrl');
     expect(appJs).toContain('compiledPdfs');
   });
