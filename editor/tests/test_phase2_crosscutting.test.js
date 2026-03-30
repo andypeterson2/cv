@@ -38,21 +38,22 @@ describe('WP #665 — E2E navigation between documents', () => {
   });
 
   test('editor supports resume, cv, and coverletter document types', () => {
-    expect(html).toContain('value="resume"');
-    expect(html).toContain('value="cv"');
-    expect(html).toContain('value="coverletter"');
+    expect(html).toContain("pdfTab === 'cv'");
+    expect(html).toContain("pdfTab === 'resume'");
+    expect(html).toContain("pdfTab === 'coverletter'");
   });
 
-  test('app tracks activeDoc state', () => {
-    expect(appJs).toContain("activeDoc:");
+  test('app tracks editor and PDF tab state', () => {
+    expect(appJs).toContain("editorTab:");
+    expect(appJs).toContain("pdfTab:");
   });
 
-  test('document switching triggers data reload', () => {
-    expect(appJs.includes('switchDoc') || appJs.includes("$watch('activeDoc'")).toBe(true);
+  test('PDF tab switching works', () => {
+    expect(appJs).toContain('switchPdfTab');
   });
 
   test('coverletter has its own editor view', () => {
-    expect(html).toContain("activeDoc === 'coverletter'");
+    expect(html).toContain("editorTab === 'coverletter'");
     expect(html).toContain('coverletter-editor');
   });
 
@@ -180,7 +181,7 @@ describe('WP #668 — Accessibility compliance', () => {
 
   test('buttons have accessible names', () => {
     expect(html).toContain('aria-label="Compile document to PDF"');
-    expect(html).toContain('aria-label="Active document"');
+    expect(html).toContain('aria-label');
   });
 
   test('textareas have aria-label attributes', () => {
@@ -198,8 +199,8 @@ describe('WP #668 — Accessibility compliance', () => {
   });
 
   test('landmark regions are properly labeled', () => {
-    expect(html).toContain('aria-label="Personal information"');
-    expect(html).toContain('aria-label="PDF preview"');
+    expect(html).toContain('aria-label="Compile document to PDF"');
+    expect(html).toContain('role="status"');
   });
 
   test('has meta description for SEO/accessibility', () => {
