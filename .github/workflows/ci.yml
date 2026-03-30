@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - run: npm ci
       - run: npm test
 
@@ -30,4 +30,14 @@ jobs:
             resume.tex
             coverletter.tex
           latexmk_use_lualatex: true
-          pre_compile: "printf '<?xml version=\"1.0\"?>\\n<fontconfig>\\n<dir>/opt/texlive/texdir/texmf-dist/fonts/opentype</dir>\\n<dir>/opt/texlive/texdir/texmf-dist/fonts/truetype</dir>\\n</fontconfig>' > /etc/fonts/local.conf && fc-cache -f"
+          pre_compile: |
+            apk add --no-cache curl unzip fontconfig
+            mkdir -p /usr/share/fonts/source-sans /usr/share/fonts/roboto
+            curl -fsSL -o /tmp/source-sans.zip "https://github.com/adobe-fonts/source-sans/releases/download/3.052R/OTF-source-sans-3.052R.zip"
+            unzip -o /tmp/source-sans.zip -d /tmp/source-sans
+            find /tmp/source-sans -name '*.otf' -exec cp {} /usr/share/fonts/source-sans/ \;
+            curl -fsSL -o /tmp/roboto.zip "https://github.com/googlefonts/roboto/releases/download/v2.138/roboto-android.zip"
+            unzip -o /tmp/roboto.zip -d /tmp/roboto
+            find /tmp/roboto -name '*.ttf' -exec cp {} /usr/share/fonts/roboto/ \;
+            fc-cache -f
+            rm -rf /tmp/source-sans.zip /tmp/source-sans /tmp/roboto.zip /tmp/roboto
