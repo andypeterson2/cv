@@ -117,7 +117,7 @@ function seedDb(db) {
   db.createCoverletterSection('Why Me?', 'I bring deep expertise.');
 }
 
-beforeAll((done) => {
+beforeAll(() => {
   // Use fresh in-memory DB for each test run
   db = new CvDatabase(':memory:');
   db.clearAllContent(); // Clear Jane Doe seed data before seeding test data
@@ -128,16 +128,20 @@ beforeAll((done) => {
   const app = require('../../server');
   app.setDb(db);
 
-  server = app.listen(0, () => {
-    port = server.address().port;
-    done();
+  return new Promise((resolve) => {
+    server = app.listen(0, () => {
+      port = server.address().port;
+      resolve();
+    });
   });
 });
 
-afterAll((done) => {
+afterAll(() => {
   if (db) db.close();
-  if (server) server.close(done);
-  else done();
+  return new Promise((resolve) => {
+    if (server) server.close(resolve);
+    else resolve();
+  });
 });
 
 // =========================================================================
