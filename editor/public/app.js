@@ -1,12 +1,19 @@
 function app() {
   return {
-    activeDoc: 'cv',
+    editorTab: 'sections',
+    pdfTab: 'cv',
     sections: [],
     docSections: [],
     personal: {},
     metrics: [],
     coverletter: { settings: {}, sections: [] },
-    showPdf: false,
+    style: {
+      pageSize: 'letterpaper',
+      fontSize: '11pt',
+      accentColor: 'spinel',
+      fontFamily: 'source-sans-3',
+      customHex: '',
+    },
     compiling: false,
     compiledPdfs: { resume: '', cv: '', coverletter: '' },
     statusMsg: '',
@@ -14,7 +21,6 @@ function app() {
     pdfUrl: '',
     sortable: null,
     darkMode: true,
-    sidebarOpen: true,
     _saveTimers: {},
 
     // Modal state
@@ -28,14 +34,16 @@ function app() {
         this.loadSections(),
         this.loadDocumentSections('cv'),
         this.loadCoverletter(),
+        this.loadStyle(),
       ]);
-      this.$watch('activeDoc', (val) => {
-        if (val !== 'coverletter') {
-          this.loadDocumentSections(val);
-        }
-        if (this.compiledPdfs[val]) {
-          this.pdfUrl = this.compiledPdfs[val];
-          this.showPdf = true;
+
+      // Init resize handle
+      this.$nextTick(() => {
+        var handle = document.getElementById('resize-handle');
+        var left = handle && handle.previousElementSibling;
+        var container = handle && handle.parentElement;
+        if (handle && left && container && window.UIKit && UIKit.initResize) {
+          UIKit.initResize(handle, left, container, { min: 280, max: 800, default: 450, key: 'cv-editor-split' });
         }
       });
     },
@@ -76,6 +84,17 @@ function app() {
       this._saveTimers[key] = setTimeout(fn, delay);
     },
 
+    // ------ PDF tab switching ------
+
+    switchPdfTab(name) {
+      this.pdfTab = name;
+      if (this.compiledPdfs[name]) {
+        this.pdfUrl = this.compiledPdfs[name];
+      } else {
+        this.pdfUrl = '';
+      }
+    },
+
     // ------ Personal info ------
 
     async loadPersonal() {
@@ -108,6 +127,45 @@ function app() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 'personal.photoEnabled': enabled }),
       });
+    },
+
+    // ------ Style settings ------
+
+    async loadStyle() {
+      const res = await fetch(API_BASE + '/api/settings?prefix=style');
+      if (!res.ok) return;
+      const data = await res.json();
+      for (const [key, value] of Object.entries(data)) {
+        const field = key.replace('style.', '');
+        if (field in this.style) {
+          this.style[field] = value;
+        }
+      }
+    },
+
+    autoSaveStyle(field) {
+      this.debounce('style.' + field, async () => {
+        await fetch(API_BASE + '/api/settings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ['style.' + field]: this.style[field] || '' }),
+        });
+        this.flash('Saved', 'success');
+      });
+    },
+
+    setAccentColor(preset) {
+      this.style.accentColor = preset;
+      this.style.customHex = '';
+      this.autoSaveStyle('accentColor');
+    },
+
+    applyCustomColor() {
+      const hex = this.style.customHex.trim();
+      if (/^#[0-9A-Fa-f]{6}$/.test(hex)) {
+        this.style.accentColor = hex;
+        this.autoSaveStyle('accentColor');
+      }
     },
 
     // ------ Metrics ------
@@ -230,7 +288,6 @@ function app() {
       const res = await fetch(API_BASE + '/api/documents/' + variant);
       if (!res.ok) return;
       const data = await res.json();
-      // Merge with full section data
       this.docSections = [];
       for (const ds of data.sections) {
         const sec = this.sections.find(s => s.id === ds.sectionId);
@@ -251,17 +308,6 @@ function app() {
       });
     },
 
-    async switchDoc(name) {
-      this.activeDoc = name;
-      if (name !== 'coverletter') {
-        await this.loadDocumentSections(name);
-      }
-      if (this.compiledPdfs[name]) {
-        this.pdfUrl = this.compiledPdfs[name];
-        this.showPdf = true;
-      }
-    },
-
     initSortable() {
       if (this.sortable) this.sortable.destroy();
       const el = document.getElementById('section-list');
@@ -280,12 +326,13 @@ function app() {
     },
 
     async saveDocumentSections() {
-      const variant = this.activeDoc;
       const sections = this.docSections.map(s => ({
         sectionId: s.id,
         enabled: s.enabled,
         resumeParagraphText: s.resumeParagraphText || null,
       }));
+      // Save for the current pdfTab variant (or cv by default)
+      const variant = this.pdfTab === 'coverletter' ? 'cv' : this.pdfTab;
       await fetch(API_BASE + '/api/documents/' + variant, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -372,7 +419,6 @@ function app() {
         body: JSON.stringify({ fields: defaults }),
       });
       if (!res.ok) { this.flash('Failed to add', 'error'); return; }
-      // Reload section data
       sec._data = null;
       await this.loadSectionData(sec);
     },
@@ -512,7 +558,7 @@ function app() {
 
     async compile() {
       this.compiling = true;
-      const name = this.activeDoc;
+      const name = this.pdfTab;
       try {
         const res = await fetch(API_BASE + '/api/compile/' + name, { method: 'POST' });
         const data = await res.json();
@@ -521,7 +567,6 @@ function app() {
           const url = API_BASE + '/api/pdf/' + name + '?t=' + Date.now();
           this.compiledPdfs[name] = url;
           this.pdfUrl = url;
-          this.showPdf = true;
         } else {
           this.flash('Compilation failed - check console', 'error');
           console.error(data.log);
