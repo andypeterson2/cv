@@ -254,7 +254,7 @@ function mockResponse(body, status = 200) {
  */
 export function createAppInstance() {
   // Set up globals that app.js expects
-  global.API_BASE = '';
+  global.API_BASE = 'http://localhost:3001';
   global.Sortable = { create: () => ({ destroy: () => {} }) };
   global.ServiceConfig = { get: () => '' };
 
