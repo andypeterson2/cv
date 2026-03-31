@@ -90,20 +90,13 @@ var DEMO_DATA = {
 
 function app() {
   return {
-    editorTab: 'sections',
-    pdfTab: 'cv',
-    sections: [],
+    activeDoc: 'cv',
     docSections: [],
-    personal: {},
-    metrics: [],
-    coverletter: { settings: {}, sections: [] },
-    style: {
-      pageSize: 'letterpaper',
-      fontSize: '11pt',
-      accentColor: 'spinel',
-      fontFamily: 'source-sans-3',
-      customHex: '',
-    },
+    dataModel: null,
+    resumeConfig: { sectionOrder: [], sections: {} },
+    coverletter: null,
+    sectionData: {},
+    showPdf: false,
     compiling: false,
     compiledPdfs: { resume: '', cv: '', coverletter: '' },
     statusMsg: '',
@@ -111,171 +104,122 @@ function app() {
     pdfUrl: '',
     sortable: null,
     darkMode: true,
-    dirty: false,
-    serverConnected: false,
-    isJaneDoe: false,
-    persons: [],
-    activePersonId: null,
-    _saveTimers: {},
+    sidebarOpen: true,
+    seeded: false,
 
-    // Modal state
-    modal: { open: false, title: '', fields: [], resolve: null },
+    // ====== Lifecycle ======
 
     async init() {
       this.darkMode = document.documentElement.dataset.theme !== 'light';
-      if (typeof API_BASE === 'undefined' || API_BASE === '') {
-        this.loadDemo();
-        return;
-      }
-      await Promise.all([
-        this.loadPersonal(),
-        this.loadMetrics(),
-        this.loadSections(),
-        this.loadDocumentSections('cv'),
-        this.loadCoverletter(),
-        this.loadStyle(),
-        this.loadPersons(),
-      ]);
-      this.serverConnected = true;
-      this.isJaneDoe = false;
 
-      // Init resize handle
-      this.$nextTick(() => {
-        var handle = document.getElementById('resize-handle');
-        var left = handle && handle.previousElementSibling;
-        var container = handle && handle.parentElement;
-        if (handle && left && container && window.UIKit && UIKit.initResize) {
-          UIKit.initResize(handle, left, container, { min: 280, max: 800, default: 450, key: 'cv-editor-split' });
+      // Try loading from localStorage first
+      const saved = CVStorage.load();
+      if (saved && saved.data && saved.sectionData) {
+        this.hydrate(saved);
+        this.seeded = true;
+      } else {
+        // First visit — seed from server
+        await this.seedFromServer();
+      }
+
+      this.renderDocument();
+
+      this.$watch('activeDoc', (val) => {
+        if (this.compiledPdfs[val]) {
+          this.pdfUrl = this.compiledPdfs[val];
+          this.showPdf = true;
         }
       });
     },
 
-    // ------ Demo mode (no backend) ------
-
-    loadDemo() {
-      var d = DEMO_DATA;
-      this.personal = Object.assign({}, d.personal);
-      this.metrics = d.metrics.map(function(m) { return Object.assign({}, m); });
-      this.sections = d.sections.map(function(s) { return { id: s.id, type: s.type, title: s.title }; });
-      this.coverletter = {
-        settings: {
-          recipientName: d.coverletter.recipientName,
-          recipientAddress: d.coverletter.recipientAddress,
-          title: d.coverletter.title,
-          opening: d.coverletter.opening,
-          closing: d.coverletter.closing,
-          enclosureLabel: d.coverletter.enclosureLabel,
-          enclosureContent: d.coverletter.enclosureContent,
-        },
-        sections: d.coverletter.sections.map(function(s) { return Object.assign({}, s); }),
-      };
-      var docSecs = d.documents.cv;
-      this.docSections = [];
-      for (var i = 0; i < docSecs.length; i++) {
-        var ds = docSecs[i];
-        var sec = d.sections.find(function(s) { return s.id === ds.sectionId; });
-        if (!sec) continue;
-        this.docSections.push({
-          id: sec.id, type: sec.type, title: sec.title,
-          enabled: ds.enabled,
-          resumeParagraphText: ds.resumeParagraphText,
+    hydrate(state) {
+      this.dataModel = state.data || { personal: {}, metrics: [] };
+      this.resumeConfig = state.resumeConfig || { sectionOrder: [], sections: {} };
+      this.coverletter = state.coverletter || null;
+      this.sectionData = state.sectionData || {};
+      // docSections from document.sections
+      if (state.document && state.document.sections) {
+        this.docSections = state.document.sections.map(s => ({
+          ...s,
           _expanded: true,
-          _data: { id: sec.id, type: sec.type, title: sec.title,
-            entries: sec.entries.map(function(e) {
-              return { id: e.id, section_id: e.section_id, sort_order: e.sort_order,
-                resumeIncluded: e.resumeIncluded, fields: Object.assign({}, e.fields),
-                items: e.items.map(function(it) { return Object.assign({}, it); }) };
-            })
-          },
-        });
+          _data: this.sectionData[s.file] || null
+        }));
       }
-      this.persons = [{ id: 1, name: 'Jane Doe' }];
-      this.activePersonId = 1;
-      this.isJaneDoe = true;
-      this.serverConnected = false;
-      this.pdfUrl = '/cv/jane-doe-cv.pdf';
-      this.compiledPdfs = { cv: '/cv/jane-doe-cv.pdf', resume: '/cv/jane-doe-resume.pdf', coverletter: '' };
-      this.$nextTick(function() { this.initSortable(); }.bind(this));
     },
 
-    // ------ Theme ------
+    async seedFromServer() {
+      try {
+        const res = await fetch(API_BASE + '/api/seed');
+        if (!res.ok) throw new Error('Seed failed: ' + res.status);
+        const state = await res.json();
+        this.hydrate(state);
+        this.seeded = true;
+        this.persist();
+        this.flash('Loaded from server', 'success');
+      } catch (e) {
+        console.error('Seed failed:', e);
+        this.flash('Failed to load from server', 'error');
+      }
+    },
+
+    // ====== Persistence ======
+
+    getState() {
+      return {
+        data: this.dataModel,
+        resumeConfig: this.resumeConfig,
+        coverletter: this.coverletter,
+        document: {
+          sections: this.docSections.map(s => ({
+            file: s.file, enabled: s.enabled, comment: s.comment || ''
+          }))
+        },
+        sectionData: this.sectionData
+      };
+    },
+
+    persist() {
+      CVStorage.save(this.getState());
+    },
+
+    exportData() {
+      CVStorage.exportJSON(this.getState());
+    },
+
+    async importData() {
+      try {
+        const state = await CVStorage.importJSON();
+        if (!state || !state.data) {
+          this.flash('Invalid file — missing data', 'error');
+          return;
+        }
+        this.hydrate(state);
+        this.renderDocument();
+        this.persist();
+        this.flash('Imported successfully', 'success');
+      } catch (e) {
+        this.flash(e.message || 'Import failed', 'error');
+      }
+    },
+
+    async resetFromServer() {
+      if (!confirm('Reset all local data from server? This will overwrite your local changes.')) return;
+      CVStorage.clear();
+      await this.seedFromServer();
+      this.renderDocument();
+    },
+
+    // ====== Theme ======
 
     toggleTheme() {
       this.darkMode = !this.darkMode;
       if (window.__setTheme) window.__setTheme(this.darkMode ? 'dark' : 'light');
     },
 
-    // ------ Modal system ------
+    // ====== Data (personal info + metrics) ======
 
-    openModal(title, fields) {
-      return new Promise((resolve) => {
-        this.modal = { open: true, title, fields: fields.map(f => ({ ...f, value: f.value || '' })), resolve };
-      });
-    },
-
-    submitModal() {
-      const result = {};
-      for (const f of this.modal.fields) {
-        result[f.name] = f.value;
-      }
-      this.modal.resolve(result);
-      this.modal = { open: false, title: '', fields: [], resolve: null };
-    },
-
-    cancelModal() {
-      this.modal.resolve(null);
-      this.modal = { open: false, title: '', fields: [], resolve: null };
-    },
-
-    // ------ Backend guard ------
-
-    requireBackend() {
-      if (this.serverConnected) return true;
-      this.flash('Connect to a backend to edit', 'error');
-      return false;
-    },
-
-    // ------ Debounced autosave ------
-
-    debounce(key, fn, delay = 500) {
-      if (!this.serverConnected) return;
-      clearTimeout(this._saveTimers[key]);
-      this._saveTimers[key] = setTimeout(fn, delay);
-    },
-
-    // ------ PDF tab switching ------
-
-    switchPdfTab(name) {
-      this.pdfTab = name;
-      if (this.compiledPdfs[name]) {
-        this.pdfUrl = this.compiledPdfs[name];
-      } else {
-        this.pdfUrl = '';
-      }
-    },
-
-    // ------ Personal info ------
-
-    async loadPersonal() {
-      const res = await fetch(API_BASE + '/api/settings?prefix=personal');
-      if (!res.ok) return;
-      const data = await res.json();
-      const p = {};
-      for (const [key, value] of Object.entries(data)) {
-        p[key.replace('personal.', '')] = value;
-      }
-      this.personal = p;
-    },
-
-    autoSavePersonal(field) {
-      this.debounce('personal.' + field, async () => {
-        await fetch(API_BASE + '/api/settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ['personal.' + field]: this.personal[field] || '' }),
-        });
-        this.flash('Saved', 'success');
-      });
+    saveData() {
+      this.persist();
     },
 
     togglePhoto() {
@@ -301,6 +245,7 @@ function app() {
           this.style[field] = value;
         }
       }
+      this.persist();
     },
 
     autoSaveStyle(field) {
@@ -351,77 +296,86 @@ function app() {
       return Object.entries(groups);
     },
 
-    autoSaveMetric(metric) {
-      this.debounce('metric.' + metric.id, async () => {
-        await fetch(API_BASE + '/api/metrics/' + metric.id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value: metric.value === '' ? null : metric.value }),
-        });
-        this.flash('Saved', 'success');
-      });
-    },
-
-    async addMetric(sectionId, groupName) {
-      if (!this.requireBackend()) return;
-      const result = await this.openModal('Add Variable', [
-        { name: 'command', label: 'Command name (e.g., myMetric)', value: '' },
-        { name: 'label', label: 'Placeholder label', value: '' },
-      ]);
-      if (!result || !result.command.trim()) return;
-      const res = await fetch(API_BASE + '/api/metrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          command: result.command.trim(),
-          label: result.label.trim() || result.command.trim(),
-          value: null,
-          groupName,
-          sectionId,
-        }),
-      });
-      if (res.status === 409) { this.flash('Command already exists', 'error'); return; }
-      if (!res.ok) { this.flash('Failed to add', 'error'); return; }
-      await this.loadMetrics();
-    },
-
-    async removeMetric(metricId) {
-      if (!this.requireBackend()) return;
-      await fetch(API_BASE + '/api/metrics/' + metricId, { method: 'DELETE' });
-      await this.loadMetrics();
-    },
-
-    async addMetricGroup(sectionId) {
-      if (!this.requireBackend()) return;
-      const result = await this.openModal('New Variable Group', [
-        { name: 'groupName', label: 'Group name', value: '' },
-        { name: 'command', label: 'First variable command name', value: '' },
-        { name: 'label', label: 'Placeholder label', value: '' },
-      ]);
-      if (!result || !result.groupName.trim() || !result.command.trim()) return;
-      const res = await fetch(API_BASE + '/api/metrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          command: result.command.trim(),
-          label: result.label.trim() || result.command.trim(),
-          value: null,
-          groupName: result.groupName.trim(),
-          sectionId,
-        }),
-      });
-      if (res.status === 409) { this.flash('Command already exists', 'error'); return; }
-      if (!res.ok) { this.flash('Failed to add', 'error'); return; }
-      await this.loadMetrics();
-    },
-
-    async removeMetricGroup(sectionId, groupName) {
-      if (!this.requireBackend()) return;
-      const toRemove = this.metrics.filter(m => m.sectionId === sectionId && m.groupName === groupName);
-      for (const m of toRemove) {
-        await fetch(API_BASE + '/api/metrics/' + m.id, { method: 'DELETE' });
+    updateMetric(command, value) {
+      const metric = this.dataModel.metrics.find(m => m.command === command);
+      if (metric) {
+        metric.value = value === '' ? null : value;
+        this.persist();
       }
-      await this.loadMetrics();
+    },
+
+    addMetric(section, group) {
+      const command = prompt('Variable command name (e.g., myMetric):');
+      if (!command || !command.trim()) return;
+      const cmd = command.trim();
+      if (this.dataModel.metrics.some(m => m.command === cmd)) {
+        this.flash('Variable command already exists', 'error');
+        return;
+      }
+      const label = prompt('Placeholder label (shown when empty):', cmd) || cmd;
+      this.dataModel.metrics.push({
+        command: cmd, label: label.trim(), value: null,
+        group: group, section: section
+      });
+      this.persist();
+    },
+
+    removeMetric(command) {
+      const idx = this.dataModel.metrics.findIndex(m => m.command === command);
+      if (idx !== -1) {
+        this.dataModel.metrics.splice(idx, 1);
+        this.persist();
+      }
+    },
+
+    addMetricGroup(section) {
+      const name = prompt('New variable group name:');
+      if (!name || !name.trim()) return;
+      this.dataModel.metrics.push({
+        command: '', label: '', value: null,
+        group: name.trim(), section: section
+      });
+      const command = prompt('First variable command name:');
+      if (command && command.trim()) {
+        const cmd = command.trim();
+        if (this.dataModel.metrics.some(m => m.command === cmd && m !== this.dataModel.metrics[this.dataModel.metrics.length - 1])) {
+          this.flash('Variable command already exists', 'error');
+          this.dataModel.metrics.pop();
+          return;
+        }
+        const label = prompt('Placeholder label:', cmd) || cmd;
+        const last = this.dataModel.metrics[this.dataModel.metrics.length - 1];
+        last.command = cmd;
+        last.label = label.trim();
+      } else {
+        this.dataModel.metrics.pop();
+        return;
+      }
+      this.persist();
+    },
+
+    removeMetricGroup(section, group) {
+      this.dataModel.metrics = this.dataModel.metrics.filter(
+        m => !(m.section === section && m.group === group)
+      );
+      this.persist();
+    },
+
+    renameMetricGroup(section, oldGroup) {
+      const newName = prompt('Rename group:', oldGroup);
+      if (!newName || !newName.trim() || newName.trim() === oldGroup) return;
+      for (const m of this.dataModel.metrics) {
+        if (m.section === section && m.group === oldGroup) {
+          m.group = newName.trim();
+        }
+      }
+      this.persist();
+    },
+
+    // ====== Resume Config ======
+
+    saveResumeConfig() {
+      this.persist();
     },
 
     async renameMetricGroup(sectionId, oldGroup) {
@@ -527,12 +481,77 @@ function app() {
           _data: null,
         });
       }
+      this.persist();
+    },
+
+    isResumeEntry(file, ei) {
+      const cfg = this.resumeConfig.sections[file];
+      if (!cfg || !cfg.entries || !cfg.entries[ei]) return true;
+      return cfg.entries[ei].resume !== false;
+    },
+
+    toggleResumeEntry(file, ei) {
+      const cfg = this.ensureSectionConfig(file);
+      while (cfg.entries.length <= ei) {
+        cfg.entries.push({ resume: true, items: [] });
+      }
+      cfg.entries[ei].resume = !cfg.entries[ei].resume;
+      this.persist();
+    },
+
+    isResumeBullet(file, ei, ii) {
+      const cfg = this.resumeConfig.sections[file];
+      if (!cfg || !cfg.entries || !cfg.entries[ei] || !cfg.entries[ei].items) return true;
+      return cfg.entries[ei].items[ii] !== false;
+    },
+
+    toggleResumeBullet(file, ei, ii) {
+      const cfg = this.ensureSectionConfig(file);
+      while (cfg.entries.length <= ei) {
+        cfg.entries.push({ resume: true, items: [] });
+      }
+      while (cfg.entries[ei].items.length <= ii) {
+        cfg.entries[ei].items.push(true);
+      }
+      cfg.entries[ei].items[ii] = !cfg.entries[ei].items[ii];
+      this.persist();
+    },
+
+    getResumeText(file) {
+      const cfg = this.resumeConfig.sections[file];
+      return cfg ? (cfg.resumeText || '') : '';
+    },
+
+    setResumeText(file, text) {
+      const cfg = this.ensureSectionConfig(file);
+      cfg.resumeText = text;
+      this.persist();
+    },
+
+    // ====== Document (section list) ======
+
+    renderDocument() {
+      // Build docSections from stored state, attaching section data
+      if (!this.docSections.length) return;
+      for (const sec of this.docSections) {
+        sec._data = this.sectionData[sec.file] || null;
+      }
       this.$nextTick(() => {
         this.initSortable();
         for (const sec of this.docSections) {
-          if (sec.enabled) this.loadSectionData(sec);
+          if (sec._data && sec._data.type === 'cventries') {
+            this.initBulletSortables(sec);
+          }
         }
       });
+    },
+
+    switchDoc(name) {
+      this.activeDoc = name;
+      if (this.compiledPdfs[name]) {
+        this.pdfUrl = this.compiledPdfs[name];
+        this.showPdf = true;
+      }
     },
 
     initSortable() {
@@ -547,8 +566,9 @@ function app() {
         onEnd: (evt) => {
           const item = this.docSections.splice(evt.oldIndex, 1)[0];
           this.docSections.splice(evt.newIndex, 0, item);
-          this.saveDocumentSections();
-        },
+          this.persist();
+          this.flash('Section order saved', 'success');
+        }
       });
     },
 
@@ -603,211 +623,107 @@ function app() {
               if (!entry) return;
               const item = entry.items.splice(evt.oldIndex, 1)[0];
               entry.items.splice(evt.newIndex, 0, item);
-              const ids = entry.items.map(i => i.id);
-              if (!this.serverConnected) return;
-              fetch(API_BASE + '/api/entries/' + entryId + '/items/order', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ids }),
-              });
-            },
+              const cfg = this.resumeConfig.sections[sec.file];
+              if (cfg && cfg.entries && cfg.entries[ei] && cfg.entries[ei].items) {
+                const flag = cfg.entries[ei].items.splice(evt.oldIndex, 1)[0];
+                cfg.entries[ei].items.splice(evt.newIndex, 0, flag !== undefined ? flag : true);
+              }
+              this.persist();
+            }
           });
         });
       });
     },
 
-    // ------ Entry CRUD ------
-
-    autoSaveEntry(entry) {
-      this.debounce('entry.' + entry.id, async () => {
-        await fetch(API_BASE + '/api/entries/' + entry.id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fields: entry.fields }),
-        });
-        this.flash('Saved', 'success');
-      });
+    toggleSection(index) {
+      this.docSections[index].enabled = !this.docSections[index].enabled;
+      this.persist();
     },
 
-    async addEntry(sec) {
-      if (!this.requireBackend()) return;
-      const defaults = {};
-      if (sec.type === 'cventries') {
-        Object.assign(defaults, { position: '', organization: '', location: '', date: '' });
-      } else if (sec.type === 'cvskills') {
-        Object.assign(defaults, { category: '', skills: '' });
-      } else if (sec.type === 'cvhonors') {
-        Object.assign(defaults, { award: '', issuer: '', location: '', date: '' });
-      } else if (sec.type === 'cvreferences') {
-        Object.assign(defaults, { name: '', relation: '', phone: '', email: '' });
-      } else if (sec.type === 'cvparagraph') {
-        Object.assign(defaults, { text: '' });
+    sectionTitle(file) {
+      const name = file.split('/').pop().replace('.tex', '');
+      return name.charAt(0).toUpperCase() + name.slice(1);
+    },
+
+    // ====== Section editing ======
+
+    saveSection(sec) {
+      // Section data is already in sectionData via _data reference
+      this.sectionData[sec.file] = sec._data;
+      this.persist();
+      this.flash('Section saved', 'success');
+    },
+
+    addCventry(sec) {
+      sec._data.entries.push({
+        position: '', organization: '', location: '', date: '', items: ['']
+      });
+      const cfg = this.ensureSectionConfig(sec.file);
+      cfg.entries.push({ resume: true, items: [true] });
+      this.persist();
+    },
+
+    removeEntry(sec, index) {
+      sec._data.entries.splice(index, 1);
+      const cfg = this.resumeConfig.sections[sec.file];
+      if (cfg && cfg.entries) {
+        cfg.entries.splice(index, 1);
       }
-      const res = await fetch(API_BASE + '/api/sections/' + sec.id + '/entries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields: defaults }),
-      });
-      if (!res.ok) { this.flash('Failed to add', 'error'); return; }
-      sec._data = null;
-      await this.loadSectionData(sec);
+      this.persist();
     },
 
-    async removeEntry(sec, entryId) {
-      if (!this.requireBackend()) return;
-      await fetch(API_BASE + '/api/entries/' + entryId, { method: 'DELETE' });
-      sec._data.entries = sec._data.entries.filter(e => e.id !== entryId);
-    },
-
-    toggleResumeEntry(entry) {
-      entry.resumeIncluded = !entry.resumeIncluded;
-      if (!this.serverConnected) return;
-      fetch(API_BASE + '/api/entries/' + entry.id, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeIncluded: entry.resumeIncluded }),
-      });
-    },
-
-    // ------ Item (bullet) CRUD ------
-
-    autoSaveItem(item) {
-      this.debounce('item.' + item.id, async () => {
-        await fetch(API_BASE + '/api/items/' + item.id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: item.content }),
-        });
-        this.flash('Saved', 'success');
-      });
-    },
-
-    async addItem(entry) {
-      if (!this.requireBackend()) return;
-      const res = await fetch(API_BASE + '/api/entries/' + entry.id + '/items', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: '' }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      entry.items.push({ id: data.id, content: '', resumeIncluded: true, sort_order: entry.items.length, entry_id: entry.id });
-    },
-
-    async removeItem(entry, itemId) {
-      if (!this.requireBackend()) return;
-      await fetch(API_BASE + '/api/items/' + itemId, { method: 'DELETE' });
-      entry.items = entry.items.filter(i => i.id !== itemId);
-    },
-
-    toggleResumeItem(item) {
-      item.resumeIncluded = !item.resumeIncluded;
-      if (!this.serverConnected) return;
-      fetch(API_BASE + '/api/items/' + item.id, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ resumeIncluded: item.resumeIncluded }),
-      });
-    },
-
-    // ------ cvparagraph: autosave text + resume text ------
-
-    autoSaveParagraph(sec) {
-      const entry = sec._data.entries[0];
-      if (!entry) return;
-      this.debounce('para.' + entry.id, async () => {
-        await fetch(API_BASE + '/api/entries/' + entry.id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fields: entry.fields }),
-        });
-        this.flash('Saved', 'success');
-      });
-    },
-
-    autoSaveResumeParagraphText(sec) {
-      this.debounce('rpt.' + sec.id, async () => {
-        this.saveDocumentSections();
-      });
-    },
-
-    // ------ Cover letter ------
-
-    async loadCoverletter() {
-      const [settingsRes, sectionsRes] = await Promise.all([
-        fetch(API_BASE + '/api/settings?prefix=coverletter'),
-        fetch(API_BASE + '/api/coverletter/sections'),
-      ]);
-      if (settingsRes.ok) {
-        const data = await settingsRes.json();
-        const s = {};
-        for (const [key, value] of Object.entries(data)) {
-          s[key.replace('coverletter.', '')] = value;
-        }
-        this.coverletter.settings = s;
+    addBullet(sec, entry, ei) {
+      entry.items.push('');
+      const cfg = this.ensureSectionConfig(sec.file);
+      while (cfg.entries.length <= ei) {
+        cfg.entries.push({ resume: true, items: [] });
       }
-      if (sectionsRes.ok) {
-        this.coverletter.sections = await sectionsRes.json();
+      cfg.entries[ei].items.push(true);
+      this.persist();
+    },
+
+    removeBullet(sec, entry, ei, ii) {
+      entry.items.splice(ii, 1);
+      const cfg = this.resumeConfig.sections[sec.file];
+      if (cfg && cfg.entries && cfg.entries[ei] && cfg.entries[ei].items) {
+        cfg.entries[ei].items.splice(ii, 1);
       }
+      this.persist();
     },
 
-    autoSaveCoverletterSetting(field) {
-      this.debounce('cl.' + field, async () => {
-        await fetch(API_BASE + '/api/settings', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ['coverletter.' + field]: this.coverletter.settings[field] || '' }),
-        });
-        this.flash('Saved', 'success');
-      });
+    // ====== Cover letter ======
+
+    loadCoverletter() {
+      return this.coverletter;
     },
 
-    async addCoverletterSection() {
-      if (!this.requireBackend()) return;
-      const res = await fetch(API_BASE + '/api/coverletter/sections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: '', body: '' }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      this.coverletter.sections.push({ id: data.id, title: '', body: '', sort_order: this.coverletter.sections.length });
+    saveCoverletter(cl) {
+      this.coverletter = cl;
+      this.persist();
+      this.flash('Cover letter saved', 'success');
     },
 
-    autoSaveCoverletterSection(sec) {
-      this.debounce('clsec.' + sec.id, async () => {
-        await fetch(API_BASE + '/api/coverletter/sections/' + sec.id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: sec.title, body: sec.body }),
-        });
-        this.flash('Saved', 'success');
-      });
-    },
-
-    async removeCoverletterSection(secId) {
-      if (!this.requireBackend()) return;
-      await fetch(API_BASE + '/api/coverletter/sections/' + secId, { method: 'DELETE' });
-      this.coverletter.sections = this.coverletter.sections.filter(s => s.id !== secId);
-    },
-
-    // ------ Compile & PDF ------
+    // ====== Compile & PDF ======
 
     async compile() {
       if (!this.requireBackend()) return;
       this.compiling = true;
       const name = this.pdfTab;
       try {
-        const res = await fetch(API_BASE + '/api/compile/' + name, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          this.flash(name.charAt(0).toUpperCase() + name.slice(1) + ' compiled', 'success');
-          const url = API_BASE + '/api/pdf/' + name + '?t=' + Date.now();
+        const res = await fetch(`${API_BASE}/api/compile/${name}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.getState())
+        });
+        const result = await res.json();
+        if (result.success) {
+          this.flash(`${name.charAt(0).toUpperCase() + name.slice(1)} compiled`, 'success');
+          const url = `${API_BASE}/api/pdf/${name}?t=${Date.now()}`;
           this.compiledPdfs[name] = url;
           this.pdfUrl = url;
         } else {
           this.flash('Compilation failed - check console', 'error');
-          console.error(data.log);
+          console.error(result.log);
         }
       } catch (e) {
         this.flash('Compilation error', 'error');
@@ -815,121 +731,7 @@ function app() {
       this.compiling = false;
     },
 
-    // ------ Person management ------
-
-    async loadPersons() {
-      try {
-        var res = await fetch(API_BASE + '/api/persons');
-        if (!res.ok) return;
-        var data = await res.json();
-        this.persons = data.persons || [];
-        this.activePersonId = data.activePersonId;
-      } catch (e) { /* offline */ }
-    },
-
-    async handlePersonSelect(value) {
-      if (value === '__new__') {
-        await this.createPerson();
-        return;
-      }
-      var id = parseInt(value);
-      if (!isNaN(id)) {
-        await this.switchPerson(id);
-      }
-    },
-
-    async createPerson() {
-      if (!this.requireBackend()) return;
-      var result = await this.openModal('New Person', [
-        { name: 'name', label: 'Person name', value: '' },
-      ]);
-      if (!result || !result.name.trim()) return;
-      var res = await fetch(API_BASE + '/api/persons', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: result.name.trim() }),
-      });
-      if (res.status === 409) { this.flash('Name already exists', 'error'); return; }
-      if (!res.ok) { this.flash('Failed to create', 'error'); return; }
-      var data = await res.json();
-      await this.loadPersons();
-      await this.switchPerson(data.id);
-    },
-
-    async switchPerson(id) {
-      if (!this.requireBackend()) return;
-      if (id === this.activePersonId) return;
-      if (this.dirty && !confirm('You have unsaved changes. Switch anyway?')) return;
-      var res = await fetch(API_BASE + '/api/persons/' + id + '/switch', { method: 'POST' });
-      if (!res.ok) { this.flash('Failed to switch', 'error'); return; }
-      this.activePersonId = id;
-      await this.init();
-      this.dirty = false;
-    },
-
-    // ------ Save ------
-
-    async save() {
-      if (!this.requireBackend()) return;
-      try {
-        var data = await fetch(API_BASE + '/api/export');
-        if (!data.ok) throw new Error('Export failed');
-        // Re-import triggers a full reload
-        this.dirty = false;
-        this.flash('Saved', 'success');
-      } catch (e) {
-        this.flash('Save failed', 'error');
-      }
-    },
-
-    // ------ Import / Export ------
-
-    async exportData() {
-      if (!this.requireBackend()) return;
-      try {
-        var res = await fetch(API_BASE + '/api/export');
-        if (!res.ok) throw new Error('Export failed');
-        var data = await res.json();
-        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-        var url = URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = (this.personal.firstName || 'export') + '-cv-data.json';
-        a.click();
-        URL.revokeObjectURL(url);
-        this.flash('Exported', 'success');
-      } catch (e) {
-        this.flash('Export failed', 'error');
-      }
-    },
-
-    async importData() {
-      if (!this.requireBackend()) return;
-      var input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.json';
-      input.onchange = async () => {
-        var file = input.files[0];
-        if (!file) return;
-        try {
-          var text = await file.text();
-          var data = JSON.parse(text);
-          var res = await fetch(API_BASE + '/api/import', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data),
-          });
-          if (!res.ok) throw new Error('Import failed');
-          await this.init();
-          this.flash('Imported', 'success');
-        } catch (e) {
-          this.flash('Import failed: ' + e.message, 'error');
-        }
-      };
-      input.click();
-    },
-
-    // ------ UI helpers ------
+    // ====== UI helpers ======
 
     flash(msg, type) {
       this.statusMsg = msg;
