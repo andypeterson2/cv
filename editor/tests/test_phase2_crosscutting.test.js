@@ -64,9 +64,9 @@ describe('WP #665 — E2E navigation between documents', () => {
     expect(server).toContain("'coverletter'");
   });
 
-  test('server lists available documents', () => {
+  test('server has seed endpoint to load all documents', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain('/api/documents');
+    expect(server).toContain('/api/seed');
   });
 
   test('resume and cv share the same data.tex', () => {
@@ -129,10 +129,16 @@ describe('WP #667 — Print/PDF output validation', () => {
     expect(server).toContain('sendFile');
   });
 
-  test('compile endpoint uses generator to build .tex from DB', () => {
+  test('compile endpoint writes data.tex from state', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain('getAllForCompile');
-    expect(server).toContain('generateAll');
+    expect(server).toContain('writeDataTex');
+    expect(server).toContain('state.data');
+  });
+
+  test('compile endpoint generates resume files for resume builds', () => {
+    const server = readFile('editor/server.js');
+    expect(server).toContain('generateResumeFiles');
+    expect(server).toContain("name === 'resume'");
   });
 
   test('compile uses xelatex with nonstopmode', () => {
@@ -218,9 +224,10 @@ describe('WP #668 — Accessibility compliance', () => {
 // ---------------------------------------------------------------------------
 
 describe('WP #669 — Performance considerations', () => {
-  test('editor loads data in parallel on init', () => {
+  test('editor loads data from localStorage or seeds from server on init', () => {
     const appJs = readFile('editor/public/app.js');
-    expect(appJs).toContain('Promise.all');
+    expect(appJs).toContain('CVStorage.load');
+    expect(appJs).toContain('seedFromServer');
   });
 
   test('AlpineJS is loaded with defer', () => {
@@ -247,7 +254,7 @@ describe('WP #669 — Performance considerations', () => {
 
   test('server limits request body size via express.json()', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain('express.json()');
+    expect(server).toContain('express.json(');
   });
 
   test('compilation has timeout protection', () => {

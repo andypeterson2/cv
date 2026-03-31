@@ -1,10 +1,44 @@
 const {
+  sanitizeLatex,
   serializeSection,
   serializeFilteredSection,
   serializeDocumentSections,
   serializeData,
   serializeCoverletter
 } = require('../../lib/serializer');
+
+// ---- sanitizeLatex ----
+
+describe('sanitizeLatex', () => {
+  test('escapes bare # $ % & _ ^', () => {
+    expect(sanitizeLatex('C# & C++')).toBe('C\\# \\& C++');
+    expect(sanitizeLatex('50% off')).toBe('50\\% off');
+    expect(sanitizeLatex('$100')).toBe('\\$100');
+    expect(sanitizeLatex('my_var')).toBe('my\\_var');
+    expect(sanitizeLatex('x^2')).toBe('x\\^2');
+  });
+
+  test('does not double-escape already-escaped chars', () => {
+    expect(sanitizeLatex('Design \\& Analysis')).toBe('Design \\& Analysis');
+    expect(sanitizeLatex('10\\% gain')).toBe('10\\% gain');
+    expect(sanitizeLatex('\\$USD')).toBe('\\$USD');
+  });
+
+  test('preserves LaTeX commands', () => {
+    expect(sanitizeLatex('\\enskip\\cdotp\\enskip')).toBe('\\enskip\\cdotp\\enskip');
+    expect(sanitizeLatex('\\textbf{hello}')).toBe('\\textbf{hello}');
+  });
+
+  test('handles multiple special chars in one string', () => {
+    expect(sanitizeLatex('R&D: $5M #1 rank')).toBe('R\\&D: \\$5M \\#1 rank');
+  });
+
+  test('handles empty and null input', () => {
+    expect(sanitizeLatex('')).toBe('');
+    expect(sanitizeLatex(null)).toBe('');
+    expect(sanitizeLatex(undefined)).toBe('');
+  });
+});
 
 // ---- serializeSection: cventries ----
 

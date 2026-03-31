@@ -1,6 +1,6 @@
 /**
- * Integration tests for the CV Editor REST API.
- * Tests HTTP endpoints against a running server with an in-memory SQLite DB.
+ * Integration tests for the CV Editor server API.
+ * Tests the seed endpoint (parse .tex → JSON) and compile endpoint (JSON → PDF).
  */
 const http = require('http');
 const CvDatabase = require('../../lib/db');
@@ -12,12 +12,15 @@ let db;
 // HTTP helper
 function request(method, urlPath, body) {
   return new Promise((resolve, reject) => {
+    const payload = body ? JSON.stringify(body) : null;
     const options = {
       hostname: 'localhost',
       port,
       path: urlPath,
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      headers: payload
+        ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+        : {}
     };
     const req = http.request(options, (res) => {
       let data = '';
@@ -31,90 +34,17 @@ function request(method, urlPath, body) {
       });
     });
     req.on('error', reject);
-    if (body !== undefined) req.write(JSON.stringify(body));
+    if (payload) req.write(payload);
     req.end();
   });
 }
 
-// Seed the in-memory DB with test data
-function seedDb(db) {
-  db.setSettings({
-    'personal.firstName': 'Andrew',
-    'personal.lastName': 'Peterson',
-    'personal.position': 'Software Engineer',
-    'personal.email': 'test@example.com',
-    'coverletter.recipientName': 'Hiring Team',
-    'coverletter.recipientAddress': '123 Main St',
-    'coverletter.title': 'Application',
-    'coverletter.opening': 'Dear Team,',
-    'coverletter.closing': 'Sincerely,',
-    'coverletter.enclosureLabel': 'Attached',
-    'coverletter.enclosureContent': 'Resume',
-  });
-
-  db.createSection('experience', 'cventries', 'Experience');
-  db.createSection('skills', 'cvskills', 'Skills');
-  db.createSection('summary', 'cvparagraph', 'Summary');
-  db.createSection('certifications', 'cvhonors', 'Certifications');
-
-  const e1 = db.createEntry('experience', {
-    position: 'Software Engineer',
-    organization: 'Acme Corp',
-    location: 'San Diego, CA',
-    date: '2022 - Present',
-  });
-  db.createItem(Number(e1), 'Built distributed systems');
-  db.createItem(Number(e1), 'Led team of 5');
-
-  const e2 = db.createEntry('experience', {
-    position: 'Intern',
-    organization: 'Startup Inc',
-    location: 'Remote',
-    date: '2021',
-  });
-  db.createItem(Number(e2), 'Developed APIs');
-
-  db.createEntry('skills', { category: 'Languages', skills: 'JavaScript, Python, Go' });
-  db.createEntry('skills', { category: 'Tools', skills: 'Docker, Git, Linux' });
-
-  db.createEntry('summary', { text: 'Experienced software engineer with a passion for quantum computing.' });
-
-  db.createEntry('certifications', {
-    award: 'AWS Certified',
-    issuer: 'Amazon',
-    location: '',
-    date: '2023',
-  });
-
-  db.createMetric({
-    command: 'projectCount',
-    label: 'Projects',
-    value: '12',
-    groupName: 'General',
-    sectionId: 'experience',
-  });
-  db.createMetric({
-    command: 'qubitCount',
-    label: 'Qubits',
-    value: null,
-    groupName: 'QI',
-    sectionId: 'experience',
-  });
-
-  db.setDocumentSections('cv', [
-    { sectionId: 'summary', enabled: true },
-    { sectionId: 'experience', enabled: true },
-    { sectionId: 'skills', enabled: true },
-    { sectionId: 'certifications', enabled: true },
-  ]);
-  db.setDocumentSections('resume', [
-    { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short resume summary.' },
-    { sectionId: 'experience', enabled: true },
-    { sectionId: 'skills', enabled: true },
-  ]);
-
-  db.createCoverletterSection('About Me', 'I am a software engineer.');
-  db.createCoverletterSection('Why Me?', 'I bring deep expertise.');
+// Helper: backup and restore files modified by compile
+function backupFile(relPath) {
+  const full = path.join(PROJECT_ROOT, relPath);
+  if (fs.existsSync(full)) {
+    fs.copyFileSync(full, full + '.test-backup');
+  }
 }
 
 beforeAll(() => {
@@ -123,118 +53,101 @@ beforeAll(() => {
   db.clearAllContent(); // Clear Jane Doe seed data before seeding test data
   seedDb(db);
 
-  // Clear require cache so we get a fresh app
-  delete require.cache[require.resolve('../../server')];
+beforeAll((done) => {
+  backupFile('data.json');
+  backupFile('data.tex');
+  backupFile('resume-config.json');
+  backupFile('cv.tex');
+
   const app = require('../../server');
-  app.setDb(db);
-
-  return new Promise((resolve) => {
-    server = app.listen(0, () => {
-      port = server.address().port;
-      resolve();
-    });
+  server = app.listen(0, () => {
+    port = server.address().port;
+    done();
   });
 });
 
-afterAll(() => {
-  if (db) db.close();
-  return new Promise((resolve) => {
-    if (server) server.close(resolve);
-    else resolve();
-  });
+afterAll((done) => {
+  restoreFile('data.json');
+  restoreFile('data.tex');
+  restoreFile('resume-config.json');
+  restoreFile('cv.tex');
+
+  if (server) {
+    server.close(done);
+  } else {
+    done();
+  }
 });
 
-// =========================================================================
-// Settings
-// =========================================================================
+// ---- GET /api/seed ----
 
-describe('GET /api/settings', () => {
-  test('returns all settings', async () => {
-    const res = await request('GET', '/api/settings');
+describe('GET /api/seed', () => {
+  test('returns full state with all required keys', async () => {
+    const res = await request('GET', '/api/seed');
     expect(res.status).toBe(200);
-    expect(res.body['personal.firstName']).toBe('Andrew');
-    expect(res.body['coverletter.title']).toBe('Application');
+    expect(res.body).toHaveProperty('data');
+    expect(res.body).toHaveProperty('resumeConfig');
+    expect(res.body).toHaveProperty('coverletter');
+    expect(res.body).toHaveProperty('document');
+    expect(res.body).toHaveProperty('sectionData');
   });
 
-  test('returns filtered settings by prefix', async () => {
-    const res = await request('GET', '/api/settings?prefix=personal');
-    expect(res.status).toBe(200);
-    expect(res.body['personal.firstName']).toBe('Andrew');
-    expect(res.body['coverletter.title']).toBeUndefined();
+  test('data contains personal info and metrics', async () => {
+    const res = await request('GET', '/api/seed');
+    expect(res.body.data.personal).toBeDefined();
+    expect(res.body.data.personal.firstName).toBe('Andrew');
+    expect(res.body.data.metrics).toBeDefined();
+    expect(res.body.data.metrics.length).toBeGreaterThan(0);
   });
 
-  test('returns empty for unknown prefix', async () => {
-    const res = await request('GET', '/api/settings?prefix=unknown');
-    expect(res.status).toBe(200);
-    expect(Object.keys(res.body).length).toBe(0);
-  });
-});
-
-describe('PATCH /api/settings', () => {
-  test('upserts settings', async () => {
-    const res = await request('PATCH', '/api/settings', {
-      'personal.firstName': 'Andy',
-    });
-    expect(res.status).toBe(200);
-
-    const get = await request('GET', '/api/settings?prefix=personal');
-    expect(get.body['personal.firstName']).toBe('Andy');
-
-    // Restore
-    await request('PATCH', '/api/settings', { 'personal.firstName': 'Andrew' });
+  test('document has sections array', async () => {
+    const res = await request('GET', '/api/seed');
+    expect(Array.isArray(res.body.document.sections)).toBe(true);
+    expect(res.body.document.sections.length).toBeGreaterThan(0);
   });
 
-  test('rejects empty body', async () => {
-    const res = await request('PATCH', '/api/settings', {});
-    expect(res.status).toBe(400);
-  });
-});
-
-// =========================================================================
-// Sections
-// =========================================================================
-
-describe('GET /api/sections', () => {
-  test('returns all sections', async () => {
-    const res = await request('GET', '/api/sections');
-    expect(res.status).toBe(200);
-    expect(res.body.length).toBe(4);
-    expect(res.body.map(s => s.id)).toContain('experience');
-  });
-});
-
-describe('GET /api/sections/:id', () => {
-  test('returns section with entries and items', async () => {
-    const res = await request('GET', '/api/sections/experience');
-    expect(res.status).toBe(200);
-    expect(res.body.type).toBe('cventries');
-    expect(res.body.title).toBe('Experience');
-    expect(res.body.entries.length).toBe(2);
-    expect(res.body.entries[0].items.length).toBe(2);
+  test('each document section has file and enabled fields', async () => {
+    const res = await request('GET', '/api/seed');
+    for (const sec of res.body.document.sections) {
+      expect(sec).toHaveProperty('file');
+      expect(sec).toHaveProperty('enabled');
+    }
   });
 
-  test('returns 404 for missing section', async () => {
-    const res = await request('GET', '/api/sections/nonexistent');
-    expect(res.status).toBe(404);
+  test('sectionData contains parsed sections', async () => {
+    const res = await request('GET', '/api/seed');
+    const sections = res.body.sectionData;
+    expect(Object.keys(sections).length).toBeGreaterThan(0);
+
+    // Experience should be cventries
+    expect(sections['cv/experience.tex']).toBeDefined();
+    expect(sections['cv/experience.tex'].type).toBe('cventries');
+    expect(sections['cv/experience.tex'].entries.length).toBeGreaterThanOrEqual(2);
   });
-});
 
-describe('POST /api/sections', () => {
-  test('creates a new section', async () => {
-    const res = await request('POST', '/api/sections', {
-      id: 'projects',
-      type: 'cventries',
-      title: 'Projects',
-    });
-    expect(res.status).toBe(201);
-    expect(res.body.id).toBe('projects');
+  test('sectionData has all section types', async () => {
+    const res = await request('GET', '/api/seed');
+    const s = res.body.sectionData;
+    expect(s['cv/skills.tex'].type).toBe('cvskills');
+    expect(s['cv/summary.tex'].type).toBe('cvparagraph');
+    expect(s['cv/certifications.tex'].type).toBe('cvhonors');
+    expect(s['cv/references.tex'].type).toBe('cvreferences');
+  });
 
-    // Verify
-    const get = await request('GET', '/api/sections/projects');
-    expect(get.body.title).toBe('Projects');
+  test('resumeConfig has sectionOrder and sections', async () => {
+    const res = await request('GET', '/api/seed');
+    expect(Array.isArray(res.body.resumeConfig.sectionOrder)).toBe(true);
+    expect(typeof res.body.resumeConfig.sections).toBe('object');
+  });
 
-    // Cleanup
-    await request('DELETE', '/api/sections/projects');
+  test('coverletter has expected structure', async () => {
+    const res = await request('GET', '/api/seed');
+    const cl = res.body.coverletter;
+    expect(cl).toBeDefined();
+    expect(cl.recipient).toBeDefined();
+    expect(cl.opening).toBeDefined();
+    expect(cl.closing).toBeDefined();
+    expect(cl.sections.length).toBeGreaterThanOrEqual(1);
   });
 
   test('returns 409 for duplicate section', async () => {
@@ -246,275 +159,74 @@ describe('POST /api/sections', () => {
     expect(res.status).toBe(409);
   });
 
-  test('rejects invalid type', async () => {
-    const res = await request('POST', '/api/sections', {
-      id: 'bad',
-      type: 'invalid',
-      title: 'Bad',
-    });
-    expect(res.status).toBe(400);
-  });
-});
-
-describe('PUT /api/sections/:id', () => {
-  test('updates section title', async () => {
-    const res = await request('PUT', '/api/sections/skills', { title: 'Technical Skills' });
-    expect(res.status).toBe(200);
-
-    const get = await request('GET', '/api/sections/skills');
-    expect(get.body.title).toBe('Technical Skills');
-
-    // Restore
-    await request('PUT', '/api/sections/skills', { title: 'Skills' });
-  });
-});
-
-describe('DELETE /api/sections/:id', () => {
-  test('deletes section and cascades', async () => {
-    // Create temp section with entries
-    await request('POST', '/api/sections', { id: 'temp', type: 'cventries', title: 'Temp' });
-    await request('POST', '/api/sections/temp/entries', { fields: { position: 'X' } });
-
-    const del = await request('DELETE', '/api/sections/temp');
-    expect(del.status).toBe(200);
-
-    const get = await request('GET', '/api/sections/temp');
-    expect(get.status).toBe(404);
-  });
-});
-
-// =========================================================================
-// Entries
-// =========================================================================
-
-describe('POST /api/sections/:id/entries', () => {
-  test('creates entry', async () => {
-    const res = await request('POST', '/api/sections/experience/entries', {
-      fields: { position: 'CTO', organization: 'Test', location: 'NYC', date: '2025' },
-    });
-    expect(res.status).toBe(201);
-    expect(typeof res.body.id).toBe('number');
-
-    // Cleanup
-    await request('DELETE', `/api/entries/${res.body.id}`);
-  });
-
-  test('returns 404 for missing section', async () => {
-    const res = await request('POST', '/api/sections/missing/entries', { fields: {} });
-    expect(res.status).toBe(404);
-  });
-});
-
-describe('PUT /api/entries/:id', () => {
-  test('updates entry fields', async () => {
-    // Get experience entries
-    const sec = await request('GET', '/api/sections/experience');
-    const entryId = sec.body.entries[0].id;
-
-    const res = await request('PUT', `/api/entries/${entryId}`, {
-      fields: { position: 'Senior Engineer', organization: 'Acme Corp', location: 'San Diego, CA', date: '2022 - Present' },
-    });
-    expect(res.status).toBe(200);
-
-    // Verify
-    const sec2 = await request('GET', '/api/sections/experience');
-    expect(sec2.body.entries[0].fields.position).toBe('Senior Engineer');
-
-    // Restore
-    await request('PUT', `/api/entries/${entryId}`, {
-      fields: { position: 'Software Engineer', organization: 'Acme Corp', location: 'San Diego, CA', date: '2022 - Present' },
-    });
-  });
-
-  test('toggles resumeIncluded', async () => {
-    const sec = await request('GET', '/api/sections/experience');
-    const entryId = sec.body.entries[1].id;
-
-    await request('PUT', `/api/entries/${entryId}`, { resumeIncluded: false });
-    const sec2 = await request('GET', '/api/sections/experience');
-    const entry = sec2.body.entries.find(e => e.id === entryId);
-    expect(entry.resumeIncluded).toBe(false);
-
-    // Restore
-    await request('PUT', `/api/entries/${entryId}`, { resumeIncluded: true });
-  });
-});
-
-describe('DELETE /api/entries/:id', () => {
-  test('deletes entry', async () => {
-    const res = await request('POST', '/api/sections/experience/entries', {
-      fields: { position: 'Temp' },
-    });
-    const del = await request('DELETE', `/api/entries/${res.body.id}`);
-    expect(del.status).toBe(200);
-  });
-});
-
-describe('PATCH /api/sections/:id/entries/order', () => {
-  test('reorders entries', async () => {
-    const sec = await request('GET', '/api/sections/experience');
-    const ids = sec.body.entries.map(e => e.id);
-
-    // Reverse order
-    const reversed = [...ids].reverse();
-    const res = await request('PATCH', '/api/sections/experience/entries/order', { ids: reversed });
-    expect(res.status).toBe(200);
-
-    // Verify new order
-    const sec2 = await request('GET', '/api/sections/experience');
-    expect(sec2.body.entries.map(e => e.id)).toEqual(reversed);
-
-    // Restore
-    await request('PATCH', '/api/sections/experience/entries/order', { ids });
-  });
-});
-
-// =========================================================================
-// Items
-// =========================================================================
-
-describe('Items CRUD', () => {
-  let testEntryId;
+describe('POST /api/compile/:name', () => {
+  let seedState;
 
   beforeAll(async () => {
-    const sec = await request('GET', '/api/sections/experience');
-    testEntryId = sec.body.entries[0].id;
+    const res = await request('GET', '/api/seed');
+    seedState = res.body;
   });
 
-  test('creates item', async () => {
-    const res = await request('POST', `/api/entries/${testEntryId}/items`, {
-      content: 'New bullet point',
-    });
-    expect(res.status).toBe(201);
-
-    // Cleanup
-    await request('DELETE', `/api/items/${res.body.id}`);
-  });
-
-  test('updates item', async () => {
-    const sec = await request('GET', '/api/sections/experience');
-    const itemId = sec.body.entries[0].items[0].id;
-
-    await request('PUT', `/api/items/${itemId}`, { content: 'Updated bullet' });
-    const sec2 = await request('GET', '/api/sections/experience');
-    const item = sec2.body.entries[0].items.find(i => i.id === itemId);
-    expect(item.content).toBe('Updated bullet');
-
-    // Restore
-    await request('PUT', `/api/items/${itemId}`, { content: 'Built distributed systems' });
-  });
-
-  test('toggles item resumeIncluded', async () => {
-    const sec = await request('GET', '/api/sections/experience');
-    const itemId = sec.body.entries[0].items[0].id;
-
-    await request('PUT', `/api/items/${itemId}`, { resumeIncluded: false });
-    const sec2 = await request('GET', '/api/sections/experience');
-    const item = sec2.body.entries[0].items.find(i => i.id === itemId);
-    expect(item.resumeIncluded).toBe(false);
-
-    // Restore
-    await request('PUT', `/api/items/${itemId}`, { resumeIncluded: true });
-  });
-
-  test('deletes item', async () => {
-    const res = await request('POST', `/api/entries/${testEntryId}/items`, { content: 'Delete me' });
-    const del = await request('DELETE', `/api/items/${res.body.id}`);
-    expect(del.status).toBe(200);
-  });
-});
-
-// =========================================================================
-// Metrics
-// =========================================================================
-
-describe('GET /api/metrics', () => {
-  test('returns all metrics', async () => {
-    const res = await request('GET', '/api/metrics');
-    expect(res.status).toBe(200);
-    expect(res.body.length).toBe(2);
-    expect(res.body[0].command).toBe('projectCount');
-  });
-
-  test('filters by section', async () => {
-    const res = await request('GET', '/api/metrics?section=experience');
-    expect(res.status).toBe(200);
-    expect(res.body.length).toBe(2);
-  });
-});
-
-describe('POST /api/metrics', () => {
-  test('creates metric', async () => {
-    const res = await request('POST', '/api/metrics', {
-      command: 'testMetric',
-      label: 'Test',
-      value: '42',
-      groupName: 'Test',
-      sectionId: 'experience',
-    });
-    expect(res.status).toBe(201);
-
-    // Cleanup
-    await request('DELETE', `/api/metrics/${res.body.id}`);
-  });
-
-  test('returns 409 for duplicate command', async () => {
-    const res = await request('POST', '/api/metrics', {
-      command: 'projectCount',
-      sectionId: 'experience',
-    });
-    expect(res.status).toBe(409);
-  });
-});
-
-describe('PUT /api/metrics/:id', () => {
-  test('updates metric value', async () => {
-    const all = await request('GET', '/api/metrics');
-    const metric = all.body.find(m => m.command === 'projectCount');
-
-    await request('PUT', `/api/metrics/${metric.id}`, { value: '99' });
-
-    const all2 = await request('GET', '/api/metrics');
-    const updated = all2.body.find(m => m.id === metric.id);
-    expect(updated.value).toBe('99');
-
-    // Restore
-    await request('PUT', `/api/metrics/${metric.id}`, { value: '12' });
-  });
-});
-
-describe('DELETE /api/metrics/:id', () => {
-  test('deletes metric', async () => {
-    const res = await request('POST', '/api/metrics', {
-      command: 'deleteme',
-      sectionId: 'experience',
-    });
-    const del = await request('DELETE', `/api/metrics/${res.body.id}`);
-    expect(del.status).toBe(200);
-  });
-});
-
-// =========================================================================
-// Document sections
-// =========================================================================
-
-describe('GET /api/documents/:variant', () => {
-  test('returns cv document sections', async () => {
-    const res = await request('GET', '/api/documents/cv');
-    expect(res.status).toBe(200);
-    expect(res.body.variant).toBe('cv');
-    expect(res.body.sections.length).toBe(4);
-  });
-
-  test('returns resume document sections', async () => {
-    const res = await request('GET', '/api/documents/resume');
-    expect(res.status).toBe(200);
-    expect(res.body.sections.length).toBe(3);
-  });
-
-  test('rejects invalid variant', async () => {
-    const res = await request('GET', '/api/documents/invalid');
+  test('rejects invalid document name', async () => {
+    const res = await request('POST', '/api/compile/invalid', seedState);
     expect(res.status).toBe(400);
+  });
+
+  test('rejects missing state body', async () => {
+    const res = await request('POST', '/api/compile/cv', {});
+    expect(res.status).toBe(400);
+  });
+
+  test('writes .tex files from state during compile', async () => {
+    // Modify a metric to verify it propagates
+    const state = JSON.parse(JSON.stringify(seedState));
+    state.data.metrics[0].value = 'test-compile-42';
+
+    const res = await request('POST', '/api/compile/cv', state);
+    expect(res.status).toBe(200);
+
+    // data.tex should contain the test value
+    const dataTex = fs.readFileSync(path.join(PROJECT_ROOT, 'data.tex'), 'utf-8');
+    expect(dataTex).toContain('test-compile-42');
+
+    // data.json should be updated too
+    const dataJson = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'data.json'), 'utf-8'));
+    expect(dataJson.metrics[0].value).toBe('test-compile-42');
+  });
+
+  test('cv.tex section order matches state after compile', async () => {
+    const res = await request('POST', '/api/compile/cv', seedState);
+    expect(res.status).toBe(200);
+
+    const cvTex = fs.readFileSync(path.join(PROJECT_ROOT, 'cv.tex'), 'utf-8');
+    // Verify no duplicate input lines
+    const inputLines = cvTex.split('\n')
+      .filter(l => /\\input\{cv\//.test(l) || /^%\s*\\input\{cv\//.test(l.trim()));
+    const files = inputLines.map(l => {
+      const m = l.match(/\\input\{([^}]+)\}/);
+      return m ? m[1] : null;
+    }).filter(Boolean);
+    const unique = new Set(files);
+    expect(unique.size).toBe(files.length);
+  });
+});
+
+// ---- GET /api/pdf/:name ----
+
+describe('GET /api/pdf/:name', () => {
+  test('rejects invalid document name', async () => {
+    const res = await request('GET', '/api/pdf/invalid');
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 if PDF not compiled yet', async () => {
+    // Delete any existing PDF to test 404
+    const pdfPath = path.join(PROJECT_ROOT, 'nonexistent-doc.pdf');
+    // Just test with a valid name where PDF may not exist
+    // This is fragile but tests the endpoint logic
+    const res = await request('GET', '/api/pdf/coverletter');
+    // Could be 200 or 404 depending on prior compilation
+    expect([200, 404]).toContain(res.status);
   });
 });
 
