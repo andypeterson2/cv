@@ -317,12 +317,9 @@ describe('WP #679 — Web editor save/preview', () => {
     expect(appJs).toContain('function app()');
   });
 
-  test('has granular API save functionality', () => {
-    expect(appJs).toContain('autoSavePersonal');
-    expect(appJs).toContain('autoSaveEntry');
-    expect(appJs).toContain('autoSaveItem');
-    expect(appJs).toContain("method: 'PATCH'");
-    expect(appJs).toContain("method: 'PUT'");
+  test('has data save functionality', () => {
+    expect(appJs).toContain('saveData');
+    expect(appJs).toContain('persist');
   });
 
   test('has section data loading', () => {
@@ -357,12 +354,9 @@ describe('WP #679 — Web editor save/preview', () => {
     expect(server).toContain('require.main === module');
   });
 
-  test('server has RESTful API routes', () => {
+  test('server has seed, compile, and pdf endpoints', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain("app.get('/api/settings'");
-    expect(server).toContain("app.patch('/api/settings'");
-    expect(server).toContain("app.get('/api/sections'");
-    expect(server).toContain("app.post('/api/sections'");
+    expect(server).toContain("app.get('/api/seed'");
     expect(server).toContain("app.post('/api/compile/");
     expect(server).toContain("app.get('/api/pdf/");
     expect(server).toContain("app.get('/api/metrics'");
