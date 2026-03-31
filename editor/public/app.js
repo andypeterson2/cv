@@ -1,3 +1,93 @@
+var DEMO_DATA = {
+  personal: {
+    firstName: 'Jane', lastName: 'Doe',
+    position: 'Senior Software Engineer',
+    address: '123 Main Street, Anytown, ST 12345',
+    mobile: '(555) 123-4567', email: 'jane.doe@example.com',
+    homepage: 'janedoe.dev',
+    github: 'janedoe', linkedin: 'janedoe', gitlab: 'janedoe',
+    twitter: 'janedoe', orcid: '0000-0001-2345-6789',
+    quote: 'Building the future, one commit at a time.',
+    photoEnabled: '0', photoFile: '',
+  },
+  sections: [
+    {
+      id: 'summary', type: 'cvparagraph', title: 'Summary',
+      entries: [{ id: 1, section_id: 'summary', sort_order: 0, resumeIncluded: true,
+        fields: { text: 'Experienced software engineer with over 6 years of experience building scalable web applications and distributed systems. Passionate about clean code, mentoring, and continuous learning.' },
+        items: [] }]
+    },
+    {
+      id: 'experience', type: 'cventries', title: 'Experience',
+      entries: [
+        { id: 2, section_id: 'experience', sort_order: 0, resumeIncluded: true,
+          fields: { position: 'Senior Software Engineer', organization: 'Acme Technologies', location: 'San Francisco, CA', date: '2022 -- Present' },
+          items: [
+            { id: 1, entry_id: 2, sort_order: 0, content: 'Led migration of monolithic architecture to microservices, reducing deployment time by 60\\%', resumeIncluded: true },
+            { id: 2, entry_id: 2, sort_order: 1, content: 'Mentored team of 4 junior engineers through code reviews and pair programming sessions', resumeIncluded: true },
+          ]
+        },
+        { id: 3, section_id: 'experience', sort_order: 1, resumeIncluded: true,
+          fields: { position: 'Software Engineer', organization: 'Widget Corp', location: 'Austin, TX', date: '2019 -- 2022' },
+          items: [
+            { id: 3, entry_id: 3, sort_order: 0, content: 'Designed and implemented RESTful API serving 10,000 requests per second', resumeIncluded: true },
+            { id: 4, entry_id: 3, sort_order: 1, content: 'Developed automated testing pipeline reducing QA cycle from 2 weeks to 3 days', resumeIncluded: true },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'education', type: 'cventries', title: 'Education',
+      entries: [
+        { id: 4, section_id: 'education', sort_order: 0, resumeIncluded: true,
+          fields: { position: 'B.S. Computer Science', organization: 'State University', location: 'Anytown, ST', date: '2015 -- 2019' },
+          items: [
+            { id: 5, entry_id: 4, sort_order: 0, content: 'Graduated magna cum laude, GPA 3.8/4.0', resumeIncluded: true },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'skills', type: 'cvskills', title: 'Skills',
+      entries: [
+        { id: 5, section_id: 'skills', sort_order: 0, resumeIncluded: true, fields: { category: 'Languages', skills: 'JavaScript, Python, Go, Rust, SQL' }, items: [] },
+        { id: 6, section_id: 'skills', sort_order: 1, resumeIncluded: true, fields: { category: 'Frameworks', skills: 'React, Node.js, Express, Django' }, items: [] },
+        { id: 7, section_id: 'skills', sort_order: 2, resumeIncluded: true, fields: { category: 'Tools', skills: 'Docker, Kubernetes, Git, CI/CD, AWS' }, items: [] },
+      ]
+    },
+  ],
+  metrics: [
+    { id: 1, command: 'projectCount', label: 'Projects', value: '15', groupName: 'General', sectionId: 'experience' },
+    { id: 2, command: 'yearsExperience', label: 'Years', value: '6', groupName: 'General', sectionId: 'experience' },
+  ],
+  documents: {
+    cv: [
+      { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: null },
+      { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
+      { sectionId: 'education', enabled: true, sortOrder: 2, resumeParagraphText: null },
+      { sectionId: 'skills', enabled: true, sortOrder: 3, resumeParagraphText: null },
+    ],
+    resume: [
+      { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: 'Software engineer with 6 years of experience in web applications and distributed systems.' },
+      { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
+      { sectionId: 'skills', enabled: true, sortOrder: 2, resumeParagraphText: null },
+    ]
+  },
+  coverletter: {
+    recipientName: 'Hiring Manager',
+    recipientAddress: '456 Corporate Ave, Business City, ST 67890',
+    title: 'Application for Software Engineer Position',
+    opening: 'Dear Hiring Manager,',
+    closing: 'Sincerely,',
+    enclosureLabel: 'Attached',
+    enclosureContent: 'Resume, Portfolio',
+    sections: [
+      { id: 1, sort_order: 0, title: 'Introduction', body: 'I am writing to express my interest in the Software Engineer position at your company. With over six years of experience in building scalable systems, I am confident I would be a strong addition to your team.' },
+      { id: 2, sort_order: 1, title: 'Experience', body: 'In my current role at Acme Technologies, I have led the migration of a monolithic application to a microservices architecture, resulting in significant improvements in deployment speed and system reliability.' },
+    ]
+  }
+};
+
 function app() {
   return {
     editorTab: 'sections',
@@ -33,6 +123,10 @@ function app() {
 
     async init() {
       this.darkMode = document.documentElement.dataset.theme !== 'light';
+      if (typeof API_BASE === 'undefined' || API_BASE === '') {
+        this.loadDemo();
+        return;
+      }
       await Promise.all([
         this.loadPersonal(),
         this.loadMetrics(),
@@ -43,6 +137,7 @@ function app() {
         this.loadPersons(),
       ]);
       this.serverConnected = true;
+      this.isJaneDoe = false;
 
       // Init resize handle
       this.$nextTick(() => {
@@ -53,6 +148,54 @@ function app() {
           UIKit.initResize(handle, left, container, { min: 280, max: 800, default: 450, key: 'cv-editor-split' });
         }
       });
+    },
+
+    // ------ Demo mode (no backend) ------
+
+    loadDemo() {
+      var d = DEMO_DATA;
+      this.personal = Object.assign({}, d.personal);
+      this.metrics = d.metrics.map(function(m) { return Object.assign({}, m); });
+      this.sections = d.sections.map(function(s) { return { id: s.id, type: s.type, title: s.title }; });
+      this.coverletter = {
+        settings: {
+          recipientName: d.coverletter.recipientName,
+          recipientAddress: d.coverletter.recipientAddress,
+          title: d.coverletter.title,
+          opening: d.coverletter.opening,
+          closing: d.coverletter.closing,
+          enclosureLabel: d.coverletter.enclosureLabel,
+          enclosureContent: d.coverletter.enclosureContent,
+        },
+        sections: d.coverletter.sections.map(function(s) { return Object.assign({}, s); }),
+      };
+      var docSecs = d.documents.cv;
+      this.docSections = [];
+      for (var i = 0; i < docSecs.length; i++) {
+        var ds = docSecs[i];
+        var sec = d.sections.find(function(s) { return s.id === ds.sectionId; });
+        if (!sec) continue;
+        this.docSections.push({
+          id: sec.id, type: sec.type, title: sec.title,
+          enabled: ds.enabled,
+          resumeParagraphText: ds.resumeParagraphText,
+          _expanded: true,
+          _data: { id: sec.id, type: sec.type, title: sec.title,
+            entries: sec.entries.map(function(e) {
+              return { id: e.id, section_id: e.section_id, sort_order: e.sort_order,
+                resumeIncluded: e.resumeIncluded, fields: Object.assign({}, e.fields),
+                items: e.items.map(function(it) { return Object.assign({}, it); }) };
+            })
+          },
+        });
+      }
+      this.persons = [{ id: 1, name: 'Jane Doe' }];
+      this.activePersonId = 1;
+      this.isJaneDoe = true;
+      this.serverConnected = false;
+      this.pdfUrl = '/cv/jane-doe-cv.pdf';
+      this.compiledPdfs = { cv: '/cv/jane-doe-cv.pdf', resume: '/cv/jane-doe-resume.pdf', coverletter: '' };
+      this.$nextTick(function() { this.initSortable(); }.bind(this));
     },
 
     // ------ Theme ------
@@ -84,9 +227,18 @@ function app() {
       this.modal = { open: false, title: '', fields: [], resolve: null };
     },
 
+    // ------ Backend guard ------
+
+    requireBackend() {
+      if (this.serverConnected) return true;
+      this.flash('Connect to a backend to edit', 'error');
+      return false;
+    },
+
     // ------ Debounced autosave ------
 
     debounce(key, fn, delay = 500) {
+      if (!this.serverConnected) return;
       clearTimeout(this._saveTimers[key]);
       this._saveTimers[key] = setTimeout(fn, delay);
     },
@@ -129,6 +281,7 @@ function app() {
     togglePhoto() {
       const enabled = this.personal.photoEnabled === '1' ? '0' : '1';
       this.personal.photoEnabled = enabled;
+      if (!this.serverConnected) return;
       fetch(API_BASE + '/api/settings', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -210,6 +363,7 @@ function app() {
     },
 
     async addMetric(sectionId, groupName) {
+      if (!this.requireBackend()) return;
       const result = await this.openModal('Add Variable', [
         { name: 'command', label: 'Command name (e.g., myMetric)', value: '' },
         { name: 'label', label: 'Placeholder label', value: '' },
@@ -232,11 +386,13 @@ function app() {
     },
 
     async removeMetric(metricId) {
+      if (!this.requireBackend()) return;
       await fetch(API_BASE + '/api/metrics/' + metricId, { method: 'DELETE' });
       await this.loadMetrics();
     },
 
     async addMetricGroup(sectionId) {
+      if (!this.requireBackend()) return;
       const result = await this.openModal('New Variable Group', [
         { name: 'groupName', label: 'Group name', value: '' },
         { name: 'command', label: 'First variable command name', value: '' },
@@ -260,6 +416,7 @@ function app() {
     },
 
     async removeMetricGroup(sectionId, groupName) {
+      if (!this.requireBackend()) return;
       const toRemove = this.metrics.filter(m => m.sectionId === sectionId && m.groupName === groupName);
       for (const m of toRemove) {
         await fetch(API_BASE + '/api/metrics/' + m.id, { method: 'DELETE' });
@@ -268,6 +425,7 @@ function app() {
     },
 
     async renameMetricGroup(sectionId, oldGroup) {
+      if (!this.requireBackend()) return;
       const result = await this.openModal('Rename Group', [
         { name: 'groupName', label: 'New group name', value: oldGroup },
       ]);
@@ -286,6 +444,7 @@ function app() {
     // ------ Section CRUD ------
 
     async createNewSection() {
+      if (!this.requireBackend()) return;
       var result = await this.openModal('New Section', [
         { name: 'title', label: 'Section title', value: '' },
         { name: 'type', label: 'Type (cventries, cvskills, cvhonors, cvreferences, cvparagraph)', value: 'cventries' },
@@ -318,6 +477,7 @@ function app() {
     },
 
     async deleteSection(sectionId) {
+      if (!this.requireBackend()) return;
       if (!confirm('Delete this section and all its entries?')) return;
       var res = await fetch(API_BASE + '/api/sections/' + sectionId, { method: 'DELETE' });
       if (!res.ok) { this.flash('Failed to delete', 'error'); return; }
@@ -328,6 +488,7 @@ function app() {
     },
 
     async renameSection(sectionId) {
+      if (!this.requireBackend()) return;
       var sec = this.docSections.find(function(s) { return s.id === sectionId; });
       var result = await this.openModal('Rename Section', [
         { name: 'title', label: 'New title', value: sec ? sec.title : '' },
@@ -392,6 +553,7 @@ function app() {
     },
 
     async saveDocumentSections() {
+      if (!this.serverConnected) return;
       const sections = this.docSections.map(s => ({
         sectionId: s.id,
         enabled: s.enabled,
@@ -442,6 +604,7 @@ function app() {
               const item = entry.items.splice(evt.oldIndex, 1)[0];
               entry.items.splice(evt.newIndex, 0, item);
               const ids = entry.items.map(i => i.id);
+              if (!this.serverConnected) return;
               fetch(API_BASE + '/api/entries/' + entryId + '/items/order', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
@@ -467,6 +630,7 @@ function app() {
     },
 
     async addEntry(sec) {
+      if (!this.requireBackend()) return;
       const defaults = {};
       if (sec.type === 'cventries') {
         Object.assign(defaults, { position: '', organization: '', location: '', date: '' });
@@ -490,12 +654,14 @@ function app() {
     },
 
     async removeEntry(sec, entryId) {
+      if (!this.requireBackend()) return;
       await fetch(API_BASE + '/api/entries/' + entryId, { method: 'DELETE' });
       sec._data.entries = sec._data.entries.filter(e => e.id !== entryId);
     },
 
     toggleResumeEntry(entry) {
       entry.resumeIncluded = !entry.resumeIncluded;
+      if (!this.serverConnected) return;
       fetch(API_BASE + '/api/entries/' + entry.id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -517,6 +683,7 @@ function app() {
     },
 
     async addItem(entry) {
+      if (!this.requireBackend()) return;
       const res = await fetch(API_BASE + '/api/entries/' + entry.id + '/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -528,12 +695,14 @@ function app() {
     },
 
     async removeItem(entry, itemId) {
+      if (!this.requireBackend()) return;
       await fetch(API_BASE + '/api/items/' + itemId, { method: 'DELETE' });
       entry.items = entry.items.filter(i => i.id !== itemId);
     },
 
     toggleResumeItem(item) {
       item.resumeIncluded = !item.resumeIncluded;
+      if (!this.serverConnected) return;
       fetch(API_BASE + '/api/items/' + item.id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -594,6 +763,7 @@ function app() {
     },
 
     async addCoverletterSection() {
+      if (!this.requireBackend()) return;
       const res = await fetch(API_BASE + '/api/coverletter/sections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -616,6 +786,7 @@ function app() {
     },
 
     async removeCoverletterSection(secId) {
+      if (!this.requireBackend()) return;
       await fetch(API_BASE + '/api/coverletter/sections/' + secId, { method: 'DELETE' });
       this.coverletter.sections = this.coverletter.sections.filter(s => s.id !== secId);
     },
@@ -623,6 +794,7 @@ function app() {
     // ------ Compile & PDF ------
 
     async compile() {
+      if (!this.requireBackend()) return;
       this.compiling = true;
       const name = this.pdfTab;
       try {
@@ -667,6 +839,7 @@ function app() {
     },
 
     async createPerson() {
+      if (!this.requireBackend()) return;
       var result = await this.openModal('New Person', [
         { name: 'name', label: 'Person name', value: '' },
       ]);
@@ -684,6 +857,7 @@ function app() {
     },
 
     async switchPerson(id) {
+      if (!this.requireBackend()) return;
       if (id === this.activePersonId) return;
       if (this.dirty && !confirm('You have unsaved changes. Switch anyway?')) return;
       var res = await fetch(API_BASE + '/api/persons/' + id + '/switch', { method: 'POST' });
@@ -696,6 +870,7 @@ function app() {
     // ------ Save ------
 
     async save() {
+      if (!this.requireBackend()) return;
       try {
         var data = await fetch(API_BASE + '/api/export');
         if (!data.ok) throw new Error('Export failed');
@@ -710,6 +885,7 @@ function app() {
     // ------ Import / Export ------
 
     async exportData() {
+      if (!this.requireBackend()) return;
       try {
         var res = await fetch(API_BASE + '/api/export');
         if (!res.ok) throw new Error('Export failed');
@@ -728,6 +904,7 @@ function app() {
     },
 
     async importData() {
+      if (!this.requireBackend()) return;
       var input = document.createElement('input');
       input.type = 'file';
       input.accept = '.json';
