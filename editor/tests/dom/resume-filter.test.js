@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setupFetchMock, createAppInstance } from './setup.js';
 
 describe('Resume Filtering', () => {
@@ -12,72 +12,61 @@ describe('Resume Filtering', () => {
     await app.init();
   });
 
-  it('entries have resumeIncluded flag from API', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
-
-    expect(sec._data.entries[0].resumeIncluded).toBe(true);
-    expect(sec._data.entries[1].resumeIncluded).toBe(false);
+  it('isResumeEntry returns true by default', () => {
+    expect(app.isResumeEntry('cv/experience.tex', 0)).toBe(true);
   });
 
-  it('toggleResumeEntry flips the flag', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('toggleResumeEntry flips the resume flag for an entry', () => {
+    const file = 'cv/experience.tex';
 
-    const entry = sec._data.entries[0];
-    expect(entry.resumeIncluded).toBe(true);
+    // Initialize resumeConfig sections for the file
+    app.resumeConfig.sections[file] = {
+      entries: [{ resume: true, items: [] }],
+    };
 
-    app.toggleResumeEntry(entry);
-    expect(entry.resumeIncluded).toBe(false);
+    expect(app.isResumeEntry(file, 0)).toBe(true);
+    app.toggleResumeEntry(file, 0);
+    expect(app.isResumeEntry(file, 0)).toBe(false);
+    app.toggleResumeEntry(file, 0);
+    expect(app.isResumeEntry(file, 0)).toBe(true);
   });
 
-  it('toggleResumeEntry sends PUT with resumeIncluded', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
-
-    const entry = sec._data.entries[0];
-    app.toggleResumeEntry(entry);
-
-    await new Promise(r => setTimeout(r, 50));
-
-    const putCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/entries/') && opts?.method === 'PUT'
-    );
-    expect(putCalls.length).toBeGreaterThan(0);
-    const body = JSON.parse(putCalls[putCalls.length - 1][1].body);
-    expect(body.resumeIncluded).toBe(false);
+  it('isResumeBullet returns true by default', () => {
+    expect(app.isResumeBullet('cv/experience.tex', 0, 0)).toBe(true);
   });
 
-  it('items have resumeIncluded flag', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('toggleResumeBullet flips the resume flag for an item', () => {
+    const file = 'cv/experience.tex';
 
-    expect(sec._data.entries[0].items[0].resumeIncluded).toBe(true);
+    app.resumeConfig.sections[file] = {
+      entries: [{ resume: true, items: [true] }],
+    };
+
+    expect(app.isResumeBullet(file, 0, 0)).toBe(true);
+    app.toggleResumeBullet(file, 0, 0);
+    expect(app.isResumeBullet(file, 0, 0)).toBe(false);
   });
 
-  it('toggleResumeItem flips the item flag', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
-
-    const item = sec._data.entries[0].items[0];
-    app.toggleResumeItem(item);
-    expect(item.resumeIncluded).toBe(false);
+  it('getResumeText returns empty string when no config', () => {
+    expect(app.getResumeText('cv/summary.tex')).toBe('');
   });
 
-  it('toggleResumeItem sends PUT with resumeIncluded', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('setResumeText stores and retrieves resume text', () => {
+    app.ensureSectionConfig = (file) => {
+      if (!app.resumeConfig.sections[file]) {
+        app.resumeConfig.sections[file] = { entries: [] };
+      }
+      return app.resumeConfig.sections[file];
+    };
 
-    const item = sec._data.entries[0].items[0];
-    app.toggleResumeItem(item);
+    app.setResumeText('cv/summary.tex', 'Short version for resume');
+    expect(app.getResumeText('cv/summary.tex')).toBe('Short version for resume');
+  });
 
-    await new Promise(r => setTimeout(r, 50));
-
-    const putCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/items/') && opts?.method === 'PUT'
-    );
-    expect(putCalls.length).toBeGreaterThan(0);
-    const body = JSON.parse(putCalls[putCalls.length - 1][1].body);
-    expect(body.resumeIncluded).toBe(false);
+  it('toggleResumeEntry persists via CVStorage', () => {
+    const saveSpy = vi.spyOn(global.CVStorage, 'save');
+    app.toggleResumeEntry('cv/experience.tex', 0);
+    expect(saveSpy).toHaveBeenCalled();
+    saveSpy.mockRestore();
   });
 });

@@ -560,7 +560,7 @@ describe('Migrations', () => {
     // The :memory: DB is fresh each time, but within a single instance
     // migrations should only run once
     const migrations = db.db.prepare('SELECT name FROM _migrations').all();
-    expect(migrations.length).toBe(3);
+    expect(migrations.length).toBe(5);
   });
 });
 
