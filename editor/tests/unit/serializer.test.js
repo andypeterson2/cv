@@ -347,11 +347,6 @@ describe('serializeData', () => {
       quote: '',
       photo: { enabled: false, file: 'profile' }
     },
-    metrics: [
-      { command: 'testVar', label: 'test', value: '42', group: 'Group A' },
-      { command: 'emptyVar', label: 'empty desc', value: null, group: 'Group A' },
-      { command: 'otherVar', label: 'other', value: 'hello', group: 'Group B' }
-    ]
   };
 
   test('includes personal info commands', () => {
@@ -387,37 +382,6 @@ describe('serializeData', () => {
     const withQuote = { ...data, personal: { ...data.personal, quote: 'Be curious.' } };
     const tex = serializeData(withQuote);
     expect(tex).toContain("\\quote{``Be curious.''}");
-  });
-
-  test('includes metrics with values', () => {
-    const tex = serializeData(data);
-    expect(tex).toContain('\\providecommand{\\testVar}{42}');
-    expect(tex).toContain('\\providecommand{\\otherVar}{hello}');
-  });
-
-  test('includes metrics with tbd placeholders for null values', () => {
-    const tex = serializeData(data);
-    expect(tex).toContain('\\providecommand{\\emptyVar}{\\tbd{empty desc}}');
-  });
-
-  test('groups metrics under comment headings', () => {
-    const tex = serializeData(data);
-    expect(tex).toContain('% Group A');
-    expect(tex).toContain('% Group B');
-  });
-
-  test('includes tbd command definition', () => {
-    const tex = serializeData(data);
-    expect(tex).toContain('\\providecommand{\\tbd}');
-  });
-
-  test('escapes percent signs in labels', () => {
-    const withPercent = {
-      ...data,
-      metrics: [{ command: 'pctVar', label: 'accuracy %', value: null, group: 'Test' }]
-    };
-    const tex = serializeData(withPercent);
-    expect(tex).toContain('\\tbd{accuracy \\%}');
   });
 });
 

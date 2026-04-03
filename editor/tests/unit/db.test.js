@@ -288,74 +288,6 @@ describe('Items', () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Metrics
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Metrics', () => {
-  beforeEach(() => {
-    db.createSection('experience', 'cventries', 'Experience');
-    db.createSection('education', 'cventries', 'Education');
-  });
-
-  test('createMetric and getMetrics roundtrip', () => {
-    db.createMetric({ command: 'qiQubitCount', label: 'qubit count', value: '8', groupName: 'QI', sectionId: 'experience' });
-    const metrics = db.getMetrics();
-    expect(metrics.length).toBe(1);
-    expect(metrics[0].command).toBe('qiQubitCount');
-    expect(metrics[0].value).toBe('8');
-    expect(metrics[0].groupName).toBe('QI');
-    expect(metrics[0].sectionId).toBe('experience');
-  });
-
-  test('getMetrics filters by sectionId', () => {
-    db.createMetric({ command: 'metric1', label: 'm1', value: '1', groupName: 'G', sectionId: 'experience' });
-    db.createMetric({ command: 'metric2', label: 'm2', value: '2', groupName: 'G', sectionId: 'education' });
-    expect(db.getMetrics('experience').length).toBe(1);
-    expect(db.getMetrics('education').length).toBe(1);
-    expect(db.getMetrics().length).toBe(2);
-  });
-
-  test('createMetric with null value stores null', () => {
-    db.createMetric({ command: 'tbd', label: 'placeholder', value: null, groupName: 'G', sectionId: 'experience' });
-    const metrics = db.getMetrics();
-    expect(metrics[0].value).toBeNull();
-  });
-
-  test('updateMetric changes fields', () => {
-    const id = db.createMetric({ command: 'old', label: 'old', value: '1', groupName: 'G', sectionId: 'experience' });
-    db.updateMetric(id, { command: 'new', label: 'new', value: '2', groupName: 'G2' });
-    const metrics = db.getMetrics();
-    expect(metrics[0].command).toBe('new');
-    expect(metrics[0].value).toBe('2');
-  });
-
-  test('deleteMetric removes metric', () => {
-    const id = db.createMetric({ command: 'temp', label: 't', value: '1', groupName: 'G', sectionId: 'experience' });
-    db.deleteMetric(id);
-    expect(db.getMetrics()).toEqual([]);
-  });
-
-  test('duplicate command throws', () => {
-    db.createMetric({ command: 'unique', label: 'a', value: '1', groupName: 'G', sectionId: 'experience' });
-    expect(() =>
-      db.createMetric({ command: 'unique', label: 'b', value: '2', groupName: 'G', sectionId: 'experience' })
-    ).toThrow();
-  });
-
-  test('metric with invalid section_id throws', () => {
-    expect(() =>
-      db.createMetric({ command: 'bad', label: 'b', value: '1', groupName: 'G', sectionId: 'nonexistent' })
-    ).toThrow();
-  });
-
-  test('deleteSection cascades to metrics', () => {
-    db.createMetric({ command: 'metric1', label: 'm', value: '1', groupName: 'G', sectionId: 'experience' });
-    db.deleteSection('experience');
-    expect(db.getMetrics()).toEqual([]);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
 // Document sections
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -499,9 +431,6 @@ describe('getAllForCompile', () => {
     db.createEntry('skills', { category: 'Languages', skills: 'Python, JS' });
     db.createEntry('summary', { text: 'Full summary for CV' });
 
-    // Add metrics
-    db.createMetric({ command: 'widgetCount', label: 'widgets', value: '42', groupName: 'Acme', sectionId: 'experience' });
-
     // Set document ordering
     db.setDocumentSections('cv', [
       { sectionId: 'summary', enabled: true },
@@ -519,12 +448,6 @@ describe('getAllForCompile', () => {
     const data = db.getAllForCompile('cv');
     expect(data.personal.firstName).toBe('Andrew');
     expect(data.personal.email).toBe('acpeters@ucsd.edu');
-  });
-
-  test('returns metrics', () => {
-    const data = db.getAllForCompile('cv');
-    expect(data.metrics.length).toBe(1);
-    expect(data.metrics[0].command).toBe('widgetCount');
   });
 
   test('returns sections in document order', () => {
@@ -596,7 +519,6 @@ describe('getAllForExport', () => {
     db.setSettings({ 'personal.firstName': 'Andrew' });
     db.createSection('skills', 'cvskills', 'Skills');
     db.createEntry('skills', { category: 'Languages', skills: 'Python' });
-    db.createMetric({ command: 'test', label: 't', value: '1', groupName: 'G', sectionId: 'skills' });
     db.setDocumentSections('cv', [{ sectionId: 'skills', enabled: true }]);
     db.setSettings({ 'coverletter.title': 'App' });
     db.createCoverletterSection('About', 'Body');
@@ -605,7 +527,6 @@ describe('getAllForExport', () => {
     expect(data.personal.firstName).toBe('Andrew');
     expect(data.sections.length).toBe(1);
     expect(data.sections[0].entries.length).toBe(1);
-    expect(data.metrics.length).toBe(1);
     expect(data.documents.cv.length).toBe(1);
     expect(data.coverletter.title).toBe('App');
     expect(data.coverletter.sections.length).toBe(1);
@@ -625,7 +546,6 @@ describe('Migrations', () => {
     expect(names).toContain('sections');
     expect(names).toContain('entries');
     expect(names).toContain('items');
-    expect(names).toContain('metrics');
     expect(names).toContain('document_sections');
     expect(names).toContain('coverletter_sections');
   });
@@ -640,7 +560,7 @@ describe('Migrations', () => {
     // The :memory: DB is fresh each time, but within a single instance
     // migrations should only run once
     const migrations = db.db.prepare('SELECT name FROM _migrations').all();
-    expect(migrations.length).toBe(2);
+    expect(migrations.length).toBe(3);
   });
 });
 
@@ -726,7 +646,6 @@ describe('clearAllContent', () => {
     db.clearAllContent();
 
     expect(db.getSections().length).toBe(0);
-    expect(db.getMetrics().length).toBe(0);
     expect(db.getCoverletterSections().length).toBe(0);
     expect(Object.keys(db.getSettings('personal')).length).toBe(0);
     expect(Object.keys(db.getSettings('coverletter')).length).toBe(0);
@@ -761,9 +680,6 @@ describe('importAll', () => {
         ]
       }
     ],
-    metrics: [
-      { id: 1, command: 'testMetric', label: 'Test', value: '42', groupName: 'G', sectionId: 'work' }
-    ],
     documents: {
       cv: [{ sectionId: 'work', enabled: true, sortOrder: 0, resumeParagraphText: null }],
       resume: []
@@ -791,10 +707,6 @@ describe('importAll', () => {
     expect(section.entries.length).toBe(1);
     expect(section.entries[0].fields.position).toBe('Dev');
     expect(section.entries[0].items.length).toBe(1);
-
-    const metrics = db.getMetrics();
-    expect(metrics.length).toBe(1);
-    expect(metrics[0].command).toBe('testMetric');
 
     const clSections = db.getCoverletterSections();
     expect(clSections.length).toBe(1);
@@ -895,9 +807,6 @@ describe('seedJaneDoe', () => {
 
     const sections = freshDb.getSections();
     expect(sections.length).toBe(4); // summary, experience, education, skills
-
-    const metrics = freshDb.getMetrics();
-    expect(metrics.length).toBe(2);
 
     freshDb.close();
   });
