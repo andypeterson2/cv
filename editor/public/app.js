@@ -56,10 +56,6 @@ var DEMO_DATA = {
       ]
     },
   ],
-  metrics: [
-    { id: 1, command: 'projectCount', label: 'Projects', value: '15', groupName: 'General', sectionId: 'experience' },
-    { id: 2, command: 'yearsExperience', label: 'Years', value: '6', groupName: 'General', sectionId: 'experience' },
-  ],
   documents: {
     cv: [
       { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: null },
@@ -133,7 +129,7 @@ function app() {
     },
 
     hydrate(state) {
-      this.dataModel = state.data || { personal: {}, metrics: [] };
+      this.dataModel = state.data || { personal: {} };
       this.resumeConfig = state.resumeConfig || { sectionOrder: [], sections: {} };
       this.coverletter = state.coverletter || null;
       this.sectionData = state.sectionData || {};
@@ -216,7 +212,7 @@ function app() {
       if (window.__setTheme) window.__setTheme(this.darkMode ? 'dark' : 'light');
     },
 
-    // ====== Data (personal info + metrics) ======
+    // ====== Data (personal info) ======
 
     saveData() {
       this.persist();
@@ -273,128 +269,6 @@ function app() {
       }
     },
 
-    // ------ Metrics ------
-
-    async loadMetrics() {
-      const res = await fetch(API_BASE + '/api/metrics');
-      if (!res.ok) return;
-      this.metrics = await res.json();
-    },
-
-    metricsForSection(sectionId) {
-      return this.metrics.filter(m => m.sectionId === sectionId);
-    },
-
-    metricGroupsForSection(sectionId) {
-      const metrics = this.metricsForSection(sectionId);
-      const groups = {};
-      for (const m of metrics) {
-        const g = m.groupName || 'Ungrouped';
-        if (!groups[g]) groups[g] = [];
-        groups[g].push(m);
-      }
-      return Object.entries(groups);
-    },
-
-    updateMetric(command, value) {
-      const metric = this.dataModel.metrics.find(m => m.command === command);
-      if (metric) {
-        metric.value = value === '' ? null : value;
-        this.persist();
-      }
-    },
-
-    addMetric(section, group) {
-      const command = prompt('Variable command name (e.g., myMetric):');
-      if (!command || !command.trim()) return;
-      const cmd = command.trim();
-      if (this.dataModel.metrics.some(m => m.command === cmd)) {
-        this.flash('Variable command already exists', 'error');
-        return;
-      }
-      const label = prompt('Placeholder label (shown when empty):', cmd) || cmd;
-      this.dataModel.metrics.push({
-        command: cmd, label: label.trim(), value: null,
-        group: group, section: section
-      });
-      this.persist();
-    },
-
-    removeMetric(command) {
-      const idx = this.dataModel.metrics.findIndex(m => m.command === command);
-      if (idx !== -1) {
-        this.dataModel.metrics.splice(idx, 1);
-        this.persist();
-      }
-    },
-
-    addMetricGroup(section) {
-      const name = prompt('New variable group name:');
-      if (!name || !name.trim()) return;
-      this.dataModel.metrics.push({
-        command: '', label: '', value: null,
-        group: name.trim(), section: section
-      });
-      const command = prompt('First variable command name:');
-      if (command && command.trim()) {
-        const cmd = command.trim();
-        if (this.dataModel.metrics.some(m => m.command === cmd && m !== this.dataModel.metrics[this.dataModel.metrics.length - 1])) {
-          this.flash('Variable command already exists', 'error');
-          this.dataModel.metrics.pop();
-          return;
-        }
-        const label = prompt('Placeholder label:', cmd) || cmd;
-        const last = this.dataModel.metrics[this.dataModel.metrics.length - 1];
-        last.command = cmd;
-        last.label = label.trim();
-      } else {
-        this.dataModel.metrics.pop();
-        return;
-      }
-      this.persist();
-    },
-
-    removeMetricGroup(section, group) {
-      this.dataModel.metrics = this.dataModel.metrics.filter(
-        m => !(m.section === section && m.group === group)
-      );
-      this.persist();
-    },
-
-    renameMetricGroup(section, oldGroup) {
-      const newName = prompt('Rename group:', oldGroup);
-      if (!newName || !newName.trim() || newName.trim() === oldGroup) return;
-      for (const m of this.dataModel.metrics) {
-        if (m.section === section && m.group === oldGroup) {
-          m.group = newName.trim();
-        }
-      }
-      this.persist();
-    },
-
-    // ====== Resume Config ======
-
-    saveResumeConfig() {
-      this.persist();
-    },
-
-    async renameMetricGroup(sectionId, oldGroup) {
-      if (!this.requireBackend()) return;
-      const result = await this.openModal('Rename Group', [
-        { name: 'groupName', label: 'New group name', value: oldGroup },
-      ]);
-      if (!result || !result.groupName.trim() || result.groupName.trim() === oldGroup) return;
-      const toRename = this.metrics.filter(m => m.sectionId === sectionId && m.groupName === oldGroup);
-      for (const m of toRename) {
-        await fetch(API_BASE + '/api/metrics/' + m.id, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ groupName: result.groupName.trim() }),
-        });
-      }
-      await this.loadMetrics();
-    },
-
     // ------ Section CRUD ------
 
     async createNewSection() {
@@ -437,24 +311,21 @@ function app() {
       if (!res.ok) { this.flash('Failed to delete', 'error'); return; }
       await this.loadSections();
       await this.loadDocumentSections('cv');
-      await this.loadMetrics();
       this.flash('Section deleted', 'success');
     },
 
-    async renameSection(sectionId) {
+    async saveSectionTitle(sectionId, newTitle) {
+      var trimmed = newTitle.trim();
+      if (!trimmed) return;
       if (!this.requireBackend()) return;
       var sec = this.docSections.find(function(s) { return s.id === sectionId; });
-      var result = await this.openModal('Rename Section', [
-        { name: 'title', label: 'New title', value: sec ? sec.title : '' },
-      ]);
-      if (!result || !result.title.trim()) return;
+      if (sec && sec.title === trimmed) return;
       await fetch(API_BASE + '/api/sections/' + sectionId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: result.title.trim() }),
+        body: JSON.stringify({ title: trimmed }),
       });
-      await this.loadSections();
-      await this.loadDocumentSections('cv');
+      if (sec) sec.title = trimmed;
     },
 
     // ------ Sections + Document config ------
@@ -567,6 +438,7 @@ function app() {
           const item = this.docSections.splice(evt.oldIndex, 1)[0];
           this.docSections.splice(evt.newIndex, 0, item);
           this.persist();
+          this.saveDocumentSections();
           this.flash('Section order saved', 'success');
         }
       });

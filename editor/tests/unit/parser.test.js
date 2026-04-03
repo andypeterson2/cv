@@ -92,9 +92,9 @@ describe('parseSection - cventries (experience)', () => {
     expect(parsed.entries[2].items.length).toBe(2);
   });
 
-  test('bullet content includes LaTeX commands', () => {
+  test('bullet content includes inlined values', () => {
     const firstBullet = parsed.entries[0].items[0];
-    expect(firstBullet).toContain('\\qiQubitCount{}');
+    expect(firstBullet).toContain('8 qubits');
   });
 
   test('parses Mathnasium entry correctly', () => {
@@ -273,33 +273,9 @@ describe('parseData', () => {
     expect(data.personal.linkedin).toBe('i-am-andy-peterson');
   });
 
-  test('parses metrics array', () => {
+  test('metrics array is empty after removal', () => {
     expect(Array.isArray(data.metrics)).toBe(true);
-    expect(data.metrics.length).toBeGreaterThanOrEqual(15);
-  });
-
-  test('metric has correct structure', () => {
-    const metric = data.metrics[0];
-    expect(metric).toHaveProperty('command');
-    expect(metric).toHaveProperty('label');
-    expect(metric).toHaveProperty('group');
-    expect(metric).toHaveProperty('value');
-  });
-
-  test('parses metric values correctly', () => {
-    const qiQubit = data.metrics.find(m => m.command === 'qiQubitCount');
-    expect(qiQubit).toBeDefined();
-    expect(qiQubit.value).toBeDefined();
-  });
-
-  test('groups metrics by comment headings', () => {
-    const ritMetrics = data.metrics.filter(m => m.group.includes('RIT'));
-    expect(ritMetrics.length).toBeGreaterThanOrEqual(3);
-  });
-
-  test('skips \\tbd command definition', () => {
-    const tbdMetric = data.metrics.find(m => m.command === 'tbd');
-    expect(tbdMetric).toBeUndefined();
+    expect(data.metrics.length).toBe(0);
   });
 });
 

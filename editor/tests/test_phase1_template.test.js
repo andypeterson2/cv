@@ -24,6 +24,18 @@ function fileExists(relPath) {
   return fs.existsSync(path.join(PROJECT_ROOT, relPath));
 }
 
+// Read server.js + all route files as a single string for pattern matching
+function readServerCode() {
+  const routesDir = path.join(PROJECT_ROOT, 'editor', 'routes');
+  let combined = readFile('editor/server.js');
+  if (fs.existsSync(routesDir)) {
+    for (const f of fs.readdirSync(routesDir)) {
+      if (f.endsWith('.js')) combined += '\n' + fs.readFileSync(path.join(routesDir, f), 'utf-8');
+    }
+  }
+  return combined;
+}
+
 // ---------------------------------------------------------------------------
 // WP #670 — Responsive layout: HTML structure
 // ---------------------------------------------------------------------------
@@ -140,7 +152,6 @@ describe('WP #672 — Content stored in SQLite database', () => {
     expect(sql).toContain('sections');
     expect(sql).toContain('entries');
     expect(sql).toContain('items');
-    expect(sql).toContain('metrics');
   });
 
   test('database access layer exists', () => {
@@ -218,9 +229,6 @@ describe('WP #675 — Variable substitution in data.tex', () => {
     expect(dataTex).toContain('\\email');
   });
 
-  test('defines metric commands', () => {
-    expect(dataTex.includes('\\newcommand') || dataTex.includes('\\providecommand')).toBe(true);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -355,12 +363,11 @@ describe('WP #679 — Web editor save/preview', () => {
   });
 
   test('server has seed, compile, and pdf endpoints', () => {
-    const server = readFile('editor/server.js');
-    expect(server).toContain("app.get('/api/seed'");
-    expect(server).toContain("app.post('/api/compile/");
-    expect(server).toContain("app.get('/api/pdf/");
-    expect(server).toContain("app.get('/api/metrics'");
-    expect(server).toContain("app.get('/api/export'");
+    const server = readServerCode();
+    expect(server).toContain('/api/seed');
+    expect(server).toContain('/compile/');
+    expect(server).toContain('/pdf/');
+    expect(server).toContain('/export');
   });
 
   test('server uses SQLite database', () => {
@@ -371,7 +378,7 @@ describe('WP #679 — Web editor save/preview', () => {
 
   test('API validation via ajv schemas', () => {
     expect(fileExists('editor/lib/schema.js')).toBe(true);
-    const server = readFile('editor/server.js');
+    const server = readServerCode();
     expect(server).toContain('validate(');
   });
 });

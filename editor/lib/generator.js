@@ -17,10 +17,10 @@ const {
 // ---------------------------------------------------------------------------
 
 /**
- * Generate data.tex from personal info + metrics.
- * Reuses the existing serializeData() which expects { personal, metrics }.
+ * Generate data.tex from personal info.
+ * Reuses the existing serializeData() which expects { personal }.
  */
-function generateDataTex(personal, metrics) {
+function generateDataTex(personal) {
   // Map DB format to serializer's expected format.
   // Pass all personal fields through — the serializer decides which to emit.
   const p = Object.assign({}, personal);
@@ -31,16 +31,7 @@ function generateDataTex(personal, metrics) {
   delete p.photoEnabled;
   delete p.photoFile;
 
-  const data = {
-    personal: p,
-    metrics: metrics.map(m => ({
-      command: m.command,
-      label: m.label,
-      value: m.value,
-      group: m.groupName,
-    })),
-  };
-  return serializeData(data);
+  return serializeData({ personal: p });
 }
 
 // ---------------------------------------------------------------------------
@@ -77,37 +68,36 @@ function generateSectionTex(section) {
 // Style defaults & preamble builder
 // ---------------------------------------------------------------------------
 
-const STYLE_DEFAULTS = {
-  pageSize: 'letterpaper',
-  fontSize: '11pt',
-  accentColor: 'spinel',
-  fontFamily: 'source-sans-3',
-};
+const { STYLE_DEFAULTS, SPACING_DEFAULTS, FONT_DEFAULTS } = require('./style-defaults');
+const ACCENT_COLORS = require('./accent-colors');
+const PRESET_COLOR_KEYS = ACCENT_COLORS.map(c => c.key);
 
-const PRESET_COLORS = [
-  'awesome-emerald', 'awesome-skyblue', 'awesome-red', 'awesome-pink',
-  'awesome-orange', 'awesome-nephritis', 'awesome-concrete', 'awesome-darknight',
-  'spinel',
-];
 
-function buildPreamble(style) {
+function buildPreamble(style, spacing, fonts) {
   const s = Object.assign({}, STYLE_DEFAULTS, style);
+  const sp = Object.assign({}, SPACING_DEFAULTS, spacing);
+  const f = Object.assign({}, FONT_DEFAULTS, fonts);
   const lines = [];
   lines.push('%!TEX TS-program = xelatex');
   lines.push('%!TEX encoding = UTF-8 Unicode');
   lines.push('');
   lines.push(`\\documentclass[${s.fontSize}, ${s.pageSize}]{awesome-cv}`);
   lines.push('');
-  lines.push('\\geometry{left=1.4cm, top=.8cm, right=1.4cm, bottom=1.8cm, footskip=.5cm}');
+
+  // Page geometry — horizontalMargin applies to both left and right
+  lines.push(`\\geometry{left=${sp.horizontalMargin}, top=${sp.marginTop}, right=${sp.horizontalMargin}, bottom=${sp.marginBottom}, footskip=${sp.footskip}}`);
   lines.push('');
 
   // Accent color
-  if (PRESET_COLORS.includes(s.accentColor)) {
+  if (PRESET_COLOR_KEYS.includes(s.accentColor)) {
     lines.push(`\\colorlet{awesome}{${s.accentColor}}`);
-  } else {
-    // Custom hex — strip leading # if present
-    const hex = s.accentColor.replace(/^#/, '');
+  } else if (s.accentColor === 'custom' && s.customHex) {
+    const hex = s.customHex.replace(/^#/, '');
     lines.push(`\\definecolor{awesome}{HTML}{${hex}}`);
+  } else {
+    // Legacy: accentColor is a raw hex
+    const hex = (s.accentColor || '').replace(/^#/, '');
+    if (hex) lines.push(`\\definecolor{awesome}{HTML}{${hex}}`);
   }
   lines.push('');
 
@@ -137,6 +127,102 @@ function buildPreamble(style) {
     lines.push('');
   }
 
+  // Header spacing overrides — headerLineGap applies to name and position rows
+  lines.push(`\\renewcommand{\\acvHeaderAfterNameSkip}{${sp.headerLineGap}}`);
+  lines.push(`\\renewcommand{\\acvHeaderAfterPositionSkip}{${sp.headerLineGap}}`);
+  lines.push(`\\renewcommand{\\acvHeaderAfterAddressSkip}{${sp.headerAfterAddressSkip}}`);
+  lines.push(`\\renewcommand{\\acvHeaderAfterSocialSkip}{${sp.headerAfterSocialSkip}}`);
+  lines.push(`\\renewcommand{\\acvHeaderAfterQuoteSkip}{${sp.headerAfterQuoteSkip}}`);
+  lines.push('');
+
+  // Section spacing overrides
+  lines.push(`\\renewcommand{\\acvSectionTopSkip}{${sp.sectionTopSkip}}`);
+  lines.push(`\\renewcommand{\\acvSectionContentTopSkip}{${sp.sectionContentTopSkip}}`);
+  lines.push('');
+
+  // Font size overrides
+  // headerNameSize: first and last name in header
+  lines.push(`\\renewcommand*{\\headerfirstnamestyle}[1]{{\\fontsize{${f.headerNameSize}}{1em}\\headerfontlight\\color{graytext} #1}}`);
+  lines.push(`\\renewcommand*{\\headerlastnamestyle}[1]{{\\fontsize{${f.headerNameSize}}{1em}\\headerfont\\bfseries\\color{text} #1}}`);
+  // headerPositionSize: position/title line
+  lines.push(`\\renewcommand*{\\headerpositionstyle}[1]{{\\fontsize{${f.headerPositionSize}}{1em}\\bodyfont\\scshape\\color{awesome} #1}}`);
+  // headerSocialSize: social links
+  lines.push(`\\renewcommand*{\\headersocialstyle}[1]{{\\fontsize{${f.headerSocialSize}}{1em}\\headerfont\\color{text} #1}}`);
+  // secondaryTextSize: address, footer, entry position/date
+  lines.push(`\\renewcommand*{\\headeraddressstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\headerfont\\itshape\\color{lighttext} #1}}`);
+  lines.push(`\\renewcommand*{\\footerstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\footerfont\\scshape\\color{lighttext} #1}}`);
+  lines.push(`\\renewcommand*{\\entrypositionstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\bodyfont\\scshape\\color{graytext} #1}}`);
+  lines.push(`\\renewcommand*{\\entrydatestyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\bodyfontlight\\slshape\\color{graytext} #1}}`);
+  // contentTextSize: body copy, descriptions, honors, skills set, quote, paragraph
+  lines.push(`\\renewcommand*{\\headerquotestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\itshape\\color{darktext} #1}}`);
+  lines.push(`\\renewcommand{\\paragraphstyle}{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\upshape\\color{text}}`);
+  lines.push(`\\renewcommand*{\\entrylocationstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\slshape\\color{awesome} #1}}`);
+  lines.push(`\\renewcommand*{\\descriptionstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\upshape\\color{text} #1}}`);
+  lines.push(`\\renewcommand*{\\honortitlestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\color{graytext} #1}}`);
+  lines.push(`\\renewcommand*{\\honorpositionstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`);
+  lines.push(`\\renewcommand*{\\honordatestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\color{graytext} #1}}`);
+  lines.push(`\\renewcommand*{\\honorlocationstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\slshape\\color{awesome} #1}}`);
+  lines.push(`\\renewcommand*{\\skillsetstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\color{text} #1}}`);
+  // itemTitleSize: entry titles, skill type labels
+  lines.push(`\\renewcommand*{\\entrytitlestyle}[1]{{\\fontsize{${f.itemTitleSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`);
+  lines.push(`\\renewcommand*{\\skilltypestyle}[1]{{\\fontsize{${f.itemTitleSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`);
+  // sectionTitleSize and subsectionTitleSize
+  lines.push(`\\renewcommand*{\\sectionstyleface}[1]{{\\fontsize{${f.sectionTitleSize}}{1em}\\bodyfont\\bfseries #1}}`);
+  lines.push(`\\renewcommand*{\\subsectionstyle}[1]{{\\fontsize{${f.subsectionTitleSize}}{1em}\\bodyfont\\scshape\\textcolor{text}{#1}}}`);
+  lines.push('');
+
+  // Entry/items/skills spacing overrides via environment redefinitions
+  // contentTopAdjust: used for entry tops and skills section top
+  lines.push(`\\renewcommand*{\\cventry}[5]{%`);
+  lines.push(`  \\vspace{${sp.contentTopAdjust}}%`);
+  lines.push('  \\setlength\\tabcolsep{0pt}%');
+  lines.push('  \\setlength{\\extrarowheight}{0pt}%');
+  lines.push('  \\begin{tabular*}{\\textwidth}{@{\\extracolsep{\\fill}} L{\\textwidth - 4.5cm} R{4.5cm}}');
+  lines.push('    \\ifempty{#2#3}');
+  lines.push('      {\\entrypositionstyle{#1} & \\entrydatestyle{#4} \\\\}');
+  lines.push('      {\\entrytitlestyle{#2} & \\entrylocationstyle{#3} \\\\');
+  lines.push('      \\entrypositionstyle{#1} & \\entrydatestyle{#4} \\\\}');
+  lines.push('    \\ifstrempty{#5}');
+  lines.push('      {}');
+  lines.push('      {\\multicolumn{2}{L{\\textwidth}}{\\descriptionstyle{#5}} \\\\}');
+  lines.push('  \\end{tabular*}%');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('\\renewenvironment{cvitems}{%');
+  lines.push(`  \\vspace{${sp.itemsTopSkip}}`);
+  lines.push('  \\begin{justify}');
+  lines.push(`  \\begin{itemize}[leftmargin=${sp.itemsLeftMargin}, nosep, noitemsep]`);
+  lines.push('    \\setlength{\\parskip}{0pt}');
+  lines.push('    \\renewcommand{\\labelitemi}{\\bullet}');
+  lines.push('}{%');
+  lines.push('  \\end{itemize}');
+  lines.push('  \\end{justify}');
+  lines.push(`  \\vspace{${sp.itemsBottomSkip}}`);
+  lines.push('}');
+  lines.push('');
+
+  lines.push('\\renewenvironment{cvskills}{%');
+  lines.push(`  \\vspace{\\acvSectionContentTopSkip}`);
+  lines.push(`  \\vspace{${sp.contentTopAdjust}}`);
+  lines.push(`    \\setlength\\tabcolsep{${sp.skillsColSep}}`);
+  lines.push('    \\setlength{\\extrarowheight}{0pt}');
+  lines.push('    \\tabularx{\\textwidth}{r>{\\raggedright\\let\\newline\\\\\\arraybackslash\\hspace{0pt}}X}');
+  lines.push('}{%');
+  lines.push('\\endtabularx\\par');
+  lines.push('}');
+  lines.push('');
+
+  lines.push('\\renewenvironment{cvparagraph}{%');
+  lines.push('  \\vspace{\\acvSectionContentTopSkip}');
+  lines.push(`  \\vspace{${sp.paragraphTopAdjust}}`);
+  lines.push('  \\paragraphstyle');
+  lines.push('}{%');
+  lines.push('  \\par');
+  lines.push(`  \\vspace{${sp.paragraphBottomSkip}}`);
+  lines.push('}');
+  lines.push('');
+
   lines.push('\\input{data.tex}');
   lines.push('');
   return lines.join('\n');
@@ -150,9 +236,9 @@ const DOC_POSTAMBLE = `
 
 \\end{document}`;
 
-function generateDocumentTex(variant, sectionFiles, style) {
+function generateDocumentTex(variant, sectionFiles, style, spacing, fonts) {
   const lines = [];
-  lines.push(buildPreamble(style));
+  lines.push(buildPreamble(style, spacing, fonts));
   lines.push('');
   lines.push('\\begin{document}');
   lines.push('');
@@ -174,9 +260,9 @@ function generateDocumentTex(variant, sectionFiles, style) {
 // Cover letter .tex generation
 // ---------------------------------------------------------------------------
 
-function generateCoverletterTex(personal, coverletter, style) {
+function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   const lines = [];
-  lines.push(buildPreamble(style));
+  lines.push(buildPreamble(style, spacing, fonts));
   lines.push('');
   lines.push('');
   lines.push('\\recipient');
@@ -235,7 +321,7 @@ function generateCoverletterTex(personal, coverletter, style) {
  * @returns {string} Path to the main .tex file for compilation
  */
 function generateAll(compileData, buildDir, templatesDir, assetsDir) {
-  const { personal, metrics, sections, coverletter, variant, style } = compileData;
+  const { personal, sections, coverletter, variant, style, spacing, fonts } = compileData;
 
   // Ensure build directory exists
   fs.mkdirSync(buildDir, { recursive: true });
@@ -257,12 +343,12 @@ function generateAll(compileData, buildDir, templatesDir, assetsDir) {
   }
 
   // Generate data.tex
-  const dataTex = generateDataTex(personal, metrics);
+  const dataTex = generateDataTex(personal);
   fs.writeFileSync(path.join(buildDir, 'data.tex'), dataTex + '\n', 'utf-8');
 
   if (variant === 'coverletter') {
     // Generate coverletter.tex
-    const clTex = generateCoverletterTex(personal, coverletter, style);
+    const clTex = generateCoverletterTex(personal, coverletter, style, spacing, fonts);
     fs.writeFileSync(path.join(buildDir, 'coverletter.tex'), clTex + '\n', 'utf-8');
     return path.join(buildDir, 'coverletter.tex');
   }
@@ -278,7 +364,7 @@ function generateAll(compileData, buildDir, templatesDir, assetsDir) {
 
   // Generate main document .tex
   const mainFilename = `${variant}.tex`;
-  const docTex = generateDocumentTex(variant, sectionFiles, style);
+  const docTex = generateDocumentTex(variant, sectionFiles, style, spacing, fonts);
   fs.writeFileSync(path.join(buildDir, mainFilename), docTex + '\n', 'utf-8');
 
   return path.join(buildDir, mainFilename);
@@ -291,4 +377,6 @@ module.exports = {
   generateCoverletterTex,
   generateAll,
   STYLE_DEFAULTS,
+  SPACING_DEFAULTS,
+  FONT_DEFAULTS,
 };
