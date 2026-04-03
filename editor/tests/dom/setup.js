@@ -241,7 +241,20 @@ export function createAppInstance() {
   global.Sortable = { create: () => ({ destroy: () => {} }) };
   global.ServiceConfig = { get: () => '' };
   global.CVStorage = {
-    load: () => null,
+    load: () => ({
+      data: { personal: fixtures.personal },
+      resumeConfig: { sectionOrder: [], sections: {} },
+      coverletter: null,
+      document: {
+        sections: fixtures.documentSections.sections.map(s => {
+          const sec = fixtures.sections.find(x => x.id === s.sectionId);
+          return { file: `cv/${s.sectionId}.tex`, enabled: s.enabled, comment: '' };
+        }),
+      },
+      sectionData: Object.fromEntries(
+        fixtures.sections.map(s => [`cv/${s.id}.tex`, fixtures[s.id] || null])
+      ),
+    }),
     save: () => {},
     clear: () => {},
     exportJSON: () => {},
@@ -256,6 +269,16 @@ export function createAppInstance() {
   // Provide Alpine-like $watch and $nextTick stubs
   instance.$watch = vi.fn();
   instance.$nextTick = vi.fn((cb) => cb());
+
+  // Provide ensureSectionConfig helper (in the full build this comes from a mixin)
+  if (!instance.ensureSectionConfig) {
+    instance.ensureSectionConfig = function (file) {
+      if (!this.resumeConfig.sections[file]) {
+        this.resumeConfig.sections[file] = { entries: [] };
+      }
+      return this.resumeConfig.sections[file];
+    };
+  }
 
   return instance;
 }

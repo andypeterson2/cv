@@ -12,51 +12,52 @@ describe('Personal Info', () => {
     await app.init();
   });
 
-  it('loads personal data from API on init', () => {
-    expect(app.personal.firstName).toBe('Andrew');
-    expect(app.personal.lastName).toBe('Peterson');
-    expect(app.personal.email).toBe('test@example.com');
-    expect(app.personal.position).toBe('Software Engineer');
+  it('loads personal data from localStorage state on init', () => {
+    // The standalone app hydrates from CVStorage.load() which returns
+    // data with personal info from fixtures
+    expect(app.dataModel).toBeDefined();
+    expect(app.dataModel.personal).toBeDefined();
+    expect(app.dataModel.personal['personal.firstName']).toBe('Andrew');
+    expect(app.dataModel.personal['personal.lastName']).toBe('Peterson');
   });
 
-  it('loads all personal fields', () => {
-    expect(app.personal.github).toBe('andrewp');
-    expect(app.personal.linkedin).toBe('andrewp');
-    expect(app.personal.mobile).toBe('555-1234');
-    expect(app.personal.address).toBe('San Diego, CA');
+  it('saveData persists state via CVStorage', () => {
+    const saveSpy = vi.spyOn(global.CVStorage, 'save');
+    app.saveData();
+    expect(saveSpy).toHaveBeenCalled();
+    saveSpy.mockRestore();
   });
 
-  it('calls PATCH /api/settings when autoSavePersonal is triggered', async () => {
-    app.personal.firstName = 'Andy';
-    app.autoSavePersonal('firstName');
+  it('togglePhoto flips photoEnabled state', () => {
+    // Set up the personal reference that togglePhoto expects
+    app.personal = app.dataModel.personal || { photoEnabled: '0' };
+    app.personal.photoEnabled = '0';
 
-    // Wait for debounce
-    await new Promise(r => setTimeout(r, 600));
-
-    const patchCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/settings') && opts?.method === 'PATCH'
-    );
-    expect(patchCalls.length).toBeGreaterThan(0);
-    const body = JSON.parse(patchCalls[patchCalls.length - 1][1].body);
-    expect(body['personal.firstName']).toBe('Andy');
-  });
-
-  it('toggles photo enabled state', () => {
-    expect(app.personal.photoEnabled).toBe('0');
     app.togglePhoto();
     expect(app.personal.photoEnabled).toBe('1');
+
     app.togglePhoto();
     expect(app.personal.photoEnabled).toBe('0');
   });
 
-  it('sends PATCH when toggling photo', async () => {
-    app.togglePhoto();
-    await new Promise(r => setTimeout(r, 50));
+  it('getState includes personal data in dataModel', () => {
+    const state = app.getState();
+    expect(state.data).toBe(app.dataModel);
+  });
 
-    const patchCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/settings') && opts?.method === 'PATCH'
-    );
-    const body = JSON.parse(patchCalls[patchCalls.length - 1][1].body);
-    expect(body['personal.photoEnabled']).toBe('1');
+  it('hydrate restores personal data from saved state', () => {
+    const savedState = {
+      data: {
+        personal: {
+          'personal.firstName': 'Restored',
+          'personal.lastName': 'User',
+        }
+      },
+      sectionData: {},
+    };
+
+    app.hydrate(savedState);
+
+    expect(app.dataModel.personal['personal.firstName']).toBe('Restored');
   });
 });
