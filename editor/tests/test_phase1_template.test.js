@@ -100,12 +100,12 @@ describe('WP #671 — Interactive elements in editor UI', () => {
     expect(html).toContain('pdf-iframe');
   });
 
-  test('has autosave functionality (no manual save button needed)', () => {
-    // New architecture uses debounced autosave instead of manual save buttons
+  test('has save and persist functionality', () => {
+    // Standalone app uses persist() for localStorage-based saving
     const appJs = readFile('editor/public/app.js');
-    expect(appJs).toContain('autoSaveEntry');
-    expect(appJs).toContain('autoSaveItem');
-    expect(appJs).toContain('debounce');
+    expect(appJs).toContain('persist');
+    expect(appJs).toContain('saveData');
+    expect(appJs).toContain('saveSection');
   });
 
   test('has add/remove entry buttons', () => {
@@ -341,8 +341,8 @@ describe('WP #679 — Web editor save/preview', () => {
   });
 
   test('has document switching', () => {
-    expect(appJs).toContain('editorTab');
-    expect(appJs).toContain('switchPdfTab');
+    expect(appJs).toContain('activeDoc');
+    expect(appJs).toContain('switchDoc');
   });
 
   test('has theme toggle support', () => {

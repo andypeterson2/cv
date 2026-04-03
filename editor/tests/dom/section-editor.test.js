@@ -12,21 +12,22 @@ describe('Section Editor', () => {
     await app.init();
   });
 
-  it('loads sections from API on init', () => {
-    expect(app.sections.length).toBe(3);
-    expect(app.sections.map(s => s.id)).toContain('experience');
-    expect(app.sections.map(s => s.id)).toContain('skills');
-  });
-
-  it('loads document sections for cv variant', () => {
+  it('loads document sections from localStorage state on init', () => {
     expect(app.docSections.length).toBe(3);
-    expect(app.docSections[0].id).toBe('summary');
-    expect(app.docSections[1].id).toBe('experience');
-    expect(app.docSections[2].id).toBe('skills');
+    expect(app.docSections.map(s => s.file)).toContain('cv/summary.tex');
+    expect(app.docSections.map(s => s.file)).toContain('cv/experience.tex');
+    expect(app.docSections.map(s => s.file)).toContain('cv/skills.tex');
   });
 
-  it('loads section data with entries and items', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
+  it('docSections have enabled flag', () => {
+    expect(app.docSections[0].enabled).toBe(true);
+  });
+
+  it('loadSectionData fetches section from server', async () => {
+    const sec = app.docSections.find(s => s.file === 'cv/experience.tex');
+    // Clear _data to force a fetch
+    sec._data = null;
+    sec.id = 'experience';
     await app.loadSectionData(sec);
     expect(sec._data).toBeDefined();
     expect(sec._data.type).toBe('cventries');
@@ -34,89 +35,84 @@ describe('Section Editor', () => {
     expect(sec._data.entries[0].items.length).toBe(2);
   });
 
-  it('adds entry via POST', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
-
-    await app.addEntry(sec);
-
-    const postCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/entries') && opts?.method === 'POST'
-    );
-    expect(postCalls.length).toBeGreaterThan(0);
+  it('saveSection persists section data via CVStorage', () => {
+    const sec = app.docSections[0];
+    sec._data = { type: 'cvparagraph', title: 'Summary', text: 'Test' };
+    const saveSpy = vi.spyOn(global.CVStorage, 'save');
+    app.saveSection(sec);
+    expect(saveSpy).toHaveBeenCalled();
+    saveSpy.mockRestore();
   });
 
-  it('removes entry via DELETE', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('addCventry adds an entry to section data', () => {
+    const sec = app.docSections.find(s => s.file === 'cv/experience.tex');
+    sec._data = {
+      type: 'cventries',
+      entries: [{ position: 'Existing', organization: '', location: '', date: '', items: [] }],
+    };
 
-    await app.removeEntry(sec, 1);
+    // Provide ensureSectionConfig if not present
+    if (!app.ensureSectionConfig) {
+      app.ensureSectionConfig = (file) => {
+        if (!app.resumeConfig.sections[file]) {
+          app.resumeConfig.sections[file] = { entries: [] };
+        }
+        return app.resumeConfig.sections[file];
+      };
+    }
 
-    const delCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/entries/1') && opts?.method === 'DELETE'
-    );
-    expect(delCalls.length).toBe(1);
-    expect(sec._data.entries.find(e => e.id === 1)).toBeUndefined();
+    app.addCventry(sec);
+    expect(sec._data.entries.length).toBe(2);
+    expect(sec._data.entries[1].position).toBe('');
   });
 
-  it('autosaves entry fields on change', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('removeEntry removes an entry by index', () => {
+    const sec = app.docSections.find(s => s.file === 'cv/experience.tex');
+    sec._data = {
+      type: 'cventries',
+      entries: [
+        { position: 'A', items: [] },
+        { position: 'B', items: [] },
+      ],
+    };
 
-    const entry = sec._data.entries[0];
-    entry.fields.position = 'Senior Engineer';
-    app.autoSaveEntry(entry);
-
-    await new Promise(r => setTimeout(r, 600));
-
-    const putCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/entries/') && opts?.method === 'PUT'
-    );
-    expect(putCalls.length).toBeGreaterThan(0);
-    const body = JSON.parse(putCalls[putCalls.length - 1][1].body);
-    expect(body.fields.position).toBe('Senior Engineer');
+    app.removeEntry(sec, 0);
+    expect(sec._data.entries.length).toBe(1);
+    expect(sec._data.entries[0].position).toBe('B');
   });
 
-  it('adds item via POST', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('addBullet adds an item to an entry', () => {
+    const sec = app.docSections.find(s => s.file === 'cv/experience.tex');
+    const entry = { position: 'Dev', items: ['existing'] };
+    sec._data = { type: 'cventries', entries: [entry] };
 
-    const entry = sec._data.entries[0];
-    await app.addItem(entry);
+    if (!app.ensureSectionConfig) {
+      app.ensureSectionConfig = (file) => {
+        if (!app.resumeConfig.sections[file]) {
+          app.resumeConfig.sections[file] = { entries: [] };
+        }
+        return app.resumeConfig.sections[file];
+      };
+    }
 
-    expect(entry.items.length).toBe(3); // 2 original + 1 new
-    expect(entry.items[2].id).toBe(99);
+    app.addBullet(sec, entry, 0);
+    expect(entry.items.length).toBe(2);
+    expect(entry.items[1]).toBe('');
   });
 
-  it('removes item via DELETE', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
+  it('removeBullet removes an item from an entry', () => {
+    const sec = app.docSections.find(s => s.file === 'cv/experience.tex');
+    const entry = { position: 'Dev', items: ['a', 'b', 'c'] };
+    sec._data = { type: 'cventries', entries: [entry] };
 
-    const entry = sec._data.entries[0];
-    await app.removeItem(entry, 10);
-
-    const delCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/items/10') && opts?.method === 'DELETE'
-    );
-    expect(delCalls.length).toBe(1);
-    expect(entry.items.find(i => i.id === 10)).toBeUndefined();
+    app.removeBullet(sec, entry, 0, 1);
+    expect(entry.items.length).toBe(2);
+    expect(entry.items).toEqual(['a', 'c']);
   });
 
-  it('autosaves item content on change', async () => {
-    const sec = app.docSections.find(s => s.id === 'experience');
-    await app.loadSectionData(sec);
-
-    const item = sec._data.entries[0].items[0];
-    item.content = 'Updated bullet';
-    app.autoSaveItem(item);
-
-    await new Promise(r => setTimeout(r, 600));
-
-    const putCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/items/') && opts?.method === 'PUT'
-    );
-    expect(putCalls.length).toBeGreaterThan(0);
-    const body = JSON.parse(putCalls[putCalls.length - 1][1].body);
-    expect(body.content).toBe('Updated bullet');
+  it('toggleSection flips enabled flag', () => {
+    expect(app.docSections[0].enabled).toBe(true);
+    app.toggleSection(0);
+    expect(app.docSections[0].enabled).toBe(false);
   });
 });
