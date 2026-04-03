@@ -6,100 +6,8 @@
  */
 
 const Database = require('better-sqlite3');
-const path = require('path');
-const fs = require('fs');
-
-const MIGRATIONS_DIR = path.join(__dirname, '..', 'migrations');
-
-const JANE_DOE_DATA = {
-  personal: {
-    firstName: 'Jane', lastName: 'Doe',
-    position: 'Senior Software Engineer',
-    address: '123 Main Street, Anytown, ST 12345',
-    mobile: '(555) 123-4567', email: 'jane.doe@example.com',
-    homepage: 'janedoe.dev',
-    github: 'janedoe', linkedin: 'janedoe', gitlab: 'janedoe',
-    twitter: 'janedoe', orcid: '0000-0001-2345-6789',
-    quote: 'Building the future, one commit at a time.',
-    photoEnabled: '0', photoFile: '',
-  },
-  sections: [
-    {
-      id: 'summary', type: 'cvparagraph', title: 'Summary',
-      entries: [{ id: 1, section_id: 'summary', sort_order: 0, resumeIncluded: true,
-        fields: { text: 'Experienced software engineer with over 6 years of experience building scalable web applications and distributed systems. Passionate about clean code, mentoring, and continuous learning.' },
-        items: [] }]
-    },
-    {
-      id: 'experience', type: 'cventries', title: 'Experience',
-      entries: [
-        { id: 2, section_id: 'experience', sort_order: 0, resumeIncluded: true,
-          fields: { position: 'Senior Software Engineer', organization: 'Acme Technologies', location: 'San Francisco, CA', date: '2022 -- Present' },
-          items: [
-            { id: 1, entry_id: 2, sort_order: 0, content: 'Led migration of monolithic architecture to microservices, reducing deployment time by 60\\%', resumeIncluded: true },
-            { id: 2, entry_id: 2, sort_order: 1, content: 'Mentored team of 4 junior engineers through code reviews and pair programming sessions', resumeIncluded: true },
-          ]
-        },
-        { id: 3, section_id: 'experience', sort_order: 1, resumeIncluded: true,
-          fields: { position: 'Software Engineer', organization: 'Widget Corp', location: 'Austin, TX', date: '2019 -- 2022' },
-          items: [
-            { id: 3, entry_id: 3, sort_order: 0, content: 'Designed and implemented RESTful API serving 10,000 requests per second', resumeIncluded: true },
-            { id: 4, entry_id: 3, sort_order: 1, content: 'Developed automated testing pipeline reducing QA cycle from 2 weeks to 3 days', resumeIncluded: true },
-          ]
-        }
-      ]
-    },
-    {
-      id: 'education', type: 'cventries', title: 'Education',
-      entries: [
-        { id: 4, section_id: 'education', sort_order: 0, resumeIncluded: true,
-          fields: { position: 'B.S. Computer Science', organization: 'State University', location: 'Anytown, ST', date: '2015 -- 2019' },
-          items: [
-            { id: 5, entry_id: 4, sort_order: 0, content: 'Graduated magna cum laude, GPA 3.8/4.0', resumeIncluded: true },
-          ]
-        }
-      ]
-    },
-    {
-      id: 'skills', type: 'cvskills', title: 'Skills',
-      entries: [
-        { id: 5, section_id: 'skills', sort_order: 0, resumeIncluded: true, fields: { category: 'Languages', skills: 'JavaScript, Python, Go, Rust, SQL' }, items: [] },
-        { id: 6, section_id: 'skills', sort_order: 1, resumeIncluded: true, fields: { category: 'Frameworks', skills: 'React, Node.js, Express, Django' }, items: [] },
-        { id: 7, section_id: 'skills', sort_order: 2, resumeIncluded: true, fields: { category: 'Tools', skills: 'Docker, Kubernetes, Git, CI/CD, AWS' }, items: [] },
-      ]
-    },
-  ],
-  metrics: [
-    { id: 1, command: 'projectCount', label: 'Projects', value: '15', groupName: 'General', sectionId: 'experience' },
-    { id: 2, command: 'yearsExperience', label: 'Years', value: '6', groupName: 'General', sectionId: 'experience' },
-  ],
-  documents: {
-    cv: [
-      { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: null },
-      { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
-      { sectionId: 'education', enabled: true, sortOrder: 2, resumeParagraphText: null },
-      { sectionId: 'skills', enabled: true, sortOrder: 3, resumeParagraphText: null },
-    ],
-    resume: [
-      { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: 'Software engineer with 6 years of experience in web applications and distributed systems.' },
-      { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
-      { sectionId: 'skills', enabled: true, sortOrder: 2, resumeParagraphText: null },
-    ]
-  },
-  coverletter: {
-    recipientName: 'Hiring Manager',
-    recipientAddress: '456 Corporate Ave, Business City, ST 67890',
-    title: 'Application for Software Engineer Position',
-    opening: 'Dear Hiring Manager,',
-    closing: 'Sincerely,',
-    enclosureLabel: 'Attached',
-    enclosureContent: 'Resume, Portfolio',
-    sections: [
-      { id: 1, sort_order: 0, title: 'Introduction', body: 'I am writing to express my interest in the Software Engineer position at your company. With over six years of experience in building scalable systems, I am confident I would be a strong addition to your team.' },
-      { id: 2, sort_order: 1, title: 'Experience', body: 'In my current role at Acme Technologies, I have led the migration of a monolithic application to a microservices architecture, resulting in significant improvements in deployment speed and system reliability.' },
-    ]
-  }
-};
+const runMigrations = require('./migration-runner');
+const { JANE_DOE_DATA } = require('./seed-data');
 
 class CvDatabase {
   /**
@@ -112,34 +20,11 @@ class CvDatabase {
     this._runMigrations();
     this._prepareStatements();
     this.seedJaneDoe();
+    this.resetToJaneDoe();
   }
 
-  // ---------------------------------------------------------------------------
-  // Migrations
-  // ---------------------------------------------------------------------------
-
   _runMigrations() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS _migrations (
-        name TEXT PRIMARY KEY,
-        applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-      )
-    `);
-
-    const applied = new Set(
-      this.db.prepare('SELECT name FROM _migrations').all().map(r => r.name)
-    );
-
-    const files = fs.readdirSync(MIGRATIONS_DIR)
-      .filter(f => f.endsWith('.sql'))
-      .sort();
-
-    for (const file of files) {
-      if (applied.has(file)) continue;
-      const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf-8');
-      this.db.exec(sql);
-      this.db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
-    }
+    runMigrations(this.db);
   }
 
   // ---------------------------------------------------------------------------
@@ -149,9 +34,10 @@ class CvDatabase {
   _prepareStatements() {
     this._stmts = {
       // Settings
-      getSettings: this.db.prepare('SELECT key, value FROM settings WHERE key LIKE ? || \'%\''),
-      getAllSettings: this.db.prepare('SELECT key, value FROM settings'),
+      getSettings: this.db.prepare('SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || \'%\''),
+      getAllSettings: this.db.prepare('SELECT key, value, value_num, value_unit FROM settings'),
       upsertSetting: this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
+      upsertSettingWithUnit: this.db.prepare('INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit'),
 
       // Sections
       getSections: this.db.prepare('SELECT id, type, title FROM sections ORDER BY id'),
@@ -171,22 +57,15 @@ class CvDatabase {
       maxEntrySortOrder: this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM entries WHERE section_id = ?'),
 
       // Items
-      getItems: this.db.prepare('SELECT id, entry_id, sort_order, content, resume_included FROM items WHERE entry_id = ? ORDER BY sort_order'),
-      getItem: this.db.prepare('SELECT id, entry_id, sort_order, content, resume_included FROM items WHERE id = ?'),
-      insertItem: this.db.prepare('INSERT INTO items (entry_id, sort_order, content, resume_included) VALUES (?, ?, ?, ?)'),
+      getItems: this.db.prepare('SELECT id, entry_id, sort_order, content, resume_included, title FROM items WHERE entry_id = ? ORDER BY sort_order'),
+      getItem: this.db.prepare('SELECT id, entry_id, sort_order, content, resume_included, title FROM items WHERE id = ?'),
+      insertItem: this.db.prepare('INSERT INTO items (entry_id, sort_order, content, resume_included, title) VALUES (?, ?, ?, ?, ?)'),
       updateItemContent: this.db.prepare('UPDATE items SET content = ? WHERE id = ?'),
+      updateItemTitle: this.db.prepare('UPDATE items SET title = ? WHERE id = ?'),
       updateItemResumeIncluded: this.db.prepare('UPDATE items SET resume_included = ? WHERE id = ?'),
       updateItemSortOrder: this.db.prepare('UPDATE items SET sort_order = ? WHERE id = ?'),
       deleteItem: this.db.prepare('DELETE FROM items WHERE id = ?'),
       maxItemSortOrder: this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM items WHERE entry_id = ?'),
-
-      // Metrics
-      getMetrics: this.db.prepare('SELECT id, command, label, value, group_name, section_id FROM metrics ORDER BY id'),
-      getMetricsBySection: this.db.prepare('SELECT id, command, label, value, group_name, section_id FROM metrics WHERE section_id = ? ORDER BY id'),
-      getMetric: this.db.prepare('SELECT id, command, label, value, group_name, section_id FROM metrics WHERE id = ?'),
-      insertMetric: this.db.prepare('INSERT INTO metrics (command, label, value, group_name, section_id) VALUES (?, ?, ?, ?, ?)'),
-      updateMetric: this.db.prepare('UPDATE metrics SET command = ?, label = ?, value = ?, group_name = ? WHERE id = ?'),
-      deleteMetric: this.db.prepare('DELETE FROM metrics WHERE id = ?'),
 
       // Document sections
       getDocumentSections: this.db.prepare('SELECT section_id, enabled, sort_order, resume_paragraph_text FROM document_sections WHERE variant = ? ORDER BY sort_order'),
@@ -196,7 +75,6 @@ class CvDatabase {
       // Persons
       getPersons: this.db.prepare('SELECT id, name, created_at FROM persons ORDER BY id'),
       getPerson: this.db.prepare('SELECT id, name, data, created_at FROM persons WHERE id = ?'),
-      getPersonByName: this.db.prepare('SELECT id, name, data, created_at FROM persons WHERE name = ?'),
       insertPerson: this.db.prepare('INSERT INTO persons (name, data) VALUES (?, ?)'),
       updatePersonName: this.db.prepare('UPDATE persons SET name = ? WHERE id = ?'),
       updatePersonData: this.db.prepare('UPDATE persons SET data = ? WHERE id = ?'),
@@ -224,15 +102,23 @@ class CvDatabase {
       : this._stmts.getAllSettings.all();
     const result = {};
     for (const row of rows) {
-      result[row.key] = row.value;
+      if (row.value_num != null && row.value_unit != null) {
+        result[row.key] = { num: row.value_num, unit: row.value_unit };
+      } else {
+        result[row.key] = row.value;
+      }
     }
     return result;
   }
 
   setSettings(map) {
     const tx = this.db.transaction((entries) => {
-      for (const [key, value] of entries) {
-        this._stmts.upsertSetting.run(key, value);
+      for (const [key, val] of entries) {
+        if (val && typeof val === 'object' && 'num' in val && 'unit' in val) {
+          this._stmts.upsertSettingWithUnit.run(key, String(val.num) + val.unit, val.num, val.unit);
+        } else {
+          this._stmts.upsertSetting.run(key, val);
+        }
       }
     });
     tx(Object.entries(map));
@@ -326,19 +212,22 @@ class CvDatabase {
   // Items
   // ---------------------------------------------------------------------------
 
-  createItem(entryId, content, resumeIncluded = true) {
+  createItem(entryId, content, resumeIncluded = true, title = '') {
     const nextOrder = this._stmts.maxItemSortOrder.get(entryId).max_order + 1;
-    const info = this._stmts.insertItem.run(entryId, nextOrder, content, resumeIncluded ? 1 : 0);
+    const info = this._stmts.insertItem.run(entryId, nextOrder, content, resumeIncluded ? 1 : 0, title);
     return info.lastInsertRowid;
   }
 
-  updateItem(id, { content, resumeIncluded }) {
+  updateItem(id, { content, resumeIncluded, title }) {
     const tx = this.db.transaction(() => {
       if (content !== undefined) {
         this._stmts.updateItemContent.run(content, id);
       }
       if (resumeIncluded !== undefined) {
         this._stmts.updateItemResumeIncluded.run(resumeIncluded ? 1 : 0, id);
+      }
+      if (title !== undefined) {
+        this._stmts.updateItemTitle.run(title, id);
       }
     });
     tx();
@@ -355,37 +244,6 @@ class CvDatabase {
       }
     });
     tx();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Metrics
-  // ---------------------------------------------------------------------------
-
-  getMetrics(sectionId) {
-    const rows = sectionId
-      ? this._stmts.getMetricsBySection.all(sectionId)
-      : this._stmts.getMetrics.all();
-    return rows.map(r => ({
-      id: r.id,
-      command: r.command,
-      label: r.label,
-      value: r.value,
-      groupName: r.group_name,
-      sectionId: r.section_id,
-    }));
-  }
-
-  createMetric({ command, label, value, groupName, sectionId }) {
-    const info = this._stmts.insertMetric.run(command, label || '', value ?? null, groupName || '', sectionId);
-    return info.lastInsertRowid;
-  }
-
-  updateMetric(id, { command, label, value, groupName }) {
-    this._stmts.updateMetric.run(command, label, value ?? null, groupName, id);
-  }
-
-  deleteMetric(id) {
-    this._stmts.deleteMetric.run(id);
   }
 
   // ---------------------------------------------------------------------------
@@ -493,7 +351,6 @@ class CvDatabase {
     const tx = this.db.transaction(() => {
       this.db.exec('DELETE FROM coverletter_sections');
       this.db.exec('DELETE FROM document_sections');
-      this.db.exec('DELETE FROM metrics');
       this.db.exec('DELETE FROM items');
       this.db.exec('DELETE FROM entries');
       this.db.exec('DELETE FROM sections');
@@ -537,24 +394,11 @@ class CvDatabase {
               if (entry.items) {
                 for (const item of entry.items) {
                   const itemResumeIncl = item.resumeIncluded !== undefined ? item.resumeIncluded : true;
-                  this.createItem(entryId, item.content, itemResumeIncl);
+                  this.createItem(entryId, item.content, itemResumeIncl, item.title || '');
                 }
               }
             }
           }
-        }
-      }
-
-      // Metrics
-      if (data.metrics) {
-        for (const m of data.metrics) {
-          this.createMetric({
-            command: m.command,
-            label: m.label || '',
-            value: m.value ?? null,
-            groupName: m.groupName || '',
-            sectionId: m.sectionId,
-          });
         }
       }
 
@@ -599,6 +443,15 @@ class CvDatabase {
     tx();
   }
 
+  resetToJaneDoe() {
+    const persons = this.getPersons();
+    const jane = persons.find(p => p.name === 'Jane Doe');
+    if (!jane) return;
+    const activeId = this.getActivePersonId();
+    if (activeId === jane.id) return;
+    this.switchPerson(jane.id);
+  }
+
   seedJaneDoe() {
     const count = this._stmts.countPersons.get().cnt;
     if (count > 0) return; // Already has persons, skip seeding
@@ -638,9 +491,6 @@ class CvDatabase {
         const field = key.replace('personal.', '');
         personal[field] = value;
       }
-
-      // All metrics
-      const metrics = this.getMetrics();
 
       // Document section ordering
       const docSections = this.getDocumentSections(variant);
@@ -692,7 +542,23 @@ class CvDatabase {
         style[key.replace('style.', '')] = value;
       }
 
-      return { personal, metrics, sections, coverletter, variant, style };
+      // Spacing settings — reconstruct combined strings for generator
+      const spacingSettings = this.getSettings('spacing');
+      const spacing = {};
+      for (const [key, val] of Object.entries(spacingSettings)) {
+        const field = key.replace('spacing.', '');
+        spacing[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
+      }
+
+      // Font size settings — reconstruct combined strings for generator
+      const fontsSettings = this.getSettings('fonts');
+      const fonts = {};
+      for (const [key, val] of Object.entries(fontsSettings)) {
+        const field = key.replace('fonts.', '');
+        fonts[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
+      }
+
+      return { personal, sections, coverletter, variant, style, spacing, fonts };
     })();
   }
 
@@ -708,7 +574,6 @@ class CvDatabase {
       }
 
       const allSections = this.getSections().map(s => this.getSection(s.id));
-      const metrics = this.getMetrics();
 
       const documents = {};
       for (const variant of ['cv', 'resume']) {
@@ -722,7 +587,7 @@ class CvDatabase {
       }
       coverletter.sections = this.getCoverletterSections();
 
-      return { personal, sections: allSections, metrics, documents, coverletter };
+      return { personal, sections: allSections, documents, coverletter };
     })();
   }
 

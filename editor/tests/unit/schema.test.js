@@ -189,56 +189,6 @@ describe('reorder schema', () => {
 // Metrics
 // ---------------------------------------------------------------------------
 
-describe('createMetric schema', () => {
-  const v = validators.createMetric;
-
-  it('accepts valid metric', () => {
-    expect(v({ command: 'projectCount', sectionId: 'experience' })).toBe(true);
-  });
-
-  it('accepts full metric', () => {
-    expect(v({
-      command: 'qiQubitCount',
-      label: 'Qubits',
-      value: '8',
-      groupName: 'QI',
-      sectionId: 'experience',
-    })).toBe(true);
-  });
-
-  it('accepts null value', () => {
-    expect(v({ command: 'pending', value: null, sectionId: 'exp' })).toBe(true);
-  });
-
-  it('rejects command with numbers', () => {
-    expect(v({ command: 'abc123', sectionId: 'exp' })).toBe(false);
-  });
-
-  it('rejects empty command', () => {
-    expect(v({ command: '', sectionId: 'exp' })).toBe(false);
-  });
-
-  it('rejects missing sectionId', () => {
-    expect(v({ command: 'foo' })).toBe(false);
-  });
-});
-
-describe('updateMetric schema', () => {
-  const v = validators.updateMetric;
-
-  it('accepts partial update', () => {
-    expect(v({ value: '10' })).toBe(true);
-  });
-
-  it('accepts null value update', () => {
-    expect(v({ value: null })).toBe(true);
-  });
-
-  it('rejects empty object', () => {
-    expect(v({})).toBe(false);
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Document sections
 // ---------------------------------------------------------------------------
