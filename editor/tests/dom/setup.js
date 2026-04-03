@@ -78,9 +78,6 @@ export const fixtures = {
       { id: 4, section_id: 'summary', sort_order: 0, fields: { text: 'Experienced engineer.' }, resumeIncluded: true, items: [] },
     ],
   },
-  metrics: [
-    { id: 1, command: 'projectCount', label: 'Projects', value: '12', groupName: 'General', sectionId: 'experience' },
-  ],
   documentSections: {
     variant: 'cv',
     sections: [
@@ -191,20 +188,6 @@ export function setupFetchMock(overrides = {}) {
       return mockResponse({ id: 999 }, 201);
     }
 
-    // Metrics
-    if (urlStr.includes('/api/metrics') && !options.method) {
-      return mockResponse(responses.metrics);
-    }
-    if (urlStr.includes('/api/metrics') && options.method === 'POST') {
-      return mockResponse({ id: 50 }, 201);
-    }
-    if (urlStr.includes('/api/metrics/') && options.method === 'PUT') {
-      return mockResponse({ success: true });
-    }
-    if (urlStr.includes('/api/metrics/') && options.method === 'DELETE') {
-      return mockResponse({ success: true });
-    }
-
     // Documents
     if (urlStr.includes('/api/documents/') && !options.method) {
       return mockResponse(responses.documentSections);
@@ -257,6 +240,13 @@ export function createAppInstance() {
   global.API_BASE = 'http://localhost:3001';
   global.Sortable = { create: () => ({ destroy: () => {} }) };
   global.ServiceConfig = { get: () => '' };
+  global.CVStorage = {
+    load: () => null,
+    save: () => {},
+    clear: () => {},
+    exportJSON: () => {},
+    importJSON: () => Promise.resolve({}),
+  };
 
   const appCode = fs.readFileSync(APP_JS_PATH, 'utf-8');
   // eslint-disable-next-line no-new-func

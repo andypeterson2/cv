@@ -285,23 +285,15 @@ function serializeData(data) {
   const lines = [];
 
   lines.push(FULL_SEP);
-  lines.push('% SHARED DATA \u2014 Single source of truth for resume.tex AND cv.tex');
-  lines.push('%');
-  lines.push('% Edit values here \u2014 they propagate to all content files automatically.');
-  lines.push('% Replace \\tbd{...} placeholders with real values as you collect them.');
+  lines.push('% SHARED DATA \u2014 Personal information for resume.tex AND cv.tex');
   lines.push(FULL_SEP);
-  lines.push('');
-  lines.push('');
-  lines.push(FULL_SEP);
-  lines.push('% Placeholder styling \u2014 change rendering of missing data in ONE place');
-  lines.push(FULL_SEP);
-  lines.push('\\providecommand{\\tbd}[1]{\\textbf{[#1]}}');
   lines.push('');
   lines.push('');
   lines.push(FULL_SEP);
   lines.push('% Personal Information');
   lines.push(FULL_SEP);
 
+  const SOCIAL_CATALOG = require('./social-catalog');
   const p = data.personal;
   // Photo (optional) — only output if enabled and file is set
   if (p.photo && p.photo.enabled && p.photo.file) {
@@ -310,36 +302,22 @@ function serializeData(data) {
   lines.push(`\\name{${san(p.firstName || '')}}{${san(p.lastName || '')}} % Legal`);
   if (p.position) lines.push(`\\position{${san(p.position)}}`);
   if (p.address) lines.push(`\\address{${san(p.address)}}`);
+  if (p.dateofbirth) lines.push(`\\dateofbirth{${san(p.dateofbirth)}}`);
   lines.push('');
   if (p.mobile) lines.push(`\\mobile{${san(p.mobile)}}`);
   if (p.email) lines.push(`\\email{${san(p.email)}}`);
-  if (p.github) lines.push(`\\github{${san(p.github)}}`);
-  if (p.linkedin) lines.push(`\\linkedin{${san(p.linkedin)}}`);
-  if (p.homepage) lines.push(`\\homepage{${san(p.homepage)}}`);
-  if (p.quote) lines.push('\\quote{``' + san(p.quote) + "''"  + '}');
-  lines.push('');
-
-  // Group metrics by group name
-  const groups = {};
-  for (const m of data.metrics) {
-    const g = m.group || 'Other';
-    if (!groups[g]) groups[g] = [];
-    groups[g].push(m);
-  }
-
-  for (const [groupName, metrics] of Object.entries(groups)) {
-    lines.push('');
-    lines.push(FULL_SEP);
-    lines.push(`% ${groupName}`);
-    lines.push(FULL_SEP);
-    for (const m of metrics) {
-      if (m.value === null || m.value === undefined) {
-        lines.push(`\\providecommand{\\${m.command}}{\\tbd{${san(m.label || m.command)}}}`);
-      } else {
-        lines.push(`\\providecommand{\\${m.command}}{${san(m.value)}}`);
-      }
+  // Social/link commands — driven by catalog
+  for (const cat of SOCIAL_CATALOG) {
+    if (cat.args === 2) {
+      const v1 = p[cat.fields[0]], v2 = p[cat.fields[1]];
+      if (v1 || v2) lines.push(`\\${cat.key}{${san(v1 || '')}}{${san(v2 || '')}}`);
+    } else {
+      if (p[cat.key]) lines.push(`\\${cat.key}{${san(p[cat.key])}}`);
     }
   }
+  if (p.quote) lines.push('\\quote{``' + san(p.quote) + "''"  + '}');
+  if (p.extrainfo) lines.push(`\\extrainfo{${san(p.extrainfo)}}`);
+  lines.push('');
 
   return lines.join('\n');
 }
