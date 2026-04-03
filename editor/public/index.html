@@ -70,7 +70,7 @@
             <template x-for="(sec, i) in docSections" :key="sec.file">
               <div class="section-card" :class="{ disabled: !sec.enabled }" :data-index="i" :data-sec-file="sec.file">
                 <div class="section-header">
-                  <span class="ui-drag-handle" aria-hidden="true"></span>
+                  <span class="ui-drag-handle section-drag" aria-hidden="true">&#x283F;</span>
                   <strong x-text="sectionTitle(sec.file)"></strong>
                   <label class="toggle-label" title="Include in CV">
                     <input type="checkbox" :checked="sec.enabled" @change="toggleSection(i)" :aria-label="'Enable ' + sectionTitle(sec.file)">
@@ -85,59 +85,31 @@
 
       <!-- ===== Sections Tab ===== -->
       <div x-show="editorTab === 'sections'" class="tab-content">
+        <div class="section-toolbar">
+          <button class="btn-sm" @click="createNewSection()">+ Add Section</button>
+          <button class="btn-sm" @click="docSections.forEach(s => { s._expanded = true; loadSectionData(s) })">Expand All</button>
+          <button class="btn-sm" @click="docSections.forEach(s => { s._expanded = false })">Collapse All</button>
+        </div>
         <div id="section-list" class="section-list">
           <template x-for="(sec, i) in docSections" :key="sec.id">
             <div class="section-card" :class="{ disabled: !sec.enabled }" :data-sec-id="sec.id">
               <div class="section-header">
-                <span class="ui-drag-handle" aria-hidden="true"></span>
-                <strong x-text="sec.title"></strong>
+                <span class="ui-drag-handle section-drag" aria-hidden="true">&#x283F;</span>
+                <span class="expand-arrow" @click="sec._expanded = !sec._expanded; if(sec._expanded) loadSectionData(sec)"
+                  :title="sec._expanded ? 'Collapse' : 'Expand'"
+                  x-text="sec._expanded ? '\u2191' : '\u2193'"></span>
+                <input type="text" class="section-title-input" :value="sec.title"
+                  @change="saveSectionTitle(sec.id, $event.target.value)"
+                  @keydown.enter="$event.target.blur()">
                 <label class="toggle-label-inline" title="Include in document">
                   <input type="checkbox" :checked="sec.enabled" @change="toggleSection(i)" :aria-label="'Enable ' + sec.title">
                 </label>
-                <button class="btn-sm" @click="sec._expanded = !sec._expanded; if(sec._expanded) loadSectionData(sec)"
-                  x-text="sec._expanded ? 'Collapse' : 'Expand'"></button>
               </div>
 
               <!-- Expanded editor -->
               <div x-show="sec._expanded && sec.enabled" class="section-body">
                 <template x-if="sec._data">
                   <div>
-                    <!-- Inline metrics for this section -->
-                    <div class="inline-metrics">
-                      <div class="inline-metrics-header">
-                        <h3 class="inline-metrics-heading">Variables</h3>
-                        <button class="btn-xs" @click="addMetricGroup(sec.id)">+ Group</button>
-                      </div>
-                      <template x-for="[group, mets] in metricGroupsForSection(sec.id)" :key="group">
-                        <div class="metric-group">
-                          <div class="metric-group-header">
-                            <span class="metric-group-name" x-text="group" @dblclick="renameMetricGroup(sec.id, group)" title="Double-click to rename"></span>
-                            <div class="metric-group-actions">
-                              <button class="btn-xs" @click="addMetric(sec.id, group)">+ Var</button>
-                              <button class="btn-xs btn-danger" @click="removeMetricGroup(sec.id, group)" title="Remove entire group">x</button>
-                            </div>
-                          </div>
-                          <div class="metrics-grid">
-                            <template x-for="metric in mets" :key="metric.id">
-                              <div class="metric-inline">
-                                <div class="metric-label-row">
-                                  <span class="metric-label" x-text="metric.command"></span>
-                                  <button class="btn-metric-remove" @click="removeMetric(metric.id)" title="Remove variable">&times;</button>
-                                </div>
-                                <input type="text"
-                                  x-model="metric.value"
-                                  :placeholder="metric.label"
-                                  @input="autoSaveMetric(metric)">
-                              </div>
-                            </template>
-                          </div>
-                        </div>
-                      </template>
-                      <template x-if="metricsForSection(sec.id).length === 0">
-                        <p class="muted">No variables. Click "+ Group" to add a variable group.</p>
-                      </template>
-                    </div>
-
                     <!-- cventries editor -->
                     <template x-if="sec._data.type === 'cventries'">
                       <div>

@@ -6,8 +6,14 @@
  */
 
 const Ajv = require('ajv');
+const LATEX_UNITS = require('./latex-units');
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: false });
+
+// Canonical list — keep in sync with public/cv/section-types.js
+const VALID_SECTION_TYPES = ['cventries', 'cvskills', 'cvhonors', 'cvreferences', 'cvparagraph'];
+
+const VALID_VARIANTS = ['cv', 'resume', 'coverletter'];
 
 // ---------------------------------------------------------------------------
 // Settings
@@ -16,7 +22,20 @@ const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: fal
 const settingsSchema = {
   type: 'object',
   patternProperties: {
-    '^[a-zA-Z0-9_.]+$': { type: 'string' },
+    '^[a-zA-Z0-9_.]+$': {
+      oneOf: [
+        { type: 'string' },
+        {
+          type: 'object',
+          properties: {
+            num: { type: 'number' },
+            unit: { type: 'string', enum: LATEX_UNITS },
+          },
+          required: ['num', 'unit'],
+          additionalProperties: false,
+        },
+      ],
+    },
   },
   additionalProperties: false,
   minProperties: 1,
@@ -32,7 +51,7 @@ const createSectionSchema = {
     id: { type: 'string', minLength: 1, maxLength: 100, pattern: '^[a-z0-9_-]+$' },
     type: {
       type: 'string',
-      enum: ['cventries', 'cvskills', 'cvhonors', 'cvreferences', 'cvparagraph'],
+      enum: VALID_SECTION_TYPES,
     },
     title: { type: 'string', maxLength: 200 },
   },
@@ -53,10 +72,18 @@ const updateSectionSchema = {
 // Entries
 // ---------------------------------------------------------------------------
 
+const entryFieldsSchema = {
+  type: 'object',
+  patternProperties: {
+    '^[a-zA-Z0-9_]+$': { type: 'string' },
+  },
+  additionalProperties: false,
+};
+
 const createEntrySchema = {
   type: 'object',
   properties: {
-    fields: { type: 'object' },
+    fields: entryFieldsSchema,
   },
   required: ['fields'],
   additionalProperties: false,
@@ -65,7 +92,7 @@ const createEntrySchema = {
 const updateEntrySchema = {
   type: 'object',
   properties: {
-    fields: { type: 'object' },
+    fields: entryFieldsSchema,
     resumeIncluded: { type: 'boolean' },
   },
   minProperties: 1,
@@ -80,6 +107,7 @@ const createItemSchema = {
   type: 'object',
   properties: {
     content: { type: 'string' },
+    title: { type: 'string' },
   },
   required: ['content'],
   additionalProperties: false,
@@ -90,6 +118,7 @@ const updateItemSchema = {
   properties: {
     content: { type: 'string' },
     resumeIncluded: { type: 'boolean' },
+    title: { type: 'string' },
   },
   minProperties: 1,
   additionalProperties: false,
@@ -110,35 +139,6 @@ const reorderSchema = {
     },
   },
   required: ['ids'],
-  additionalProperties: false,
-};
-
-// ---------------------------------------------------------------------------
-// Metrics
-// ---------------------------------------------------------------------------
-
-const createMetricSchema = {
-  type: 'object',
-  properties: {
-    command: { type: 'string', minLength: 1, maxLength: 100, pattern: '^[a-zA-Z]+$' },
-    label: { type: 'string', maxLength: 200 },
-    value: { type: ['string', 'null'], maxLength: 200 },
-    groupName: { type: 'string', maxLength: 200 },
-    sectionId: { type: 'string', minLength: 1 },
-  },
-  required: ['command', 'sectionId'],
-  additionalProperties: false,
-};
-
-const updateMetricSchema = {
-  type: 'object',
-  properties: {
-    command: { type: 'string', minLength: 1, maxLength: 100, pattern: '^[a-zA-Z]+$' },
-    label: { type: 'string', maxLength: 200 },
-    value: { type: ['string', 'null'], maxLength: 200 },
-    groupName: { type: 'string', maxLength: 200 },
-  },
-  minProperties: 1,
   additionalProperties: false,
 };
 
@@ -197,7 +197,7 @@ const updateCoverletterSectionSchema = {
 
 const variantSchema = {
   type: 'string',
-  enum: ['cv', 'resume', 'coverletter'],
+  enum: VALID_VARIANTS,
 };
 
 // ---------------------------------------------------------------------------
@@ -227,7 +227,6 @@ const importDataSchema = {
   properties: {
     personal: { type: 'object' },
     sections: { type: 'array' },
-    metrics: { type: 'array' },
     documents: { type: 'object' },
     coverletter: { type: 'object' },
   },
@@ -248,8 +247,6 @@ const validators = {
   createItem: ajv.compile(createItemSchema),
   updateItem: ajv.compile(updateItemSchema),
   reorder: ajv.compile(reorderSchema),
-  createMetric: ajv.compile(createMetricSchema),
-  updateMetric: ajv.compile(updateMetricSchema),
   documentSections: ajv.compile(documentSectionsSchema),
   createCoverletterSection: ajv.compile(createCoverletterSectionSchema),
   updateCoverletterSection: ajv.compile(updateCoverletterSectionSchema),
@@ -281,13 +278,14 @@ function validate(schemaName) {
  * Check if a variant string is valid.
  */
 function isValidVariant(variant) {
-  return ['cv', 'resume', 'coverletter'].includes(variant);
+  return VALID_VARIANTS.includes(variant);
 }
 
 module.exports = {
   validators,
   validate,
   isValidVariant,
+  VALID_VARIANTS,
   // Export raw schemas for testing
   schemas: {
     settings: settingsSchema,
@@ -298,8 +296,6 @@ module.exports = {
     createItem: createItemSchema,
     updateItem: updateItemSchema,
     reorder: reorderSchema,
-    createMetric: createMetricSchema,
-    updateMetric: updateMetricSchema,
     documentSections: documentSectionsSchema,
     createCoverletterSection: createCoverletterSectionSchema,
     updateCoverletterSection: updateCoverletterSectionSchema,

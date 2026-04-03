@@ -283,99 +283,6 @@ select:focus-visible {
 
 .section-body { padding: 0; }
 
-/* ---- Inline Metrics ---- */
-.inline-metrics {
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  padding: 8px 12px;
-}
-
-.inline-metrics-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.inline-metrics-heading {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.metric-group {
-  border: 1px solid var(--border);
-  margin-bottom: -1px;
-}
-
-.metric-group-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-}
-
-.metric-group-name {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.metric-group-name:hover { text-decoration: underline dotted; }
-
-.metric-group-actions { display: flex; gap: 0; }
-.metric-group-actions > * + * { margin-left: -1px; }
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0;
-  padding: 6px 8px;
-}
-
-.metric-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  margin: -1px 0 0 -1px;
-  padding: 4px 6px;
-}
-
-.metric-inline input[type="text"] {
-  width: 100%;
-  padding: 3px 6px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 12px;
-  font-family: inherit;
-}
-
-.metric-label-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.metric-label { font-family: inherit; font-size: 11px; font-weight: 700; color: var(--accent); }
-
-.btn-metric-remove {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
-  padding: 0 2px;
-  opacity: 0.5;
-}
-.btn-metric-remove:hover { color: var(--danger); opacity: 1; }
-
 /* ---- Entry Cards ---- */
 .entry-card {
   background: var(--surface);
@@ -458,6 +365,58 @@ select:focus-visible {
   padding: 6px;
   border-right: 1px solid var(--border);
   background: var(--surface2);
+}
+
+.section-drag {
+  padding: 4px 8px;
+  font-size: 16px;
+  color: var(--text-muted, #999);
+}
+
+.section-drag:hover {
+  color: var(--text);
+}
+
+.section-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.section-title-input {
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 2px 4px;
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.section-title-input:hover {
+  border-color: var(--border);
+}
+
+.section-title-input:focus {
+  border-color: var(--accent, #06c);
+  background: var(--surface, #fff);
+  outline: none;
+}
+
+.expand-arrow {
+  padding: 2px 4px;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-muted, #999);
+}
+
+.expand-arrow:hover {
+  color: var(--text);
 }
 
 .items-list > .btn-sm {
@@ -718,7 +677,6 @@ select:focus-visible {
 }
 
 @media (max-width: 480px) {
-  .metrics-grid { grid-template-columns: 1fr; }
   .topbar-title { padding: 0 8px; font-size: 13px; }
   .btn { padding: 0 8px; font-size: 12px; }
 }

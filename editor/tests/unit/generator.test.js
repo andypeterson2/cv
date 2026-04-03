@@ -27,7 +27,7 @@ describe('generateDataTex', () => {
       homepage: 'example.com',
       quote: 'Hello world',
     };
-    const tex = generateDataTex(personal, []);
+    const tex = generateDataTex(personal);
     expect(tex).toContain('\\name{Andrew}{Peterson}');
     expect(tex).toContain('\\position{Software Engineer}');
     expect(tex).toContain('\\address{San Diego, CA}');
@@ -42,28 +42,10 @@ describe('generateDataTex', () => {
 
   it('handles empty personal fields gracefully', () => {
     const personal = {};
-    const tex = generateDataTex(personal, []);
+    const tex = generateDataTex(personal);
     expect(tex).toContain('\\name{}{}');
     // Serializer omits empty fields, but name is always present
     expect(typeof tex).toBe('string');
-  });
-
-  it('includes metrics with values', () => {
-    const metrics = [
-      { command: 'projectCount', label: 'Projects', value: '12', groupName: 'General' },
-    ];
-    const tex = generateDataTex({}, metrics);
-    expect(tex).toContain('\\projectCount');
-    expect(tex).toContain('12');
-  });
-
-  it('includes metrics with null value as tbd', () => {
-    const metrics = [
-      { command: 'pending', label: 'Pending', value: null, groupName: 'General' },
-    ];
-    const tex = generateDataTex({}, metrics);
-    expect(tex).toContain('\\pending');
-    expect(tex).toContain('Pending');
   });
 
   it('handles photo enabled', () => {
@@ -71,13 +53,13 @@ describe('generateDataTex', () => {
       photoEnabled: '1',
       photoFile: 'myprofile',
     };
-    const tex = generateDataTex(personal, []);
+    const tex = generateDataTex(personal);
     expect(tex).toContain('myprofile');
   });
 
   it('handles photo disabled', () => {
     const personal = { photoEnabled: '0' };
-    const tex = generateDataTex(personal, []);
+    const tex = generateDataTex(personal);
     // Should not error
     expect(typeof tex).toBe('string');
   });
@@ -321,7 +303,6 @@ describe('generateAll', () => {
 
   const baseCompileData = {
     personal: { firstName: 'Andrew', lastName: 'Peterson' },
-    metrics: [],
     sections: [
       {
         id: 'experience',
@@ -382,8 +363,7 @@ describe('generateAll', () => {
   it('generates coverletter variant', () => {
     const clData = {
       personal: { firstName: 'Andrew', lastName: 'Peterson' },
-      metrics: [],
-      sections: [],
+        sections: [],
       coverletter: {
         recipientName: 'HR',
         recipientAddress: '123 St',

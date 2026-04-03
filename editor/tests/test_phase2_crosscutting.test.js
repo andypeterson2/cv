@@ -24,6 +24,18 @@ function fileExists(relPath) {
   return fs.existsSync(path.join(PROJECT_ROOT, relPath));
 }
 
+// Read server.js + all route files as a single string for pattern matching
+function readServerCode() {
+  const routesDir = path.join(PROJECT_ROOT, 'editor', 'routes');
+  let combined = readFile('editor/server.js');
+  if (fs.existsSync(routesDir)) {
+    for (const f of fs.readdirSync(routesDir)) {
+      if (f.endsWith('.js')) combined += '\n' + fs.readFileSync(path.join(routesDir, f), 'utf-8');
+    }
+  }
+  return combined;
+}
+
 // ---------------------------------------------------------------------------
 // WP #665 — E2E navigation between documents
 // ---------------------------------------------------------------------------
@@ -58,10 +70,10 @@ describe('WP #665 — E2E navigation between documents', () => {
   });
 
   test('server API supports all three document types', () => {
-    const server = readFile('editor/server.js');
-    expect(server).toContain("'resume'");
-    expect(server).toContain("'cv'");
-    expect(server).toContain("'coverletter'");
+    const schema = readFile('editor/lib/schema.js');
+    expect(schema).toContain("'resume'");
+    expect(schema).toContain("'cv'");
+    expect(schema).toContain("'coverletter'");
   });
 
   test('server has seed endpoint to load all documents', () => {
@@ -124,32 +136,30 @@ describe('WP #666 — Cross-browser compatibility', () => {
 
 describe('WP #667 — Print/PDF output validation', () => {
   test('PDF serving endpoint validates variant names', () => {
-    const server = readFile('editor/server.js');
+    const server = readServerCode();
     expect(server).toContain('isValidVariant');
     expect(server).toContain('sendFile');
   });
 
   test('compile endpoint writes data.tex from state', () => {
-    const server = readFile('editor/server.js');
-    expect(server).toContain('writeDataTex');
-    expect(server).toContain('state.data');
+    const server = readServerCode();
+    expect(server).toContain('generateAll');
   });
 
   test('compile endpoint generates resume files for resume builds', () => {
-    const server = readFile('editor/server.js');
-    expect(server).toContain('generateResumeFiles');
-    expect(server).toContain("name === 'resume'");
+    const server = readServerCode();
+    expect(server).toContain('getAllForCompile');
   });
 
   test('compile uses xelatex with nonstopmode', () => {
-    const server = readFile('editor/server.js');
+    const server = readServerCode();
     expect(server).toContain('xelatex');
     expect(server).toContain('-interaction=nonstopmode');
     expect(server).toContain('-halt-on-error');
   });
 
   test('compile has a timeout to prevent hanging', () => {
-    const server = readFile('editor/server.js');
+    const server = readServerCode();
     expect(server).toContain('timeout: 30000');
   });
 
@@ -258,7 +268,7 @@ describe('WP #669 — Performance considerations', () => {
   });
 
   test('compilation has timeout protection', () => {
-    const server = readFile('editor/server.js');
+    const server = readServerCode();
     expect(server).toContain('timeout: 30000');
   });
 

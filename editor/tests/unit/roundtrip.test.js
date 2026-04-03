@@ -85,7 +85,7 @@ describe('round-trip: cvparagraph (summary)', () => {
 });
 
 describe('round-trip: data.json → data.tex → parseData', () => {
-  test('serialize from JSON then parse gives consistent metrics', () => {
+  test('serialize from JSON then parse gives consistent personal info', () => {
     const dataJson = JSON.parse(readFixture('data.json'));
     const tex = serializeData(dataJson);
     const parsedBack = parseData(tex);
@@ -93,23 +93,5 @@ describe('round-trip: data.json → data.tex → parseData', () => {
     expect(parsedBack.personal.firstName).toBe(dataJson.personal.firstName);
     expect(parsedBack.personal.lastName).toBe(dataJson.personal.lastName);
     expect(parsedBack.personal.email).toBe(dataJson.personal.email);
-
-    // Verify all metrics with values round-trip correctly
-    for (const m of dataJson.metrics) {
-      if (m.value !== null) {
-        const found = parsedBack.metrics.find(pm => pm.command === m.command);
-        expect(found).toBeDefined();
-        expect(found.value).toBe(m.value);
-      }
-    }
-
-    // Verify null-value metrics become tbd placeholders that parse back with null value
-    for (const m of dataJson.metrics) {
-      if (m.value === null) {
-        const found = parsedBack.metrics.find(pm => pm.command === m.command);
-        expect(found).toBeDefined();
-        expect(found.value).toBeNull();
-      }
-    }
   });
 });

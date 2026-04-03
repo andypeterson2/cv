@@ -92,12 +92,10 @@ describe('GET /api/seed', () => {
     expect(res.body).toHaveProperty('sectionData');
   });
 
-  test('data contains personal info and metrics', async () => {
+  test('data contains personal info', async () => {
     const res = await request('GET', '/api/seed');
     expect(res.body.data.personal).toBeDefined();
     expect(res.body.data.personal.firstName).toBe('Andrew');
-    expect(res.body.data.metrics).toBeDefined();
-    expect(res.body.data.metrics.length).toBeGreaterThan(0);
   });
 
   test('document has sections array', async () => {
@@ -178,20 +176,14 @@ describe('POST /api/compile/:name', () => {
   });
 
   test('writes .tex files from state during compile', async () => {
-    // Modify a metric to verify it propagates
     const state = JSON.parse(JSON.stringify(seedState));
-    state.data.metrics[0].value = 'test-compile-42';
 
     const res = await request('POST', '/api/compile/cv', state);
     expect(res.status).toBe(200);
 
-    // data.tex should contain the test value
+    // data.tex should contain personal info
     const dataTex = fs.readFileSync(path.join(PROJECT_ROOT, 'data.tex'), 'utf-8');
-    expect(dataTex).toContain('test-compile-42');
-
-    // data.json should be updated too
-    const dataJson = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'data.json'), 'utf-8'));
-    expect(dataJson.metrics[0].value).toBe('test-compile-42');
+    expect(dataTex).toContain('\\name');
   });
 
   test('cv.tex section order matches state after compile', async () => {
@@ -321,7 +313,6 @@ describe('GET /api/export', () => {
     expect(res.status).toBe(200);
     expect(res.body.personal.firstName).toBe('Andrew');
     expect(res.body.sections.length).toBe(4);
-    expect(res.body.metrics.length).toBe(2);
     expect(res.body.coverletter.sections.length).toBe(2);
   });
 });
@@ -357,13 +348,6 @@ describe('Request validation', () => {
     expect(res.status).toBe(400);
   });
 
-  test('rejects metric with numeric command', async () => {
-    const res = await request('POST', '/api/metrics', {
-      command: 'abc123',
-      sectionId: 'experience',
-    });
-    expect(res.status).toBe(400);
-  });
 });
 
 // =========================================================================
@@ -489,7 +473,6 @@ describe('Import API', () => {
           ]
         }
       ],
-      metrics: [],
       documents: { cv: [{ sectionId: 'work', enabled: true, sortOrder: 0 }], resume: [] },
       coverletter: { recipientName: 'Nobody', sections: [] }
     };
@@ -527,7 +510,6 @@ describe('Person switch workflow', () => {
           entries: [{ id: 1, section_id: 'work', sort_order: 0, resumeIncluded: true,
             fields: { position: 'Dev', organization: 'Co', location: 'NY', date: '2024' }, items: [] }] }
       ],
-      metrics: [],
       documents: { cv: [{ sectionId: 'work', enabled: true, sortOrder: 0 }], resume: [] },
       coverletter: { sections: [] }
     };
@@ -551,7 +533,6 @@ describe('Person switch workflow', () => {
     await request('POST', '/api/import', {
       personal: { firstName: 'Bob', lastName: 'Builder' },
       sections: [],
-      metrics: [],
       documents: { cv: [], resume: [] },
       coverletter: { sections: [] }
     });
