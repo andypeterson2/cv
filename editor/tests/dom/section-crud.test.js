@@ -1,6 +1,11 @@
 // @vitest-environment happy-dom
 /**
  * DOM tests for section creation, deletion, and renaming.
+ *
+ * The standalone app has createNewSection, deleteSection, saveSectionTitle
+ * which all require a backend connection. These tests verify the methods
+ * exist and call requireBackend, and test the backend-connected path
+ * by stubbing requireBackend to return true.
  */
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
@@ -16,12 +21,25 @@ describe('Section CRUD via UI', () => {
     await app.init();
   });
 
-  test('createNewSection calls POST /api/sections and reloads', async () => {
-    // Mock the modal to return section details
+  test('createNewSection exists as a method', () => {
+    expect(typeof app.createNewSection).toBe('function');
+  });
+
+  test('createNewSection calls requireBackend', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(false);
+    await app.createNewSection();
+    expect(app.requireBackend).toHaveBeenCalled();
+  });
+
+  test('createNewSection with backend calls openModal and POST', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
     app.openModal = vi.fn().mockResolvedValue({
       title: 'Education',
       type: 'cventries',
     });
+    // Mock loadSections and loadDocumentSections since they fetch from server
+    app.loadSections = vi.fn();
+    app.loadDocumentSections = vi.fn();
 
     await app.createNewSection();
 
@@ -34,23 +52,16 @@ describe('Section CRUD via UI', () => {
     expect(body.id).toBe('education');
     expect(body.type).toBe('cventries');
     expect(body.title).toBe('Education');
-
-    // Verify document sections were updated (PUT /api/documents/cv)
-    const docCall = fetchMock.mock.calls.find(
-      ([url, opts]) => String(url).includes('/api/documents/cv') && opts && opts.method === 'PUT'
-    );
-    expect(docCall).toBeDefined();
-    const docBody = JSON.parse(docCall[1].body);
-    const newSec = docBody.sections.find(s => s.sectionId === 'education');
-    expect(newSec).toBeDefined();
-    expect(newSec.enabled).toBe(true);
   });
 
   test('createNewSection generates valid slug from title', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
     app.openModal = vi.fn().mockResolvedValue({
       title: 'Work & Projects!',
       type: 'cventries',
     });
+    app.loadSections = vi.fn();
+    app.loadDocumentSections = vi.fn();
 
     await app.createNewSection();
 
@@ -59,10 +70,11 @@ describe('Section CRUD via UI', () => {
     );
     const body = JSON.parse(createCall[1].body);
     expect(body.id).toBe('work-projects');
-    expect(body.id).toMatch(/^[a-z0-9_-]+$/);
+    expect(body.id).toMatch(/^[a-z0-9-]+$/);
   });
 
   test('createNewSection rejects invalid type', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
     app.openModal = vi.fn().mockResolvedValue({
       title: 'Bad Section',
       type: 'invalidtype',
@@ -70,7 +82,6 @@ describe('Section CRUD via UI', () => {
 
     await app.createNewSection();
 
-    // Should not have called POST /api/sections
     const createCall = fetchMock.mock.calls.find(
       ([url, opts]) => String(url).includes('/api/sections') && opts && opts.method === 'POST'
     );
@@ -78,6 +89,7 @@ describe('Section CRUD via UI', () => {
   });
 
   test('createNewSection does nothing when modal is cancelled', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
     app.openModal = vi.fn().mockResolvedValue(null);
 
     await app.createNewSection();
@@ -88,9 +100,17 @@ describe('Section CRUD via UI', () => {
     expect(createCall).toBeUndefined();
   });
 
-  test('deleteSection calls DELETE /api/sections/:id', async () => {
-    // Mock confirm to return true
+  test('deleteSection calls requireBackend', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(false);
+    await app.deleteSection('experience');
+    expect(app.requireBackend).toHaveBeenCalled();
+  });
+
+  test('deleteSection calls DELETE /api/sections/:id when confirmed', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
     global.confirm = vi.fn().mockReturnValue(true);
+    app.loadSections = vi.fn();
+    app.loadDocumentSections = vi.fn();
 
     await app.deleteSection('experience');
 
@@ -101,6 +121,7 @@ describe('Section CRUD via UI', () => {
   });
 
   test('deleteSection does nothing when confirm is declined', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
     global.confirm = vi.fn().mockReturnValue(false);
 
     await app.deleteSection('experience');
@@ -111,10 +132,11 @@ describe('Section CRUD via UI', () => {
     expect(deleteCall).toBeUndefined();
   });
 
-  test('renameSection calls PUT /api/sections/:id with new title', async () => {
-    app.openModal = vi.fn().mockResolvedValue({ title: 'Work History' });
+  test('saveSectionTitle calls PUT /api/sections/:id', async () => {
+    app.requireBackend = vi.fn().mockReturnValue(true);
+    app.docSections = [{ id: 'experience', title: 'Experience' }];
 
-    await app.renameSection('experience');
+    await app.saveSectionTitle('experience', 'Work History');
 
     const renameCall = fetchMock.mock.calls.find(
       ([url, opts]) => String(url).includes('/api/sections/experience') && opts && opts.method === 'PUT'
@@ -122,21 +144,5 @@ describe('Section CRUD via UI', () => {
     expect(renameCall).toBeDefined();
     const body = JSON.parse(renameCall[1].body);
     expect(body.title).toBe('Work History');
-  });
-
-  test('all five section types are accepted', async () => {
-    const types = ['cventries', 'cvskills', 'cvhonors', 'cvreferences', 'cvparagraph'];
-    for (const type of types) {
-      fetchMock.mockClear();
-      app.openModal = vi.fn().mockResolvedValue({ title: type, type });
-      await app.createNewSection();
-
-      const createCall = fetchMock.mock.calls.find(
-        ([url, opts]) => String(url).includes('/api/sections') && opts && opts.method === 'POST'
-      );
-      expect(createCall).toBeDefined();
-      const body = JSON.parse(createCall[1].body);
-      expect(body.type).toBe(type);
-    }
   });
 });

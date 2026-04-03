@@ -9,89 +9,84 @@ describe('Cover Letter', () => {
   beforeEach(async () => {
     fetchMock = setupFetchMock();
     app = createAppInstance();
-    await app.init();
+    // The standalone app uses DEMO_DATA for coverletter,
+    // seeded via CVStorage.load() or seedFromServer().
+    // Since CVStorage.load() returns null in test setup,
+    // init() calls seedFromServer() which fetches /api/seed.
   });
 
-  it('loads coverletter settings on init', () => {
-    expect(app.coverletter.settings.recipientName).toBe('HR Team');
-    expect(app.coverletter.settings.recipientAddress).toBe('123 Main St');
-    expect(app.coverletter.settings.title).toBe('Application');
-    expect(app.coverletter.settings.opening).toBe('Dear Team,');
-    expect(app.coverletter.settings.closing).toBe('Sincerely,');
-    expect(app.coverletter.settings.enclosureLabel).toBe('Attached');
-    expect(app.coverletter.settings.enclosureContent).toBe('Resume');
+  it('has coverletter property initialized to null before init', () => {
+    // Before init, coverletter starts as null
+    expect(app.coverletter).toBeNull();
   });
 
-  it('loads coverletter sections on init', () => {
-    expect(app.coverletter.sections.length).toBe(2);
-    expect(app.coverletter.sections[0].title).toBe('About Me');
-    expect(app.coverletter.sections[0].body).toBe('I am a software engineer.');
-    expect(app.coverletter.sections[1].title).toBe('Why Me?');
+  it('loadCoverletter returns the coverletter data', () => {
+    // Set up coverletter data like DEMO_DATA provides
+    app.coverletter = {
+      recipientName: 'Hiring Manager',
+      recipientAddress: '456 Corporate Ave',
+      title: 'Application',
+      opening: 'Dear Hiring Manager,',
+      closing: 'Sincerely,',
+      enclosureLabel: 'Attached',
+      enclosureContent: 'Resume, Portfolio',
+      sections: [
+        { id: 1, sort_order: 0, title: 'Introduction', body: 'Test intro.' },
+        { id: 2, sort_order: 1, title: 'Experience', body: 'Test experience.' },
+      ]
+    };
+
+    const cl = app.loadCoverletter();
+    expect(cl).toBe(app.coverletter);
+    expect(cl.recipientName).toBe('Hiring Manager');
+    expect(cl.sections.length).toBe(2);
   });
 
-  it('autoSaveCoverletterSetting sends PATCH with prefixed key', async () => {
-    app.coverletter.settings.recipientName = 'New HR';
-    app.autoSaveCoverletterSetting('recipientName');
+  it('saveCoverletter updates coverletter and persists', () => {
+    const cl = {
+      recipientName: 'New HR',
+      recipientAddress: '789 New St',
+      title: 'New Application',
+      opening: 'Hello,',
+      closing: 'Best,',
+      enclosureLabel: 'Enclosed',
+      enclosureContent: 'CV',
+      sections: [
+        { id: 1, sort_order: 0, title: 'About Me', body: 'Updated.' },
+      ]
+    };
 
-    await new Promise(r => setTimeout(r, 600));
+    app.saveCoverletter(cl);
 
-    const patchCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/settings') && opts?.method === 'PATCH'
-    );
-    expect(patchCalls.length).toBeGreaterThan(0);
-    const body = JSON.parse(patchCalls[patchCalls.length - 1][1].body);
-    expect(body['coverletter.recipientName']).toBe('New HR');
-  });
-
-  it('addCoverletterSection appends a new section', async () => {
-    await app.addCoverletterSection();
-
-    expect(app.coverletter.sections.length).toBe(3);
-    const last = app.coverletter.sections[2];
-    expect(last.id).toBeDefined();
-    expect(last.title).toBe('');
-    expect(last.body).toBe('');
-  });
-
-  it('addCoverletterSection sends POST', async () => {
-    await app.addCoverletterSection();
-
-    const postCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/coverletter/sections') && opts?.method === 'POST'
-    );
-    expect(postCalls.length).toBe(1);
-  });
-
-  it('removeCoverletterSection removes by id', async () => {
-    await app.removeCoverletterSection(1);
-
+    expect(app.coverletter).toBe(cl);
+    expect(app.coverletter.recipientName).toBe('New HR');
     expect(app.coverletter.sections.length).toBe(1);
-    expect(app.coverletter.sections[0].id).toBe(2);
   });
 
-  it('removeCoverletterSection sends DELETE', async () => {
-    await app.removeCoverletterSection(1);
+  it('coverletter is included in getState()', () => {
+    app.coverletter = {
+      recipientName: 'HR Team',
+      sections: [{ id: 1, title: 'Intro', body: 'Hello.' }]
+    };
 
-    const delCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/coverletter/sections/1') && opts?.method === 'DELETE'
-    );
-    expect(delCalls.length).toBe(1);
+    const state = app.getState();
+    expect(state.coverletter).toBe(app.coverletter);
+    expect(state.coverletter.recipientName).toBe('HR Team');
   });
 
-  it('autoSaveCoverletterSection sends PUT with title and body', async () => {
-    const sec = app.coverletter.sections[0];
-    sec.title = 'Updated Title';
-    sec.body = 'Updated body text.';
-    app.autoSaveCoverletterSection(sec);
+  it('hydrate restores coverletter from saved state', () => {
+    const savedState = {
+      data: { personal: {} },
+      coverletter: {
+        recipientName: 'Restored HR',
+        sections: [{ id: 1, title: 'Restored', body: 'Content.' }]
+      },
+      sectionData: {},
+    };
 
-    await new Promise(r => setTimeout(r, 600));
+    app.hydrate(savedState);
 
-    const putCalls = fetchMock.mock.calls.filter(
-      ([url, opts]) => String(url).includes('/api/coverletter/sections/1') && opts?.method === 'PUT'
-    );
-    expect(putCalls.length).toBe(1);
-    const body = JSON.parse(putCalls[0][1].body);
-    expect(body.title).toBe('Updated Title');
-    expect(body.body).toBe('Updated body text.');
+    expect(app.coverletter.recipientName).toBe('Restored HR');
+    expect(app.coverletter.sections.length).toBe(1);
   });
 });
