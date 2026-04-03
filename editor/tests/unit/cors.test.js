@@ -29,8 +29,9 @@ function makeRequest(method, path, headers = {}) {
 
 describe('CORS headers', () => {
   test('GET /api/seed includes Access-Control-Allow-Origin', async () => {
+    // Use an origin from the default allowed list
     const res = await makeRequest('GET', '/api/seed', {
-      Origin: 'https://andypeterson2.github.io',
+      Origin: 'http://localhost:3001',
     });
     expect(res.status).toBe(200);
     expect(res.headers['access-control-allow-origin']).toBeDefined();
@@ -38,7 +39,7 @@ describe('CORS headers', () => {
 
   test('OPTIONS preflight returns CORS headers', async () => {
     const res = await makeRequest('OPTIONS', '/api/seed', {
-      Origin: 'https://andypeterson2.github.io',
+      Origin: 'http://localhost:3001',
       'Access-Control-Request-Method': 'GET',
     });
     expect(res.status).toBeLessThanOrEqual(204);
@@ -47,7 +48,7 @@ describe('CORS headers', () => {
 
   test('GET /api/pdf/cv includes Access-Control-Allow-Origin', async () => {
     const res = await makeRequest('GET', '/api/pdf/cv', {
-      Origin: 'https://andypeterson2.github.io',
+      Origin: 'http://localhost:3001',
     });
     expect(res.headers['access-control-allow-origin']).toBeDefined();
   });
