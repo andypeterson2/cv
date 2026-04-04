@@ -99,7 +99,7 @@ describe('Sections API', () => {
       const existingId = sections.body[0].id;
       const res = await request('POST', '/api/sections', {
         id: existingId,
-        type: 'cventries',
+        type: 'experience',
         title: 'Dup',
       });
       expect(res.status).toBe(409);

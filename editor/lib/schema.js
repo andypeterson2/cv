@@ -11,7 +11,8 @@ const LATEX_UNITS = require('./latex-units');
 const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: false });
 
 // Canonical list — keep in sync with public/cv/section-types.js
-const VALID_SECTION_TYPES = ['cventries', 'cvskills', 'cvhonors', 'cvreferences', 'cvparagraph'];
+const { VALID_SEMANTIC_TYPES } = require('./latex-type-map');
+const VALID_SECTION_TYPES = VALID_SEMANTIC_TYPES;
 
 const VALID_VARIANTS = ['cv', 'resume', 'coverletter'];
 
