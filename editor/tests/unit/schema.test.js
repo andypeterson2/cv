@@ -37,11 +37,11 @@ describe('createSection schema', () => {
   const v = validators.createSection;
 
   it('accepts valid section', () => {
-    expect(v({ id: 'experience', type: 'cventries', title: 'Experience' })).toBe(true);
+    expect(v({ id: 'experience', type: 'experience', title: 'Experience' })).toBe(true);
   });
 
   it('rejects missing id', () => {
-    expect(v({ type: 'cventries', title: 'Experience' })).toBe(false);
+    expect(v({ type: 'experience', title: 'Experience' })).toBe(false);
   });
 
   it('rejects invalid type', () => {
@@ -49,11 +49,11 @@ describe('createSection schema', () => {
   });
 
   it('rejects id with spaces', () => {
-    expect(v({ id: 'has space', type: 'cventries', title: 'X' })).toBe(false);
+    expect(v({ id: 'has space', type: 'experience', title: 'X' })).toBe(false);
   });
 
   it('strips additional properties', () => {
-    const data = { id: 'x', type: 'cventries', title: 'X', extra: 'removed' };
+    const data = { id: 'x', type: 'experience', title: 'X', extra: 'removed' };
     v(data);
     expect(data.extra).toBeUndefined();
   });
@@ -283,7 +283,7 @@ describe('isValidVariant', () => {
 describe('validate middleware', () => {
   it('calls next on valid body', () => {
     const middleware = validate('createSection');
-    const req = { body: { id: 'test', type: 'cventries', title: 'Test' } };
+    const req = { body: { id: 'test', type: 'experience', title: 'Test' } };
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
     const next = vi.fn();
     middleware(req, res, next);

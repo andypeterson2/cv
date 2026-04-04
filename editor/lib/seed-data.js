@@ -17,13 +17,13 @@ const JANE_DOE_DATA = {
   },
   sections: [
     {
-      id: 'summary', type: 'cvparagraph', title: 'Summary',
+      id: 'summary', type: 'summary', title: 'Summary',
       entries: [{ id: 1, section_id: 'summary', sort_order: 0, resumeIncluded: true,
         fields: { text: 'Experienced software engineer with over 6 years of experience building scalable web applications and distributed systems. Passionate about clean code, mentoring, and continuous learning.' },
         items: [] }]
     },
     {
-      id: 'experience', type: 'cventries', title: 'Experience',
+      id: 'experience', type: 'experience', title: 'Experience',
       entries: [
         { id: 2, section_id: 'experience', sort_order: 0, resumeIncluded: true,
           fields: { position: 'Senior Software Engineer', organization: 'Acme Technologies', location: 'San Francisco, CA', date: '2022 -- Present' },
@@ -42,7 +42,7 @@ const JANE_DOE_DATA = {
       ]
     },
     {
-      id: 'education', type: 'cventries', title: 'Education',
+      id: 'education', type: 'education', title: 'Education',
       entries: [
         { id: 4, section_id: 'education', sort_order: 0, resumeIncluded: true,
           fields: { position: 'B.S. Computer Science', organization: 'State University', location: 'Anytown, ST', date: '2015 -- 2019' },
@@ -53,7 +53,7 @@ const JANE_DOE_DATA = {
       ]
     },
     {
-      id: 'skills', type: 'cvskills', title: 'Skills',
+      id: 'skills', type: 'skills', title: 'Skills',
       entries: [
         { id: 5, section_id: 'skills', sort_order: 0, resumeIncluded: true, fields: { category: 'Languages', skills: 'JavaScript, Python, Go, Rust, SQL' }, items: [] },
         { id: 6, section_id: 'skills', sort_order: 1, resumeIncluded: true, fields: { category: 'Frameworks', skills: 'React, Node.js, Express, Django' }, items: [] },

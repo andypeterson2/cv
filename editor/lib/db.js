@@ -8,6 +8,7 @@
 const Database = require('better-sqlite3');
 const runMigrations = require('./migration-runner');
 const { JANE_DOE_DATA } = require('./seed-data');
+const { getLatexType, normalizeType } = require('./latex-type-map');
 
 class CvDatabase {
   /**
@@ -385,7 +386,7 @@ class CvDatabase {
       // Sections with entries and items
       if (data.sections) {
         for (const sec of data.sections) {
-          this.createSection(sec.id, sec.type, sec.title);
+          this.createSection(sec.id, normalizeType(sec.type), sec.title);
           if (sec.entries) {
             for (let ei = 0; ei < sec.entries.length; ei++) {
               const entry = sec.entries[ei];
@@ -512,7 +513,7 @@ class CvDatabase {
             }));
 
           // Use resume paragraph text override if available
-          if (section.type === 'cvparagraph' && ds.resumeParagraphText) {
+          if (getLatexType(section.type) === 'cvparagraph' && ds.resumeParagraphText) {
             if (section.entries.length > 0) {
               section.entries[0].fields = { ...section.entries[0].fields, text: ds.resumeParagraphText };
             }
