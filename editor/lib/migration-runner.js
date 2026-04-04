@@ -20,7 +20,7 @@ function runMigrations(db) {
   );
 
   const files = fs.readdirSync(MIGRATIONS_DIR)
-    .filter(f => f.endsWith('.sql') || f.endsWith('.js'))
+    .filter(f => (f.endsWith('.sql') || f.endsWith('.js')) && !f.includes('rollback'))
     .sort();
 
   for (const file of files) {

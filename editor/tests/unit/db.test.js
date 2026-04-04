@@ -79,17 +79,17 @@ describe('Sections', () => {
   });
 
   test('createSection and getSections roundtrip', () => {
-    db.createSection('experience', 'cventries', 'Experience');
-    db.createSection('skills', 'cvskills', 'Skills');
+    db.createSection('experience', 'experience', 'Experience');
+    db.createSection('skills', 'skills', 'Skills');
     const sections = db.getSections();
     expect(sections.length).toBe(2);
     expect(sections[0].id).toBe('experience');
-    expect(sections[0].type).toBe('cventries');
+    expect(sections[0].type).toBe('experience');
     expect(sections[0].title).toBe('Experience');
   });
 
   test('getSection returns section with empty entries', () => {
-    db.createSection('skills', 'cvskills', 'Skills');
+    db.createSection('skills', 'skills', 'Skills');
     const section = db.getSection('skills');
     expect(section.id).toBe('skills');
     expect(section.entries).toEqual([]);
@@ -100,20 +100,20 @@ describe('Sections', () => {
   });
 
   test('updateSection changes title', () => {
-    db.createSection('skills', 'cvskills', 'Skills');
+    db.createSection('skills', 'skills', 'Skills');
     db.updateSection('skills', { title: 'Technical Skills' });
     expect(db.getSection('skills').title).toBe('Technical Skills');
   });
 
   test('deleteSection removes section', () => {
-    db.createSection('skills', 'cvskills', 'Skills');
+    db.createSection('skills', 'skills', 'Skills');
     db.deleteSection('skills');
     expect(db.getSections()).toEqual([]);
   });
 
   test('duplicate section id throws', () => {
-    db.createSection('skills', 'cvskills', 'Skills');
-    expect(() => db.createSection('skills', 'cvskills', 'Skills 2')).toThrow();
+    db.createSection('skills', 'skills', 'Skills');
+    expect(() => db.createSection('skills', 'skills', 'Skills 2')).toThrow();
   });
 });
 
@@ -123,7 +123,7 @@ describe('Sections', () => {
 
 describe('Entries', () => {
   beforeEach(() => {
-    db.createSection('experience', 'cventries', 'Experience');
+    db.createSection('experience', 'experience', 'Experience');
   });
 
   test('createEntry returns auto-incremented ID', () => {
@@ -229,7 +229,7 @@ describe('Items', () => {
   let entryId;
 
   beforeEach(() => {
-    db.createSection('experience', 'cventries', 'Experience');
+    db.createSection('experience', 'experience', 'Experience');
     entryId = db.createEntry('experience', { position: 'Engineer' });
   });
 
@@ -293,9 +293,9 @@ describe('Items', () => {
 
 describe('Document sections', () => {
   beforeEach(() => {
-    db.createSection('experience', 'cventries', 'Experience');
-    db.createSection('skills', 'cvskills', 'Skills');
-    db.createSection('education', 'cventries', 'Education');
+    db.createSection('experience', 'experience', 'Experience');
+    db.createSection('skills', 'skills', 'Skills');
+    db.createSection('education', 'education', 'Education');
   });
 
   test('getDocumentSections returns empty for unknown variant', () => {
@@ -328,7 +328,7 @@ describe('Document sections', () => {
   });
 
   test('setDocumentSections preserves resumeParagraphText', () => {
-    db.createSection('summary', 'cvparagraph', 'Summary');
+    db.createSection('summary', 'summary', 'Summary');
     db.setDocumentSections('resume', [
       { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short version for resume' },
     ]);
@@ -416,9 +416,9 @@ describe('getAllForCompile', () => {
     });
 
     // Create sections
-    db.createSection('experience', 'cventries', 'Experience');
-    db.createSection('skills', 'cvskills', 'Skills');
-    db.createSection('summary', 'cvparagraph', 'Summary');
+    db.createSection('experience', 'experience', 'Experience');
+    db.createSection('skills', 'skills', 'Skills');
+    db.createSection('summary', 'summary', 'Summary');
 
     // Add entries
     const expId = db.createEntry('experience', { position: 'Engineer', organization: 'Acme' });
@@ -517,7 +517,7 @@ describe('getAllForCompile', () => {
 describe('getAllForExport', () => {
   test('returns complete data structure', () => {
     db.setSettings({ 'personal.firstName': 'Andrew' });
-    db.createSection('skills', 'cvskills', 'Skills');
+    db.createSection('skills', 'skills', 'Skills');
     db.createEntry('skills', { category: 'Languages', skills: 'Python' });
     db.setDocumentSections('cv', [{ sectionId: 'skills', enabled: true }]);
     db.setSettings({ 'coverletter.title': 'App' });
@@ -560,7 +560,7 @@ describe('Migrations', () => {
     // The :memory: DB is fresh each time, but within a single instance
     // migrations should only run once
     const migrations = db.db.prepare('SELECT name FROM _migrations').all();
-    expect(migrations.length).toBe(5);
+    expect(migrations.length).toBe(6);
   });
 });
 
