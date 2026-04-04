@@ -11,6 +11,7 @@ const {
   serializeSection,
   serializeData,
 } = require('./serializer');
+const { getLatexType, SECTION_TYPE_MAP } = require('./latex-type-map');
 
 // ---------------------------------------------------------------------------
 // data.tex generation
@@ -43,9 +44,10 @@ function generateDataTex(personal) {
  * Maps DB entry format (with JSON fields) to what serializeSection expects.
  */
 function generateSectionTex(section) {
+  const latexType = getLatexType(section.type);
   const data = { type: section.type, title: section.title };
 
-  if (section.type === 'cvparagraph') {
+  if (latexType === 'cvparagraph') {
     // cvparagraph expects { type, title, text }
     const entry = section.entries[0];
     data.text = entry ? (entry.fields.text || '') : '';
@@ -53,8 +55,14 @@ function generateSectionTex(section) {
     // All other types expect { type, title, entries: [...] }
     data.entries = section.entries.map(e => {
       const entry = { ...e.fields };
+      // Apply combine rules (e.g. education: program + major → position)
+      const typeInfo = SECTION_TYPE_MAP[section.type];
+      if (typeInfo && typeInfo.combine) {
+        const { target, from, join } = typeInfo.combine;
+        entry[target] = from.map(k => entry[k] || '').join(join).trim();
+      }
       // cventries have items (bullet points)
-      if (section.type === 'cventries' && e.items) {
+      if (latexType === 'cventries' && e.items) {
         entry.items = e.items.map(i => i.content);
       }
       return entry;
