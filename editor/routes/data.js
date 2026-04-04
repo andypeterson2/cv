@@ -19,12 +19,15 @@ module.exports = function createDataRouter(getDb) {
   }));
 
   router.get('/catalog', (req, res) => {
+    const { LATEX_TYPE_MAP, VALID_SEMANTIC_TYPES } = require('../lib/latex-type-map');
     res.json({
       socialCatalog: require('../lib/social-catalog'),
       latexUnits: require('../lib/latex-units'),
       identityExtras: require('../lib/identity-extras'),
       accentColors: require('../lib/accent-colors'),
       styleDefaults: require('../lib/style-defaults'),
+      latexTypeMap: LATEX_TYPE_MAP,
+      validSectionTypes: VALID_SEMANTIC_TYPES,
     });
   });
 

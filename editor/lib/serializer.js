@@ -3,6 +3,8 @@
  * Reproduces the project's formatting conventions.
  */
 
+const { getLatexType } = require('./latex-type-map');
+
 const SEP = '%---------------------------------------------------------';
 const FULL_SEP = '%-------------------------------------------------------------------------------';
 
@@ -221,13 +223,14 @@ function serializeCvparagraph(data) {
 // ---------------------------------------------------------------------------
 
 function serializeSection(data) {
-  switch (data.type) {
+  const latexType = getLatexType(data.type);
+  switch (latexType) {
     case 'cventries': return serializeCventries(data);
     case 'cvskills': return serializeCvskills(data);
     case 'cvhonors': return serializeCvhonors(data);
     case 'cvreferences': return serializeCvreferences(data);
     case 'cvparagraph': return serializeCvparagraph(data);
-    default: throw new Error(`Unknown section type: ${data.type}`);
+    default: throw new Error(`Unknown section type: ${data.type} (latex: ${latexType})`);
   }
 }
 
@@ -380,7 +383,7 @@ function serializeFilteredSection(sectionData, configEntry) {
   if (!configEntry) return serializeSection(sectionData);
 
   // cvparagraph: use resumeText if provided
-  if (sectionData.type === 'cvparagraph') {
+  if (getLatexType(sectionData.type) === 'cvparagraph') {
     const filtered = { ...sectionData };
     if (configEntry.resumeText) {
       filtered.text = configEntry.resumeText;
