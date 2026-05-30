@@ -16,8 +16,14 @@ cv.db
 cv.db-wal
 cv.db-shm
 
+# SQLite manual backups (contain real CV data — never commit)
+cv.db.bak*
+
 # Generated build output
 build/
 
 # Editor dependencies
 editor/node_modules/
+
+# MCP server dependencies
+mcp-server/node_modules/
