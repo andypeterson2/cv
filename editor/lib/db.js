@@ -319,7 +319,9 @@ class CvDatabase {
   getPerson(id) {
     const row = this._stmts.getPerson.get(id);
     if (!row) return null;
-    return { id: row.id, name: row.name, data: JSON.parse(row.data), created_at: row.created_at };
+    let data;
+    try { data = JSON.parse(row.data); } catch { data = {}; }
+    return { id: row.id, name: row.name, data, created_at: row.created_at };
   }
 
   createPerson(name, data = {}) {
@@ -560,6 +562,98 @@ class CvDatabase {
       }
 
       return { personal, sections, coverletter, variant, style, spacing, fonts };
+    })();
+  }
+
+  /**
+   * Build compile-ready data for a stored person + variant WITHOUT mutating
+   * active-person state. Mirrors getAllForCompile() but sources content from
+   * the person's stored export JSON instead of the live working tables.
+   *
+   * Style/spacing/fonts come from the global settings table (those aren't
+   * person-scoped — they apply uniformly to whichever profile is rendered).
+   *
+   * @throws Error('Person not found') if no person with that id exists
+   * @throws Error('Person has no data') if the row exists but data is empty
+   */
+  getCompileDataForPerson(personId, variant) {
+    return this.db.transaction(() => {
+      const row = this._stmts.getPerson.get(personId);
+      if (!row) throw new Error('Person not found');
+      let data;
+      try { data = JSON.parse(row.data || '{}'); } catch { data = {}; }
+      if (!data.personal && !data.sections) throw new Error('Person has no data');
+
+      const personal = data.personal || {};
+      const docSections = ((data.documents && data.documents[variant]) || [])
+        .slice()
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      const allSections = data.sections || [];
+
+      const sections = [];
+      for (const ds of docSections) {
+        if (!ds.enabled) continue;
+        const orig = allSections.find(s => s.id === ds.sectionId);
+        if (!orig) continue;
+
+        // Shallow copy that lets us safely filter entries/items for the resume variant
+        let section = {
+          ...orig,
+          entries: (orig.entries || []).map(e => ({
+            ...e,
+            items: e.items ? [...e.items] : [],
+          })),
+        };
+
+        if (variant === 'resume') {
+          section.entries = section.entries
+            .filter(e => e.resumeIncluded)
+            .map(e => ({
+              ...e,
+              items: e.items.filter(i => i.resumeIncluded),
+            }));
+
+          if (getLatexType(section.type) === 'cvparagraph' && ds.resumeParagraphText) {
+            if (section.entries.length > 0) {
+              section.entries[0] = {
+                ...section.entries[0],
+                fields: { ...section.entries[0].fields, text: ds.resumeParagraphText },
+              };
+            }
+          }
+        }
+
+        sections.push({ ...section, sortOrder: ds.sortOrder });
+      }
+
+      let coverletter = null;
+      if (variant === 'coverletter') {
+        coverletter = { ...(data.coverletter || {}) };
+        if (!Array.isArray(coverletter.sections)) coverletter.sections = [];
+      }
+
+      // Style/spacing/fonts are global (not per-person)
+      const styleSettings = this.getSettings('style');
+      const style = {};
+      for (const [key, value] of Object.entries(styleSettings)) {
+        style[key.replace('style.', '')] = value;
+      }
+
+      const spacingSettings = this.getSettings('spacing');
+      const spacing = {};
+      for (const [key, val] of Object.entries(spacingSettings)) {
+        const field = key.replace('spacing.', '');
+        spacing[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
+      }
+
+      const fontsSettings = this.getSettings('fonts');
+      const fonts = {};
+      for (const [key, val] of Object.entries(fontsSettings)) {
+        const field = key.replace('fonts.', '');
+        fonts[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
+      }
+
+      return { name: row.name, personal, sections, coverletter, variant, style, spacing, fonts };
     })();
   }
 

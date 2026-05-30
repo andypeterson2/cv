@@ -514,6 +514,91 @@ describe('getAllForCompile', () => {
   });
 });
 
+describe('getCompileDataForPerson', () => {
+  let personId;
+
+  beforeEach(() => {
+    // Build working state, then snapshot it into a stored (non-active) person.
+    db.setSettings({
+      'personal.firstName': 'Stored',
+      'personal.lastName': 'Person',
+      'personal.email': 'stored@example.com',
+    });
+    db.createSection('experience', 'experience', 'Experience');
+    db.createSection('skills', 'skills', 'Skills');
+    db.createSection('summary', 'summary', 'Summary');
+
+    const expId = db.createEntry('experience', { position: 'Engineer', organization: 'Acme' });
+    db.createItem(expId, 'Built widgets');
+    db.createItem(expId, 'Fixed bugs', false); // excluded from resume
+    db.createEntry('experience', { position: 'Intern', organization: 'Corp' }, false); // excluded
+    db.createEntry('skills', { category: 'Languages', skills: 'Python, JS' });
+    db.createEntry('summary', { text: 'Full summary for CV' });
+
+    db.setDocumentSections('cv', [
+      { sectionId: 'summary', enabled: true },
+      { sectionId: 'experience', enabled: true },
+      { sectionId: 'skills', enabled: false },
+    ]);
+    db.setDocumentSections('resume', [
+      { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short resume summary' },
+      { sectionId: 'experience', enabled: true },
+    ]);
+
+    personId = db.createPerson('Stored Person');
+    db.savePerson(personId); // snapshot current working tables into the person row
+  });
+
+  test('returns person name and personal info from the stored snapshot', () => {
+    const data = db.getCompileDataForPerson(personId, 'cv');
+    expect(data.name).toBe('Stored Person');
+    expect(data.personal.firstName).toBe('Stored');
+    expect(data.personal.email).toBe('stored@example.com');
+  });
+
+  test('returns enabled sections in document order, skipping disabled', () => {
+    const data = db.getCompileDataForPerson(personId, 'cv');
+    expect(data.sections.map(s => s.id)).toEqual(['summary', 'experience']);
+  });
+
+  test('CV variant includes all entries', () => {
+    const data = db.getCompileDataForPerson(personId, 'cv');
+    const exp = data.sections.find(s => s.id === 'experience');
+    expect(exp.entries.length).toBe(2);
+  });
+
+  test('resume variant filters excluded entries and items', () => {
+    const data = db.getCompileDataForPerson(personId, 'resume');
+    const exp = data.sections.find(s => s.id === 'experience');
+    expect(exp.entries.length).toBe(1);
+    expect(exp.entries[0].fields.position).toBe('Engineer');
+    expect(exp.entries[0].items.map(i => i.content)).toEqual(['Built widgets']);
+  });
+
+  test('resume variant applies resumeParagraphText override', () => {
+    const data = db.getCompileDataForPerson(personId, 'resume');
+    const summary = data.sections.find(s => s.id === 'summary');
+    expect(summary.entries[0].fields.text).toBe('Short resume summary');
+  });
+
+  test('does not mutate the stored snapshot across calls', () => {
+    db.getCompileDataForPerson(personId, 'resume'); // filters entries/items
+    const cv = db.getCompileDataForPerson(personId, 'cv'); // must still see everything
+    const exp = cv.sections.find(s => s.id === 'experience');
+    expect(exp.entries.length).toBe(2);
+    expect(exp.entries[0].items.length).toBe(2);
+  });
+
+  test('throws "Person not found" for an unknown id', () => {
+    expect(() => db.getCompileDataForPerson(99999, 'cv')).toThrow('Person not found');
+  });
+
+  test('throws "Person has no data" for a freshly created person', () => {
+    const emptyId = db.createPerson('Empty');
+    expect(() => db.getCompileDataForPerson(emptyId, 'cv')).toThrow('Person has no data');
+  });
+});
+
 describe('getAllForExport', () => {
   test('returns complete data structure', () => {
     db.setSettings({ 'personal.firstName': 'Andrew' });
