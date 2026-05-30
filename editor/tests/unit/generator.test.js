@@ -274,6 +274,28 @@ describe('generateCoverletterTex', () => {
     expect(tex).toContain('\\end{cvletter}');
     expect(tex).not.toContain('\\lettersection');
   });
+
+  it('escapes LaTeX special characters in user content', () => {
+    const tex = generateCoverletterTex(
+      { firstName: 'A&B', lastName: 'C_D' },
+      {
+        recipientName: 'R&D Team',
+        title: '100% Match',
+        opening: 'Dear A&B,',
+        enclosureContent: 'Cost #1',
+        sections: [{ title: 'Budget', body: 'Saved $5 & 10% time' }],
+      }
+    );
+    expect(tex).toContain('{R\\&D Team}');
+    expect(tex).toContain('\\lettertitle{100\\% Match}');
+    expect(tex).toContain('\\letteropening{Dear A\\&B,}');
+    expect(tex).toContain('Cost \\#1');
+    expect(tex).toContain('Saved \\$5 \\& 10\\% time');
+    expect(tex).toContain('A\\&B C\\_D'); // footer name
+    // No bare, unescaped specials leak through
+    expect(tex).not.toContain('R&D Team');
+    expect(tex).not.toContain('100% Match');
+  });
 });
 
 // ---------------------------------------------------------------------------

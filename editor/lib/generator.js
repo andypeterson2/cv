@@ -10,6 +10,7 @@ const fs = require('fs');
 const {
   serializeSection,
   serializeData,
+  sanitizeLatex: san,
 } = require('./serializer');
 const { getLatexType, SECTION_TYPE_MAP } = require('./latex-type-map');
 
@@ -274,13 +275,13 @@ function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   lines.push('');
   lines.push('');
   lines.push('\\recipient');
-  lines.push(`  {${coverletter.recipientName || ''}}`);
-  lines.push(`  {${coverletter.recipientAddress || ''}}`);
+  lines.push(`  {${san(coverletter.recipientName || '')}}`);
+  lines.push(`  {${san(coverletter.recipientAddress || '')}}`);
   lines.push('\\letterdate{\\today}');
-  lines.push(`\\lettertitle{${coverletter.title || ''}}`);
-  lines.push(`\\letteropening{${coverletter.opening || ''}}`);
-  lines.push(`\\letterclosing{${coverletter.closing || ''}}`);
-  lines.push(`\\letterenclosure[${coverletter.enclosureLabel || 'Attached'}]{${coverletter.enclosureContent || ''}}`);
+  lines.push(`\\lettertitle{${san(coverletter.title || '')}}`);
+  lines.push(`\\letteropening{${san(coverletter.opening || '')}}`);
+  lines.push(`\\letterclosing{${san(coverletter.closing || '')}}`);
+  lines.push(`\\letterenclosure[${san(coverletter.enclosureLabel || 'Attached')}]{${san(coverletter.enclosureContent || '')}}`);
   lines.push('');
   lines.push('');
   lines.push('\\begin{document}');
@@ -289,7 +290,7 @@ function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   lines.push('');
   lines.push('\\makecvfooter');
   lines.push('  {\\today}');
-  lines.push(`  {${personal.firstName || ''} ${personal.lastName || ''}~~~\\cdotp~~~Cover Letter}`);
+  lines.push(`  {${san(personal.firstName || '')} ${san(personal.lastName || '')}~~~\\cdotp~~~Cover Letter}`);
   lines.push('  {}');
   lines.push('');
   lines.push('\\makelettertitle');
@@ -299,8 +300,8 @@ function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
 
   if (coverletter.sections) {
     for (const sec of coverletter.sections) {
-      lines.push(`\\lettersection{${sec.title}}`);
-      lines.push(sec.body);
+      lines.push(`\\lettersection{${san(sec.title || '')}}`);
+      lines.push(san(sec.body || ''));
       lines.push('');
     }
   }
