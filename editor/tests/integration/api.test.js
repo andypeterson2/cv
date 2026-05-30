@@ -332,6 +332,95 @@ describe('Persons API', () => {
   });
 });
 
+// ---- Per-person JSON export ----
+
+describe('GET /api/persons/:id/export', () => {
+  test('returns the stored JSON for a non-active person', async () => {
+    // Seed the active person with some data first so save-on-switch captures it
+    await request('POST', '/api/import', {
+      personal: { firstName: 'Active', lastName: 'User' },
+      sections: [], documents: { cv: [], resume: [] }, coverletter: { sections: [] },
+    });
+    // Create a new person and seed their stored data via switch + import + save
+    const create = await request('POST', '/api/persons', { name: 'Export Target' });
+    const id = create.body.id;
+    await request('POST', '/api/persons/' + id + '/switch');
+    await request('POST', '/api/import', {
+      personal: { firstName: 'Stored', lastName: 'Snapshot' },
+      sections: [{ id: 's', type: 'cventries', title: 'S', entries: [] }],
+      documents: { cv: [{ sectionId: 's', enabled: true, sortOrder: 0 }], resume: [] },
+      coverletter: { sections: [] },
+    });
+    await request('POST', '/api/persons/' + id + '/save');
+    // Switch away so the request hits the non-active branch
+    const list = await request('GET', '/api/persons');
+    const otherId = list.body.persons.find(p => p.id !== id).id;
+    await request('POST', '/api/persons/' + otherId + '/switch');
+
+    const res = await request('GET', '/api/persons/' + id + '/export');
+    expect(res.status).toBe(200);
+    expect(res.body.personal.firstName).toBe('Stored');
+    expect(res.body.sections).toHaveLength(1);
+    expect(res.body.sections[0].id).toBe('s');
+  });
+
+  test('returns fresh working-state data for the active person (reads live tables)', async () => {
+    // Import data — leaves working tables populated but persons.data may be stale.
+    // The active-person export reads live working state, so it reflects this.
+    await request('POST', '/api/import', {
+      personal: { firstName: 'Fresh', lastName: 'Active' },
+      sections: [], documents: { cv: [], resume: [] }, coverletter: { sections: [] },
+    });
+    const list = await request('GET', '/api/persons');
+    const id = list.body.activePersonId;
+
+    const res = await request('GET', '/api/persons/' + id + '/export');
+    expect(res.status).toBe(200);
+    expect(res.body.personal.firstName).toBe('Fresh');
+  });
+
+  test('returns 404 for non-existent person', async () => {
+    const res = await request('GET', '/api/persons/99999/export');
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 for non-numeric person id', async () => {
+    const res = await request('GET', '/api/persons/abc/export');
+    expect(res.status).toBe(400);
+  });
+});
+
+// ---- Per-person variant PDF ----
+//
+// These tests cover validation/error paths only — successful renders require
+// xelatex + font caches which aren't guaranteed outside the Docker image. The
+// happy path is exercised by /api/compile and the corresponding manual smoke
+// tests; the route shares the same generate+xelatex code path here.
+
+describe('GET /api/persons/:id/pdf/:variant', () => {
+  test('returns 400 for invalid variant', async () => {
+    const res = await request('GET', '/api/persons/1/pdf/not-a-variant');
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 404 for non-existent person', async () => {
+    const res = await request('GET', '/api/persons/99999/pdf/cv');
+    expect(res.status).toBe(404);
+  });
+
+  test('returns 400 when the person row exists but has no data', async () => {
+    const create = await request('POST', '/api/persons', { name: 'Empty Person For PDF' });
+    const id = create.body.id;
+    const res = await request('GET', '/api/persons/' + id + '/pdf/cv');
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 for non-numeric person id', async () => {
+    const res = await request('GET', '/api/persons/abc/pdf/cv');
+    expect(res.status).toBe(400);
+  });
+});
+
 // ---- Import API ----
 
 describe('Import API', () => {
