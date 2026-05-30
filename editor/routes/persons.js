@@ -61,5 +61,25 @@ module.exports = function createPersonsRouter(getDb) {
     res.json({ success: true });
   }));
 
+  // Per-person JSON export. Mirrors GET /api/export but targets a specific
+  // stored profile instead of the active one — useful for backups across the
+  // whole roster without having to switch active person.
+  //
+  // For the active person the working tables are the source of truth, so we
+  // read them live via getAllForExport() rather than the (possibly stale)
+  // stored snapshot. This keeps the GET side-effect-free (no DB write).
+  router.get('/:id/export', wrap((req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) throw new AppError('Invalid person id', 400);
+
+    const db = getDb();
+    if (db.getActivePersonId() === id) {
+      return res.json(db.getAllForExport());
+    }
+    const person = db.getPerson(id);
+    if (!person) throw new NotFoundError('Person not found');
+    res.json(person.data);
+  }));
+
   return router;
 };
