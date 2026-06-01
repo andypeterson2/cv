@@ -77,9 +77,9 @@ describe('WP #665 — E2E navigation between documents', () => {
     expect(schema).toContain("'coverletter'");
   });
 
-  test('server has seed endpoint to load all documents', () => {
+  test('server mounts the persons router to load profiles', () => {
     const server = readFile('editor/server.js');
-    expect(server).toContain('/api/seed');
+    expect(server).toContain('/api/persons');
   });
 
   test('resume and cv share the same data.tex', () => {
@@ -136,9 +136,9 @@ describe('WP #666 — Cross-browser compatibility', () => {
 // ---------------------------------------------------------------------------
 
 describe('WP #667 — Print/PDF output validation', () => {
-  test('PDF serving endpoint validates variant names', () => {
+  test('PDF serving endpoint validates variant ids', () => {
     const server = readServerCode();
-    expect(server).toContain('isValidVariant');
+    expect(server).toContain('intId');
     expect(server).toContain('sendFile');
   });
 
@@ -147,9 +147,9 @@ describe('WP #667 — Print/PDF output validation', () => {
     expect(server).toContain('generateAll');
   });
 
-  test('compile endpoint generates resume files for resume builds', () => {
+  test('compile endpoint resolves a variant before generating files', () => {
     const server = readServerCode();
-    expect(server).toContain('getAllForCompile');
+    expect(server).toContain('resolveVariant');
   });
 
   test('compile uses xelatex with nonstopmode', () => {

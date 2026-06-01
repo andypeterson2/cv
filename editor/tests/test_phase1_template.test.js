@@ -160,7 +160,7 @@ describe('WP #672 — Content stored in SQLite database', () => {
     expect(db).toContain('class CvDatabase');
     expect(db).toContain('getSettings');
     expect(db).toContain('getSections');
-    expect(db).toContain('getAllForCompile');
+    expect(db).toContain('resolveVariant');
   });
 
   test('migration script exists', () => {
@@ -362,11 +362,11 @@ describe('WP #679 — Web editor save/preview', () => {
     expect(server).toContain('require.main === module');
   });
 
-  test('server has seed, compile, and pdf endpoints', () => {
+  test('server has resolve, compile, pdf, and export endpoints', () => {
     const server = readServerCode();
-    expect(server).toContain('/api/seed');
-    expect(server).toContain('/compile/');
-    expect(server).toContain('/pdf/');
+    expect(server).toContain('/resolve');
+    expect(server).toContain('/compile');
+    expect(server).toContain('/pdf');
     expect(server).toContain('/export');
   });
 
