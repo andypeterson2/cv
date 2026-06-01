@@ -1,14 +1,26 @@
 /**
- * SQLite access layer for the CV Editor.
+ * SQLite access layer for the CV Editor (normalized, stateless model).
  *
- * Thin wrapper around better-sqlite3 with prepared statements.
- * All methods are synchronous (better-sqlite3 is sync by design).
+ * Single source of truth — every person owns a master CV (sections → entries →
+ * items, with free-string tags) plus named variants. A variant is a lightweight
+ * overlay: a tag query (variant_rules) + sparse per-entry/item exceptions
+ * (entry_overrides / item_overrides) + a section list (variant_sections), or —
+ * for coverletter-kind variants — a list of letter paragraphs.
+ *
+ * There is NO "active person" and NO JSON-blob working copy. All ids are stable
+ * and every method takes the ids it operates on, so callers (REST, MCP) are
+ * fully addressable and stateless.
+ *
+ * Style/spacing/fonts remain GLOBAL (the `settings` table); personal info and
+ * the cover-letter header are per-person (`person_settings`).
  */
 
 const Database = require('better-sqlite3');
 const runMigrations = require('./migration-runner');
 const { JANE_DOE_DATA } = require('./seed-data');
 const { getLatexType, normalizeType } = require('./latex-type-map');
+
+const KINDS = ['cv', 'resume', 'coverletter'];
 
 class CvDatabase {
   /**
@@ -18,14 +30,9 @@ class CvDatabase {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    this._runMigrations();
+    runMigrations(this.db);
     this._prepareStatements();
     this.seedJaneDoe();
-    this.resetToJaneDoe();
-  }
-
-  _runMigrations() {
-    runMigrations(this.db);
   }
 
   // ---------------------------------------------------------------------------
@@ -33,90 +40,114 @@ class CvDatabase {
   // ---------------------------------------------------------------------------
 
   _prepareStatements() {
+    const p = (sql) => this.db.prepare(sql);
     this._stmts = {
-      // Settings
-      getSettings: this.db.prepare('SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || \'%\''),
-      getAllSettings: this.db.prepare('SELECT key, value, value_num, value_unit FROM settings'),
-      upsertSetting: this.db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
-      upsertSettingWithUnit: this.db.prepare('INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit'),
+      // Global settings (style/spacing/fonts)
+      getSettings: p("SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || '%'"),
+      upsertSetting: p('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
+      upsertSettingUnit: p('INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit'),
 
-      // Sections
-      getSections: this.db.prepare('SELECT id, type, title FROM sections ORDER BY id'),
-      getSection: this.db.prepare('SELECT id, type, title FROM sections WHERE id = ?'),
-      insertSection: this.db.prepare('INSERT INTO sections (id, type, title) VALUES (?, ?, ?)'),
-      updateSection: this.db.prepare('UPDATE sections SET title = ? WHERE id = ?'),
-      deleteSection: this.db.prepare('DELETE FROM sections WHERE id = ?'),
-
-      // Entries
-      getEntries: this.db.prepare('SELECT id, section_id, sort_order, fields, resume_included FROM entries WHERE section_id = ? ORDER BY sort_order'),
-      getEntry: this.db.prepare('SELECT id, section_id, sort_order, fields, resume_included FROM entries WHERE id = ?'),
-      insertEntry: this.db.prepare('INSERT INTO entries (section_id, sort_order, fields, resume_included) VALUES (?, ?, ?, ?)'),
-      updateEntryFields: this.db.prepare('UPDATE entries SET fields = ? WHERE id = ?'),
-      updateEntryResumeIncluded: this.db.prepare('UPDATE entries SET resume_included = ? WHERE id = ?'),
-      updateEntrySortOrder: this.db.prepare('UPDATE entries SET sort_order = ? WHERE id = ?'),
-      deleteEntry: this.db.prepare('DELETE FROM entries WHERE id = ?'),
-      maxEntrySortOrder: this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM entries WHERE section_id = ?'),
-
-      // Items
-      getItems: this.db.prepare('SELECT id, entry_id, sort_order, content, resume_included, title FROM items WHERE entry_id = ? ORDER BY sort_order'),
-      getItem: this.db.prepare('SELECT id, entry_id, sort_order, content, resume_included, title FROM items WHERE id = ?'),
-      insertItem: this.db.prepare('INSERT INTO items (entry_id, sort_order, content, resume_included, title) VALUES (?, ?, ?, ?, ?)'),
-      updateItemContent: this.db.prepare('UPDATE items SET content = ? WHERE id = ?'),
-      updateItemTitle: this.db.prepare('UPDATE items SET title = ? WHERE id = ?'),
-      updateItemResumeIncluded: this.db.prepare('UPDATE items SET resume_included = ? WHERE id = ?'),
-      updateItemSortOrder: this.db.prepare('UPDATE items SET sort_order = ? WHERE id = ?'),
-      deleteItem: this.db.prepare('DELETE FROM items WHERE id = ?'),
-      maxItemSortOrder: this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM items WHERE entry_id = ?'),
-
-      // Document sections
-      getDocumentSections: this.db.prepare('SELECT section_id, enabled, sort_order, resume_paragraph_text FROM document_sections WHERE variant = ? ORDER BY sort_order'),
-      clearDocumentSections: this.db.prepare('DELETE FROM document_sections WHERE variant = ?'),
-      insertDocumentSection: this.db.prepare('INSERT INTO document_sections (variant, section_id, enabled, sort_order, resume_paragraph_text) VALUES (?, ?, ?, ?, ?)'),
+      // Person settings (personal.* / coverletter.*)
+      getPersonSettings: p("SELECT key, value, value_num, value_unit FROM person_settings WHERE person_id = ? AND key LIKE ? || '%'"),
+      upsertPersonSetting: p('INSERT INTO person_settings (person_id, key, value) VALUES (?, ?, ?) ON CONFLICT(person_id, key) DO UPDATE SET value = excluded.value'),
+      deletePersonSetting: p('DELETE FROM person_settings WHERE person_id = ? AND key = ?'),
 
       // Persons
-      getPersons: this.db.prepare('SELECT id, name, created_at FROM persons ORDER BY id'),
-      getPerson: this.db.prepare('SELECT id, name, data, created_at FROM persons WHERE id = ?'),
-      insertPerson: this.db.prepare('INSERT INTO persons (name, data) VALUES (?, ?)'),
-      updatePersonName: this.db.prepare('UPDATE persons SET name = ? WHERE id = ?'),
-      updatePersonData: this.db.prepare('UPDATE persons SET data = ? WHERE id = ?'),
-      deletePerson: this.db.prepare('DELETE FROM persons WHERE id = ?'),
-      countPersons: this.db.prepare('SELECT COUNT(*) AS cnt FROM persons'),
+      getPersons: p('SELECT id, name, created_at FROM persons ORDER BY id'),
+      getPerson: p('SELECT id, name, created_at FROM persons WHERE id = ?'),
+      insertPerson: p('INSERT INTO persons (name) VALUES (?)'),
+      updatePersonName: p('UPDATE persons SET name = ? WHERE id = ?'),
+      deletePerson: p('DELETE FROM persons WHERE id = ?'),
+      countPersons: p('SELECT COUNT(*) AS cnt FROM persons'),
 
-      // Coverletter sections
-      getCoverletterSections: this.db.prepare('SELECT id, sort_order, title, body FROM coverletter_sections ORDER BY sort_order'),
-      getCoverletterSection: this.db.prepare('SELECT id, sort_order, title, body FROM coverletter_sections WHERE id = ?'),
-      insertCoverletterSection: this.db.prepare('INSERT INTO coverletter_sections (sort_order, title, body) VALUES (?, ?, ?)'),
-      updateCoverletterSection: this.db.prepare('UPDATE coverletter_sections SET title = ?, body = ? WHERE id = ?'),
-      deleteCoverletterSection: this.db.prepare('DELETE FROM coverletter_sections WHERE id = ?'),
-      updateCoverletterSectionOrder: this.db.prepare('UPDATE coverletter_sections SET sort_order = ? WHERE id = ?'),
-      maxCoverletterSectionOrder: this.db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS max_order FROM coverletter_sections'),
+      // Sections
+      getSectionsByPerson: p('SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE person_id = ? ORDER BY sort_order, id'),
+      getSection: p('SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE id = ?'),
+      insertSection: p('INSERT INTO sections (person_id, slug, type, title, sort_order) VALUES (?, ?, ?, ?, ?)'),
+      updateSectionTitle: p('UPDATE sections SET title = ? WHERE id = ?'),
+      updateSectionSlugType: p('UPDATE sections SET slug = ?, type = ?, title = ? WHERE id = ?'),
+      updateSectionSortOrder: p('UPDATE sections SET sort_order = ? WHERE id = ?'),
+      deleteSection: p('DELETE FROM sections WHERE id = ?'),
+      maxSectionSortOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM sections WHERE person_id = ?'),
+
+      // Entries
+      getEntries: p('SELECT id, section_id, sort_order, fields FROM entries WHERE section_id = ? ORDER BY sort_order, id'),
+      getEntry: p('SELECT id, section_id, sort_order, fields FROM entries WHERE id = ?'),
+      insertEntry: p('INSERT INTO entries (section_id, sort_order, fields) VALUES (?, ?, ?)'),
+      updateEntryFields: p('UPDATE entries SET fields = ? WHERE id = ?'),
+      updateEntrySortOrder: p('UPDATE entries SET sort_order = ? WHERE id = ?'),
+      deleteEntry: p('DELETE FROM entries WHERE id = ?'),
+      maxEntrySortOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM entries WHERE section_id = ?'),
+
+      // Items
+      getItems: p('SELECT id, entry_id, sort_order, content, title FROM items WHERE entry_id = ? ORDER BY sort_order, id'),
+      getItem: p('SELECT id, entry_id, sort_order, content, title FROM items WHERE id = ?'),
+      insertItem: p('INSERT INTO items (entry_id, sort_order, content, title) VALUES (?, ?, ?, ?)'),
+      updateItemContent: p('UPDATE items SET content = ? WHERE id = ?'),
+      updateItemTitle: p('UPDATE items SET title = ? WHERE id = ?'),
+      updateItemSortOrder: p('UPDATE items SET sort_order = ? WHERE id = ?'),
+      deleteItem: p('DELETE FROM items WHERE id = ?'),
+      maxItemSortOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM items WHERE entry_id = ?'),
+
+      // Tags
+      getEntryTags: p('SELECT tag FROM entry_tags WHERE entry_id = ? ORDER BY tag'),
+      addEntryTag: p('INSERT OR IGNORE INTO entry_tags (entry_id, tag) VALUES (?, ?)'),
+      delEntryTag: p('DELETE FROM entry_tags WHERE entry_id = ? AND tag = ?'),
+      getItemTags: p('SELECT tag FROM item_tags WHERE item_id = ? ORDER BY tag'),
+      addItemTag: p('INSERT OR IGNORE INTO item_tags (item_id, tag) VALUES (?, ?)'),
+      delItemTag: p('DELETE FROM item_tags WHERE item_id = ? AND tag = ?'),
+      listEntryTags: p('SELECT DISTINCT et.tag FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?'),
+      listItemTags: p('SELECT DISTINCT it.tag FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?'),
+
+      // Variants
+      getVariants: p('SELECT id, person_id, name, kind, created_at FROM variants WHERE person_id = ? ORDER BY id'),
+      getVariant: p('SELECT id, person_id, name, kind, created_at FROM variants WHERE id = ?'),
+      insertVariant: p('INSERT INTO variants (person_id, name, kind) VALUES (?, ?, ?)'),
+      updateVariantName: p('UPDATE variants SET name = ? WHERE id = ?'),
+      deleteVariant: p('DELETE FROM variants WHERE id = ?'),
+
+      // Variant rules
+      getVariantRules: p('SELECT tag, mode FROM variant_rules WHERE variant_id = ?'),
+      clearVariantRules: p('DELETE FROM variant_rules WHERE variant_id = ?'),
+      insertVariantRule: p('INSERT OR IGNORE INTO variant_rules (variant_id, tag, mode) VALUES (?, ?, ?)'),
+
+      // Variant sections
+      getVariantSections: p('SELECT section_id, enabled, sort_order FROM variant_sections WHERE variant_id = ? ORDER BY sort_order, section_id'),
+      clearVariantSections: p('DELETE FROM variant_sections WHERE variant_id = ?'),
+      insertVariantSection: p('INSERT OR IGNORE INTO variant_sections (variant_id, section_id, enabled, sort_order) VALUES (?, ?, ?, ?)'),
+
+      // Overrides
+      getEntryOverrides: p('SELECT entry_id, included, text_override, sort_override FROM entry_overrides WHERE variant_id = ?'),
+      upsertEntryOverride: p('INSERT INTO entry_overrides (variant_id, entry_id, included, text_override, sort_override) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, entry_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override'),
+      deleteEntryOverride: p('DELETE FROM entry_overrides WHERE variant_id = ? AND entry_id = ?'),
+      getItemOverrides: p('SELECT item_id, included, text_override, sort_override FROM item_overrides WHERE variant_id = ?'),
+      upsertItemOverride: p('INSERT INTO item_overrides (variant_id, item_id, included, text_override, sort_override) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, item_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override'),
+      deleteItemOverride: p('DELETE FROM item_overrides WHERE variant_id = ? AND item_id = ?'),
+
+      // Variant letter sections
+      getLetterSections: p('SELECT id, sort_order, title, body FROM variant_letter_sections WHERE variant_id = ? ORDER BY sort_order, id'),
+      insertLetterSection: p('INSERT INTO variant_letter_sections (variant_id, sort_order, title, body) VALUES (?, ?, ?, ?)'),
+      updateLetterSection: p('UPDATE variant_letter_sections SET title = ?, body = ? WHERE id = ?'),
+      deleteLetterSection: p('DELETE FROM variant_letter_sections WHERE id = ?'),
+      updateLetterSectionOrder: p('UPDATE variant_letter_sections SET sort_order = ? WHERE id = ?'),
+      maxLetterSectionOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM variant_letter_sections WHERE variant_id = ?'),
     };
   }
 
   // ---------------------------------------------------------------------------
-  // Settings
+  // Global settings (style / spacing / fonts)
   // ---------------------------------------------------------------------------
 
   getSettings(prefix) {
-    const rows = prefix
-      ? this._stmts.getSettings.all(prefix + '.')
-      : this._stmts.getAllSettings.all();
-    const result = {};
-    for (const row of rows) {
-      if (row.value_num != null && row.value_unit != null) {
-        result[row.key] = { num: row.value_num, unit: row.value_unit };
-      } else {
-        result[row.key] = row.value;
-      }
-    }
-    return result;
+    const rows = this._stmts.getSettings.all(prefix ? prefix + '.' : '');
+    return rowsToSettings(rows);
   }
 
   setSettings(map) {
     const tx = this.db.transaction((entries) => {
       for (const [key, val] of entries) {
         if (val && typeof val === 'object' && 'num' in val && 'unit' in val) {
-          this._stmts.upsertSettingWithUnit.run(key, String(val.num) + val.unit, val.num, val.unit);
+          this._stmts.upsertSettingUnit.run(key, String(val.num) + val.unit, val.num, val.unit);
         } else {
           this._stmts.upsertSetting.run(key, val);
         }
@@ -126,186 +157,37 @@ class CvDatabase {
   }
 
   // ---------------------------------------------------------------------------
-  // Sections
+  // Person settings (personal.* / coverletter.*)
   // ---------------------------------------------------------------------------
 
-  getSections() {
-    return this._stmts.getSections.all();
+  getPersonSettings(personId, prefix) {
+    const rows = this._stmts.getPersonSettings.all(personId, prefix ? prefix + '.' : '');
+    return rowsToSettings(rows);
   }
 
-  getSection(id) {
-    const section = this._stmts.getSection.get(id);
-    if (!section) return null;
-
-    const entries = this._stmts.getEntries.all(id).map(e => ({
-      ...e,
-      fields: JSON.parse(e.fields),
-      resumeIncluded: !!e.resume_included,
-      items: this._stmts.getItems.all(e.id).map(i => ({
-        ...i,
-        resumeIncluded: !!i.resume_included,
-      })),
-    }));
-
-    return { ...section, entries };
-  }
-
-  createSection(id, type, title) {
-    this._stmts.insertSection.run(id, type, title);
-  }
-
-  updateSection(id, { title }) {
-    this._stmts.updateSection.run(title, id);
-  }
-
-  deleteSection(id) {
-    this._stmts.deleteSection.run(id);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Entries
-  // ---------------------------------------------------------------------------
-
-  getEntries(sectionId) {
-    return this._stmts.getEntries.all(sectionId).map(e => ({
-      ...e,
-      fields: JSON.parse(e.fields),
-      resumeIncluded: !!e.resume_included,
-      items: this._stmts.getItems.all(e.id).map(i => ({
-        ...i,
-        resumeIncluded: !!i.resume_included,
-      })),
-    }));
-  }
-
-  createEntry(sectionId, fields, resumeIncluded = true) {
-    const nextOrder = this._stmts.maxEntrySortOrder.get(sectionId).max_order + 1;
-    const info = this._stmts.insertEntry.run(sectionId, nextOrder, JSON.stringify(fields), resumeIncluded ? 1 : 0);
-    return info.lastInsertRowid;
-  }
-
-  updateEntry(id, { fields, resumeIncluded }) {
+  setPersonSettings(personId, map) {
     const tx = this.db.transaction(() => {
-      if (fields !== undefined) {
-        this._stmts.updateEntryFields.run(JSON.stringify(fields), id);
-      }
-      if (resumeIncluded !== undefined) {
-        this._stmts.updateEntryResumeIncluded.run(resumeIncluded ? 1 : 0, id);
+      for (const [key, val] of Object.entries(map)) {
+        this._stmts.upsertPersonSetting.run(personId, key, val == null ? null : String(val));
       }
     });
     tx();
   }
 
-  deleteEntry(id) {
-    this._stmts.deleteEntry.run(id);
+  /** personal.* settings → flat object with the prefix stripped. */
+  getPersonal(personId) {
+    return stripPrefix(this.getPersonSettings(personId, 'personal'), 'personal.');
   }
 
-  reorderEntries(sectionId, ids) {
-    const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) {
-        this._stmts.updateEntrySortOrder.run(i, ids[i]);
-      }
-    });
-    tx();
+  setPersonal(personId, fields) {
+    const map = {};
+    for (const [k, v] of Object.entries(fields)) map['personal.' + k] = v;
+    this.setPersonSettings(personId, map);
   }
 
-  // ---------------------------------------------------------------------------
-  // Items
-  // ---------------------------------------------------------------------------
-
-  createItem(entryId, content, resumeIncluded = true, title = '') {
-    const nextOrder = this._stmts.maxItemSortOrder.get(entryId).max_order + 1;
-    const info = this._stmts.insertItem.run(entryId, nextOrder, content, resumeIncluded ? 1 : 0, title);
-    return info.lastInsertRowid;
-  }
-
-  updateItem(id, { content, resumeIncluded, title }) {
-    const tx = this.db.transaction(() => {
-      if (content !== undefined) {
-        this._stmts.updateItemContent.run(content, id);
-      }
-      if (resumeIncluded !== undefined) {
-        this._stmts.updateItemResumeIncluded.run(resumeIncluded ? 1 : 0, id);
-      }
-      if (title !== undefined) {
-        this._stmts.updateItemTitle.run(title, id);
-      }
-    });
-    tx();
-  }
-
-  deleteItem(id) {
-    this._stmts.deleteItem.run(id);
-  }
-
-  reorderItems(entryId, ids) {
-    const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) {
-        this._stmts.updateItemSortOrder.run(i, ids[i]);
-      }
-    });
-    tx();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Document sections
-  // ---------------------------------------------------------------------------
-
-  getDocumentSections(variant) {
-    return this._stmts.getDocumentSections.all(variant).map(r => ({
-      sectionId: r.section_id,
-      enabled: !!r.enabled,
-      sortOrder: r.sort_order,
-      resumeParagraphText: r.resume_paragraph_text,
-    }));
-  }
-
-  setDocumentSections(variant, sections) {
-    const tx = this.db.transaction(() => {
-      this._stmts.clearDocumentSections.run(variant);
-      for (let i = 0; i < sections.length; i++) {
-        const s = sections[i];
-        this._stmts.insertDocumentSection.run(
-          variant,
-          s.sectionId,
-          s.enabled !== false ? 1 : 0,
-          i,
-          s.resumeParagraphText ?? null
-        );
-      }
-    });
-    tx();
-  }
-
-  // ---------------------------------------------------------------------------
-  // Cover letter sections
-  // ---------------------------------------------------------------------------
-
-  getCoverletterSections() {
-    return this._stmts.getCoverletterSections.all();
-  }
-
-  createCoverletterSection(title, body) {
-    const nextOrder = this._stmts.maxCoverletterSectionOrder.get().max_order + 1;
-    const info = this._stmts.insertCoverletterSection.run(nextOrder, title, body);
-    return info.lastInsertRowid;
-  }
-
-  updateCoverletterSection(id, { title, body }) {
-    this._stmts.updateCoverletterSection.run(title, body, id);
-  }
-
-  deleteCoverletterSection(id) {
-    this._stmts.deleteCoverletterSection.run(id);
-  }
-
-  reorderCoverletterSections(ids) {
-    const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) {
-        this._stmts.updateCoverletterSectionOrder.run(i, ids[i]);
-      }
-    });
-    tx();
+  /** coverletter.* header settings → flat object (no `sections`). */
+  getCoverletterHeader(personId) {
+    return stripPrefix(this.getPersonSettings(personId, 'coverletter'), 'coverletter.');
   }
 
   // ---------------------------------------------------------------------------
@@ -317,16 +199,11 @@ class CvDatabase {
   }
 
   getPerson(id) {
-    const row = this._stmts.getPerson.get(id);
-    if (!row) return null;
-    let data;
-    try { data = JSON.parse(row.data); } catch { data = {}; }
-    return { id: row.id, name: row.name, data, created_at: row.created_at };
+    return this._stmts.getPerson.get(id) || null;
   }
 
-  createPerson(name, data = {}) {
-    const info = this._stmts.insertPerson.run(name, JSON.stringify(data));
-    return info.lastInsertRowid;
+  createPerson(name) {
+    return this._stmts.insertPerson.run(name).lastInsertRowid;
   }
 
   renamePerson(id, name) {
@@ -334,356 +211,585 @@ class CvDatabase {
   }
 
   deletePerson(id) {
-    const activeId = this.getActivePersonId();
-    if (activeId === id) {
-      throw new Error('Cannot delete the active person');
-    }
+    // Cascades to person_settings, sections→entries→items→tags, variants→rules/overrides/sections/letters.
     this._stmts.deletePerson.run(id);
   }
 
-  getActivePersonId() {
-    const row = this.db.prepare("SELECT value FROM settings WHERE key = '_active_person_id'").get();
-    return row ? parseInt(row.value, 10) : null;
+  // ---------------------------------------------------------------------------
+  // Sections
+  // ---------------------------------------------------------------------------
+
+  getSections(personId) {
+    return this._stmts.getSectionsByPerson.all(personId).map(rowToSection);
   }
 
-  setActivePersonId(id) {
-    this._stmts.upsertSetting.run('_active_person_id', String(id));
+  /** Section with full entries→items→tags. */
+  getSection(id) {
+    const s = this._stmts.getSection.get(id);
+    if (!s) return null;
+    return { ...rowToSection(s), entries: this._entriesForSection(id) };
   }
 
+  _entriesForSection(sectionId) {
+    return this._stmts.getEntries.all(sectionId).map((e) => ({
+      id: e.id,
+      sectionId: e.section_id,
+      sortOrder: e.sort_order,
+      fields: JSON.parse(e.fields),
+      tags: this._stmts.getEntryTags.all(e.id).map((r) => r.tag),
+      items: this._stmts.getItems.all(e.id).map((i) => ({
+        id: i.id,
+        entryId: i.entry_id,
+        sortOrder: i.sort_order,
+        content: i.content,
+        title: i.title,
+        tags: this._stmts.getItemTags.all(i.id).map((r) => r.tag),
+      })),
+    }));
+  }
+
+  createSection(personId, slug, type, title = '') {
+    const order = this._stmts.maxSectionSortOrder.get(personId).m + 1;
+    return this._stmts.insertSection.run(personId, slug, normalizeType(type), title, order).lastInsertRowid;
+  }
+
+  updateSection(id, { slug, type, title }) {
+    const cur = this._stmts.getSection.get(id);
+    if (!cur) return;
+    if (slug !== undefined || type !== undefined) {
+      this._stmts.updateSectionSlugType.run(
+        slug ?? cur.slug,
+        type !== undefined ? normalizeType(type) : cur.type,
+        title ?? cur.title,
+        id
+      );
+    } else if (title !== undefined) {
+      this._stmts.updateSectionTitle.run(title, id);
+    }
+  }
+
+  deleteSection(id) {
+    this._stmts.deleteSection.run(id);
+  }
+
+  reorderSections(personId, ids) {
+    const tx = this.db.transaction(() => {
+      for (let i = 0; i < ids.length; i++) this._stmts.updateSectionSortOrder.run(i, ids[i]);
+    });
+    tx();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Entries
+  // ---------------------------------------------------------------------------
+
+  getEntry(id) {
+    const e = this._stmts.getEntry.get(id);
+    if (!e) return null;
+    return {
+      id: e.id,
+      sectionId: e.section_id,
+      sortOrder: e.sort_order,
+      fields: JSON.parse(e.fields),
+      tags: this._stmts.getEntryTags.all(e.id).map((r) => r.tag),
+      items: this._stmts.getItems.all(e.id).map((i) => ({
+        id: i.id, entryId: i.entry_id, sortOrder: i.sort_order, content: i.content, title: i.title,
+        tags: this._stmts.getItemTags.all(i.id).map((r) => r.tag),
+      })),
+    };
+  }
+
+  createEntry(sectionId, fields) {
+    const order = this._stmts.maxEntrySortOrder.get(sectionId).m + 1;
+    return this._stmts.insertEntry.run(sectionId, order, JSON.stringify(fields || {})).lastInsertRowid;
+  }
+
+  updateEntry(id, { fields }) {
+    if (fields !== undefined) this._stmts.updateEntryFields.run(JSON.stringify(fields), id);
+  }
+
+  deleteEntry(id) {
+    this._stmts.deleteEntry.run(id);
+  }
+
+  reorderEntries(sectionId, ids) {
+    const tx = this.db.transaction(() => {
+      for (let i = 0; i < ids.length; i++) this._stmts.updateEntrySortOrder.run(i, ids[i]);
+    });
+    tx();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Items
+  // ---------------------------------------------------------------------------
+
+  createItem(entryId, content, title = '') {
+    const order = this._stmts.maxItemSortOrder.get(entryId).m + 1;
+    return this._stmts.insertItem.run(entryId, order, content, title).lastInsertRowid;
+  }
+
+  updateItem(id, { content, title }) {
+    const tx = this.db.transaction(() => {
+      if (content !== undefined) this._stmts.updateItemContent.run(content, id);
+      if (title !== undefined) this._stmts.updateItemTitle.run(title, id);
+    });
+    tx();
+  }
+
+  deleteItem(id) {
+    this._stmts.deleteItem.run(id);
+  }
+
+  reorderItems(entryId, ids) {
+    const tx = this.db.transaction(() => {
+      for (let i = 0; i < ids.length; i++) this._stmts.updateItemSortOrder.run(i, ids[i]);
+    });
+    tx();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tags
+  // ---------------------------------------------------------------------------
+
+  addEntryTags(entryId, tags) {
+    const tx = this.db.transaction(() => {
+      for (const t of tags) this._stmts.addEntryTag.run(entryId, normTag(t));
+    });
+    tx();
+  }
+
+  removeEntryTag(entryId, tag) {
+    this._stmts.delEntryTag.run(entryId, normTag(tag));
+  }
+
+  addItemTags(itemId, tags) {
+    const tx = this.db.transaction(() => {
+      for (const t of tags) this._stmts.addItemTag.run(itemId, normTag(t));
+    });
+    tx();
+  }
+
+  removeItemTag(itemId, tag) {
+    this._stmts.delItemTag.run(itemId, normTag(tag));
+  }
+
+  /** Distinct tag vocabulary across a person's entries + items. */
+  listTags(personId) {
+    const set = new Set();
+    for (const r of this._stmts.listEntryTags.all(personId)) set.add(r.tag);
+    for (const r of this._stmts.listItemTags.all(personId)) set.add(r.tag);
+    return [...set].sort();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Variants
+  // ---------------------------------------------------------------------------
+
+  getVariants(personId) {
+    return this._stmts.getVariants.all(personId).map(rowToVariant);
+  }
+
+  getVariant(id) {
+    const v = this._stmts.getVariant.get(id);
+    return v ? rowToVariant(v) : null;
+  }
+
+  createVariant(personId, name, kind) {
+    if (!KINDS.includes(kind)) throw new Error(`Invalid variant kind: ${kind}`);
+    return this._stmts.insertVariant.run(personId, name, kind).lastInsertRowid;
+  }
+
+  updateVariant(id, { name }) {
+    if (name !== undefined) this._stmts.updateVariantName.run(name, id);
+  }
+
+  deleteVariant(id) {
+    this._stmts.deleteVariant.run(id);
+  }
+
+  // ---- rules ----
+
+  getVariantRules(variantId) {
+    const include = [];
+    const exclude = [];
+    for (const r of this._stmts.getVariantRules.all(variantId)) {
+      (r.mode === 'exclude' ? exclude : include).push(r.tag);
+    }
+    return { include, exclude };
+  }
+
+  /** Replace a variant's tag rules. Include wins if a tag appears in both. */
+  setVariantRules(variantId, { include = [], exclude = [] } = {}) {
+    const tx = this.db.transaction(() => {
+      this._stmts.clearVariantRules.run(variantId);
+      for (const t of include) this._stmts.insertVariantRule.run(variantId, normTag(t), 'include');
+      for (const t of exclude) this._stmts.insertVariantRule.run(variantId, normTag(t), 'exclude');
+    });
+    tx();
+  }
+
+  // ---- sections ----
+
+  getVariantSections(variantId) {
+    return this._stmts.getVariantSections.all(variantId).map((r) => ({
+      sectionId: r.section_id,
+      enabled: !!r.enabled,
+      sortOrder: r.sort_order,
+    }));
+  }
+
+  setVariantSections(variantId, sections) {
+    const tx = this.db.transaction(() => {
+      this._stmts.clearVariantSections.run(variantId);
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        this._stmts.insertVariantSection.run(
+          variantId,
+          s.sectionId,
+          s.enabled === false ? 0 : 1,
+          typeof s.sortOrder === 'number' ? s.sortOrder : i
+        );
+      }
+    });
+    tx();
+  }
+
+  // ---- overrides ----
+
+  getEntryOverrides(variantId) {
+    const m = new Map();
+    for (const r of this._stmts.getEntryOverrides.all(variantId)) {
+      m.set(r.entry_id, { included: r.included, textOverride: r.text_override, sortOverride: r.sort_override });
+    }
+    return m;
+  }
+
+  getItemOverrides(variantId) {
+    const m = new Map();
+    for (const r of this._stmts.getItemOverrides.all(variantId)) {
+      m.set(r.item_id, { included: r.included, textOverride: r.text_override, sortOverride: r.sort_override });
+    }
+    return m;
+  }
+
+  /** Upsert (or, if all fields null/undefined, delete) an entry override. */
+  setEntryOverride(variantId, entryId, { included = null, textOverride = null, sortOverride = null } = {}) {
+    if (included == null && textOverride == null && sortOverride == null) {
+      this._stmts.deleteEntryOverride.run(variantId, entryId);
+      return;
+    }
+    this._stmts.upsertEntryOverride.run(variantId, entryId, included == null ? null : (included ? 1 : 0), textOverride, sortOverride);
+  }
+
+  setItemOverride(variantId, itemId, { included = null, textOverride = null, sortOverride = null } = {}) {
+    if (included == null && textOverride == null && sortOverride == null) {
+      this._stmts.deleteItemOverride.run(variantId, itemId);
+      return;
+    }
+    this._stmts.upsertItemOverride.run(variantId, itemId, included == null ? null : (included ? 1 : 0), textOverride, sortOverride);
+  }
+
+  // ---- cover-letter paragraphs ----
+
+  getLetterSections(variantId) {
+    return this._stmts.getLetterSections.all(variantId);
+  }
+
+  createLetterSection(variantId, title, body) {
+    const order = this._stmts.maxLetterSectionOrder.get(variantId).m + 1;
+    return this._stmts.insertLetterSection.run(variantId, order, title, body).lastInsertRowid;
+  }
+
+  updateLetterSection(id, { title, body }) {
+    const cur = this.db.prepare('SELECT title, body FROM variant_letter_sections WHERE id = ?').get(id);
+    if (!cur) return;
+    this._stmts.updateLetterSection.run(title ?? cur.title, body ?? cur.body, id);
+  }
+
+  deleteLetterSection(id) {
+    this._stmts.deleteLetterSection.run(id);
+  }
+
+  reorderLetterSections(variantId, ids) {
+    const tx = this.db.transaction(() => {
+      for (let i = 0; i < ids.length; i++) this._stmts.updateLetterSectionOrder.run(i, ids[i]);
+    });
+    tx();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Resolution — variant → compile-ready data for lib/generator
+  // ---------------------------------------------------------------------------
+
+  _matchesTags(tags, rules) {
+    if (rules.exclude.size && tags.some((t) => rules.exclude.has(t))) return false;
+    if (rules.include.size === 0) return true;
+    return tags.some((t) => rules.include.has(t));
+  }
+
+  _included(tags, rules, override) {
+    if (override && override.included != null) return override.included === 1;
+    return this._matchesTags(tags, rules);
+  }
+
+  _renderSettings() {
+    const style = stripPrefix(this.getSettings('style'), 'style.');
+    const spacing = combineUnits(stripPrefix(this.getSettings('spacing'), 'spacing.'));
+    const fonts = combineUnits(stripPrefix(this.getSettings('fonts'), 'fonts.'));
+    return { style, spacing, fonts };
+  }
+
+  /**
+   * Resolve a variant into the shape lib/generator.generateAll expects:
+   *   { personal, sections, coverletter, variant:<kind>, style, spacing, fonts }
+   * @throws Error('Variant not found')
+   */
+  resolveVariant(variantId) {
+    return this.db.transaction(() => {
+      const v = this._stmts.getVariant.get(variantId);
+      if (!v) throw new Error('Variant not found');
+      const personId = v.person_id;
+      const personal = this.getPersonal(personId);
+      const { style, spacing, fonts } = this._renderSettings();
+
+      if (v.kind === 'coverletter') {
+        const coverletter = this.getCoverletterHeader(personId);
+        coverletter.sections = this.getLetterSections(variantId).map((s) => ({ title: s.title, body: s.body }));
+        return { personal, sections: [], coverletter, variant: 'coverletter', style, spacing, fonts };
+      }
+
+      const rawRules = this.getVariantRules(variantId);
+      const rules = { include: new Set(rawRules.include), exclude: new Set(rawRules.exclude) };
+      const entryOv = this.getEntryOverrides(variantId);
+      const itemOv = this.getItemOverrides(variantId);
+
+      // Section set + order
+      const vsec = this.getVariantSections(variantId);
+      let sectionRefs;
+      if (vsec.length) {
+        sectionRefs = vsec
+          .filter((r) => r.enabled)
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .map((r) => r.sectionId);
+      } else {
+        sectionRefs = this.getSections(personId).map((s) => s.id);
+      }
+
+      const sections = [];
+      for (const sectionId of sectionRefs) {
+        const section = this.getSection(sectionId);
+        if (!section) continue;
+        const isParagraph = getLatexType(section.type) === 'cvparagraph';
+
+        const entries = [];
+        for (const e of section.entries) {
+          const eov = entryOv.get(e.id);
+          if (!this._included(e.tags, rules, eov)) continue;
+
+          let fields = e.fields;
+          if (eov && eov.textOverride != null && isParagraph) {
+            fields = { ...fields, text: eov.textOverride };
+          }
+
+          const items = [];
+          for (const it of e.items) {
+            const iov = itemOv.get(it.id);
+            if (!this._included(it.tags, rules, iov)) continue;
+            const content = iov && iov.textOverride != null ? iov.textOverride : it.content;
+            items.push({ ...it, content, _sort: sortKey(iov && iov.sortOverride, it.sortOrder, it.id) });
+          }
+          items.sort(bySort);
+
+          entries.push({ ...e, fields, items, _sort: sortKey(eov && eov.sortOverride, e.sortOrder, e.id) });
+        }
+        entries.sort(bySort);
+        if (entries.length === 0) continue; // drop empty section
+
+        sections.push({ id: section.slug, type: section.type, title: section.title, entries });
+      }
+
+      return { personal, sections, coverletter: null, variant: v.kind, style, spacing, fonts };
+    })();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Aggregate read for MCP / UI — full master + variant summaries
+  // ---------------------------------------------------------------------------
+
+  getMaster(personId) {
+    const person = this.getPerson(personId);
+    if (!person) return null;
+    return {
+      person,
+      personal: this.getPersonal(personId),
+      coverletter: this.getCoverletterHeader(personId),
+      sections: this.getSections(personId).map((s) => this.getSection(s.id)),
+      variants: this.getVariants(personId).map((v) => ({
+        ...v,
+        rules: this.getVariantRules(v.id),
+        sections: this.getVariantSections(v.id),
+      })),
+      tags: this.listTags(personId),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Export / import (per person, normalized "new" shape; also accepts legacy)
+  // ---------------------------------------------------------------------------
+
+  getPersonExport(personId) {
+    const person = this.getPerson(personId);
+    if (!person) return null;
+    const sections = this.getSections(personId).map((s) => {
+      const full = this.getSection(s.id);
+      return {
+        slug: full.slug,
+        type: full.type,
+        title: full.title,
+        sortOrder: full.sortOrder,
+        entries: full.entries.map((e) => ({
+          fields: e.fields,
+          tags: e.tags,
+          items: e.items.map((i) => ({ content: i.content, title: i.title, tags: i.tags })),
+        })),
+      };
+    });
+    const variants = this.getVariants(personId).map((v) => ({
+      name: v.name,
+      kind: v.kind,
+      rules: this.getVariantRules(v.id),
+      sections: this.getVariantSections(v.id).map((r) => ({
+        slug: this._slugForSection(r.sectionId),
+        enabled: r.enabled,
+        sortOrder: r.sortOrder,
+      })),
+      letterSections: v.kind === 'coverletter'
+        ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
+        : undefined,
+    }));
+    return {
+      name: person.name,
+      personal: this.getPersonal(personId),
+      coverletter: this.getCoverletterHeader(personId),
+      sections,
+      variants,
+    };
+  }
+
+  _slugForSection(sectionId) {
+    const s = this._stmts.getSection.get(sectionId);
+    return s ? s.slug : null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Seeding
+  // ---------------------------------------------------------------------------
+
+  /** Seed Jane Doe once, on a truly empty database. */
+  seedJaneDoe() {
+    if (this._stmts.countPersons.get().cnt > 0) return;
+    const id = this.createPerson('Jane Doe');
+    this.importLegacyData(id, JANE_DOE_DATA);
+  }
+
+  /**
+   * Materialize a legacy export blob ({personal, sections, documents:{cv,resume},
+   * coverletter}) into the normalized model for an existing (empty) person,
+   * deriving CV / Resume / Cover Letter variants. Mirrors migration 007's
+   * per-person backfill. Used for seeding and importing legacy backups.
+   */
+  importLegacyData(personId, data) {
+    const tx = this.db.transaction(() => {
+      // personal + coverletter header
+      if (data.personal) this.setPersonal(personId, data.personal);
+      if (data.coverletter) {
+        const header = {};
+        for (const [k, v] of Object.entries(data.coverletter)) {
+          if (k === 'sections') continue;
+          header['coverletter.' + k] = v;
+        }
+        if (Object.keys(header).length) this.setPersonSettings(personId, header);
+      }
+
+      const blobSections = Array.isArray(data.sections) ? data.sections : [];
+      const cvDoc = (data.documents && Array.isArray(data.documents.cv)) ? data.documents.cv : [];
+      const resumeDoc = (data.documents && Array.isArray(data.documents.resume)) ? data.documents.resume : [];
+
+      // master order = cv order, then leftovers
+      const orderedSlugs = [];
+      for (const d of cvDoc) {
+        if (blobSections.some((s) => s.id === d.sectionId) && !orderedSlugs.includes(d.sectionId)) {
+          orderedSlugs.push(d.sectionId);
+        }
+      }
+      for (const s of blobSections) if (!orderedSlugs.includes(s.id)) orderedSlugs.push(s.id);
+
+      const sectionIdBySlug = {};
+      const entryIdByOld = {};
+      const itemIdByOld = {};
+      const firstResumeEntryBySlug = {};
+
+      for (const slug of orderedSlugs) {
+        const sec = blobSections.find((s) => s.id === slug);
+        const type = normalizeType(sec.type);
+        const sectionId = this.createSection(personId, slug, type, sec.title || '');
+        sectionIdBySlug[slug] = sectionId;
+        const paragraph = getLatexType(type) === 'cvparagraph';
+
+        for (const e of (sec.entries || [])) {
+          const entryId = this.createEntry(sectionId, e.fields || {});
+          if (e.id != null) entryIdByOld[e.id] = entryId;
+          if (paragraph && e.resumeIncluded !== false && firstResumeEntryBySlug[slug] == null) {
+            firstResumeEntryBySlug[slug] = entryId;
+          }
+          for (const it of (e.items || [])) {
+            const itemId = this.createItem(entryId, it.content || '', it.title || '');
+            if (it.id != null) itemIdByOld[it.id] = itemId;
+          }
+        }
+      }
+
+      // CV variant
+      const cvId = this.createVariant(personId, 'CV', 'cv');
+      this.setVariantSections(cvId, mapDocToVariantSections(cvDoc, sectionIdBySlug));
+
+      // Resume variant
+      const resumeId = this.createVariant(personId, 'Resume', 'resume');
+      this.setVariantSections(resumeId, mapDocToVariantSections(resumeDoc, sectionIdBySlug));
+      for (const sec of blobSections) {
+        for (const e of (sec.entries || [])) {
+          if (e.resumeIncluded === false && entryIdByOld[e.id] != null) {
+            this.setEntryOverride(resumeId, entryIdByOld[e.id], { included: false });
+          }
+          for (const it of (e.items || [])) {
+            if (it.resumeIncluded === false && itemIdByOld[it.id] != null) {
+              this.setItemOverride(resumeId, itemIdByOld[it.id], { included: false });
+            }
+          }
+        }
+      }
+      for (const d of resumeDoc) {
+        if (d.resumeParagraphText != null && firstResumeEntryBySlug[d.sectionId] != null) {
+          this.setEntryOverride(resumeId, firstResumeEntryBySlug[d.sectionId], { textOverride: d.resumeParagraphText });
+        }
+      }
+
+      // Cover Letter variant (only if there are paragraphs)
+      const clSections = (data.coverletter && Array.isArray(data.coverletter.sections)) ? data.coverletter.sections : [];
+      if (clSections.length) {
+        const clId = this.createVariant(personId, 'Cover Letter', 'coverletter');
+        for (const s of clSections) this.createLetterSection(clId, s.title || '', s.body || '');
+      }
+    });
+    tx();
+  }
+
+  /** Convenience for tests: remove all persons (cascades to all content). */
   clearAllContent() {
     const tx = this.db.transaction(() => {
-      this.db.exec('DELETE FROM coverletter_sections');
-      this.db.exec('DELETE FROM document_sections');
-      this.db.exec('DELETE FROM items');
-      this.db.exec('DELETE FROM entries');
-      this.db.exec('DELETE FROM sections');
-      this.db.exec("DELETE FROM settings WHERE key != '_active_person_id'");
+      for (const pp of this._stmts.getPersons.all()) this._stmts.deletePerson.run(pp.id);
     });
     tx();
-  }
-
-  importAll(data) {
-    const tx = this.db.transaction(() => {
-      this.clearAllContent();
-
-      // Settings: personal
-      if (data.personal) {
-        const personalSettings = {};
-        for (const [key, value] of Object.entries(data.personal)) {
-          personalSettings['personal.' + key] = value;
-        }
-        this.setSettings(personalSettings);
-      }
-
-      // Settings: coverletter (excluding sections array)
-      if (data.coverletter) {
-        const clSettings = {};
-        for (const [key, value] of Object.entries(data.coverletter)) {
-          if (key === 'sections') continue;
-          clSettings['coverletter.' + key] = value;
-        }
-        this.setSettings(clSettings);
-      }
-
-      // Sections with entries and items
-      if (data.sections) {
-        for (const sec of data.sections) {
-          this.createSection(sec.id, normalizeType(sec.type), sec.title);
-          if (sec.entries) {
-            for (let ei = 0; ei < sec.entries.length; ei++) {
-              const entry = sec.entries[ei];
-              const resumeIncl = entry.resumeIncluded !== undefined ? entry.resumeIncluded : true;
-              const entryId = this.createEntry(sec.id, entry.fields, resumeIncl);
-              if (entry.items) {
-                for (const item of entry.items) {
-                  const itemResumeIncl = item.resumeIncluded !== undefined ? item.resumeIncluded : true;
-                  this.createItem(entryId, item.content, itemResumeIncl, item.title || '');
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Document sections
-      if (data.documents) {
-        for (const [variant, sections] of Object.entries(data.documents)) {
-          this.setDocumentSections(variant, sections);
-        }
-      }
-
-      // Cover letter sections
-      if (data.coverletter && data.coverletter.sections) {
-        for (const sec of data.coverletter.sections) {
-          this.createCoverletterSection(sec.title, sec.body);
-        }
-      }
-    });
-    tx();
-  }
-
-  savePerson(id) {
-    const exportData = this.getAllForExport();
-    this._stmts.updatePersonData.run(JSON.stringify(exportData), id);
-  }
-
-  switchPerson(newId) {
-    const tx = this.db.transaction(() => {
-      const currentId = this.getActivePersonId();
-      if (currentId) {
-        this.savePerson(currentId);
-      }
-      const person = this.getPerson(newId);
-      if (!person) throw new Error('Person not found');
-      // Only import if data is non-empty
-      if (person.data && Object.keys(person.data).length > 0) {
-        this.importAll(person.data);
-      } else {
-        this.clearAllContent();
-      }
-      this.setActivePersonId(newId);
-    });
-    tx();
-  }
-
-  resetToJaneDoe() {
-    const persons = this.getPersons();
-    const jane = persons.find(p => p.name === 'Jane Doe');
-    if (!jane) return;
-    const activeId = this.getActivePersonId();
-    if (activeId === jane.id) return;
-    this.switchPerson(jane.id);
-  }
-
-  seedJaneDoe() {
-    const count = this._stmts.countPersons.get().cnt;
-    if (count > 0) return; // Already has persons, skip seeding
-
-    // If content tables have data (existing user data), save it as a person first
-    const existingSections = this.getSections();
-    if (existingSections.length > 0) {
-      const existingData = this.getAllForExport();
-      const existingId = this.createPerson('My Data', existingData);
-      this.setActivePersonId(existingId);
-    }
-
-    // Create Jane Doe
-    const janeId = this.createPerson('Jane Doe', JANE_DOE_DATA);
-
-    // If no active person yet, load Jane's data
-    if (!this.getActivePersonId()) {
-      this.importAll(JANE_DOE_DATA);
-      this.setActivePersonId(janeId);
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Compound reads
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Returns everything needed to generate .tex files for a document variant.
-   * Runs in a single read transaction for consistency.
-   */
-  getAllForCompile(variant) {
-    return this.db.transaction(() => {
-      // Personal info
-      const personalSettings = this.getSettings('personal');
-      const personal = {};
-      for (const [key, value] of Object.entries(personalSettings)) {
-        const field = key.replace('personal.', '');
-        personal[field] = value;
-      }
-
-      // Document section ordering
-      const docSections = this.getDocumentSections(variant);
-
-      // Full section data for each included section
-      const sections = [];
-      for (const ds of docSections) {
-        if (!ds.enabled) continue;
-        const section = this.getSection(ds.sectionId);
-        if (!section) continue;
-
-        // For resume variant, filter out excluded entries and items
-        if (variant === 'resume') {
-          section.entries = section.entries
-            .filter(e => e.resumeIncluded)
-            .map(e => ({
-              ...e,
-              items: e.items.filter(i => i.resumeIncluded),
-            }));
-
-          // Use resume paragraph text override if available
-          if (getLatexType(section.type) === 'cvparagraph' && ds.resumeParagraphText) {
-            if (section.entries.length > 0) {
-              section.entries[0].fields = { ...section.entries[0].fields, text: ds.resumeParagraphText };
-            }
-          }
-        }
-
-        sections.push({ ...section, sortOrder: ds.sortOrder });
-      }
-
-      // Cover letter data (only for coverletter variant)
-      let coverletter = null;
-      if (variant === 'coverletter') {
-        const clSettings = this.getSettings('coverletter');
-        const cl = {};
-        for (const [key, value] of Object.entries(clSettings)) {
-          const field = key.replace('coverletter.', '');
-          cl[field] = value;
-        }
-        cl.sections = this.getCoverletterSections();
-        coverletter = cl;
-      }
-
-      // Style settings
-      const styleSettings = this.getSettings('style');
-      const style = {};
-      for (const [key, value] of Object.entries(styleSettings)) {
-        style[key.replace('style.', '')] = value;
-      }
-
-      // Spacing settings — reconstruct combined strings for generator
-      const spacingSettings = this.getSettings('spacing');
-      const spacing = {};
-      for (const [key, val] of Object.entries(spacingSettings)) {
-        const field = key.replace('spacing.', '');
-        spacing[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
-      }
-
-      // Font size settings — reconstruct combined strings for generator
-      const fontsSettings = this.getSettings('fonts');
-      const fonts = {};
-      for (const [key, val] of Object.entries(fontsSettings)) {
-        const field = key.replace('fonts.', '');
-        fonts[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
-      }
-
-      return { personal, sections, coverletter, variant, style, spacing, fonts };
-    })();
-  }
-
-  /**
-   * Build compile-ready data for a stored person + variant WITHOUT mutating
-   * active-person state. Mirrors getAllForCompile() but sources content from
-   * the person's stored export JSON instead of the live working tables.
-   *
-   * Style/spacing/fonts come from the global settings table (those aren't
-   * person-scoped — they apply uniformly to whichever profile is rendered).
-   *
-   * @throws Error('Person not found') if no person with that id exists
-   * @throws Error('Person has no data') if the row exists but data is empty
-   */
-  getCompileDataForPerson(personId, variant) {
-    return this.db.transaction(() => {
-      const row = this._stmts.getPerson.get(personId);
-      if (!row) throw new Error('Person not found');
-      let data;
-      try { data = JSON.parse(row.data || '{}'); } catch { data = {}; }
-      if (!data.personal && !data.sections) throw new Error('Person has no data');
-
-      const personal = data.personal || {};
-      const docSections = ((data.documents && data.documents[variant]) || [])
-        .slice()
-        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-      const allSections = data.sections || [];
-
-      const sections = [];
-      for (const ds of docSections) {
-        if (!ds.enabled) continue;
-        const orig = allSections.find(s => s.id === ds.sectionId);
-        if (!orig) continue;
-
-        // Shallow copy that lets us safely filter entries/items for the resume variant
-        let section = {
-          ...orig,
-          entries: (orig.entries || []).map(e => ({
-            ...e,
-            items: e.items ? [...e.items] : [],
-          })),
-        };
-
-        if (variant === 'resume') {
-          section.entries = section.entries
-            .filter(e => e.resumeIncluded)
-            .map(e => ({
-              ...e,
-              items: e.items.filter(i => i.resumeIncluded),
-            }));
-
-          if (getLatexType(section.type) === 'cvparagraph' && ds.resumeParagraphText) {
-            if (section.entries.length > 0) {
-              section.entries[0] = {
-                ...section.entries[0],
-                fields: { ...section.entries[0].fields, text: ds.resumeParagraphText },
-              };
-            }
-          }
-        }
-
-        sections.push({ ...section, sortOrder: ds.sortOrder });
-      }
-
-      let coverletter = null;
-      if (variant === 'coverletter') {
-        coverletter = { ...(data.coverletter || {}) };
-        if (!Array.isArray(coverletter.sections)) coverletter.sections = [];
-      }
-
-      // Style/spacing/fonts are global (not per-person)
-      const styleSettings = this.getSettings('style');
-      const style = {};
-      for (const [key, value] of Object.entries(styleSettings)) {
-        style[key.replace('style.', '')] = value;
-      }
-
-      const spacingSettings = this.getSettings('spacing');
-      const spacing = {};
-      for (const [key, val] of Object.entries(spacingSettings)) {
-        const field = key.replace('spacing.', '');
-        spacing[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
-      }
-
-      const fontsSettings = this.getSettings('fonts');
-      const fonts = {};
-      for (const [key, val] of Object.entries(fontsSettings)) {
-        const field = key.replace('fonts.', '');
-        fonts[field] = (val && typeof val === 'object') ? String(val.num) + val.unit : val;
-      }
-
-      return { name: row.name, personal, sections, coverletter, variant, style, spacing, fonts };
-    })();
-  }
-
-  /**
-   * Full JSON export of all data (for website about page / backup).
-   */
-  getAllForExport() {
-    return this.db.transaction(() => {
-      const personalSettings = this.getSettings('personal');
-      const personal = {};
-      for (const [key, value] of Object.entries(personalSettings)) {
-        personal[key.replace('personal.', '')] = value;
-      }
-
-      const allSections = this.getSections().map(s => this.getSection(s.id));
-
-      const documents = {};
-      for (const variant of ['cv', 'resume']) {
-        documents[variant] = this.getDocumentSections(variant);
-      }
-
-      const clSettings = this.getSettings('coverletter');
-      const coverletter = {};
-      for (const [key, value] of Object.entries(clSettings)) {
-        coverletter[key.replace('coverletter.', '')] = value;
-      }
-      coverletter.sections = this.getCoverletterSections();
-
-      return { personal, sections: allSections, documents, coverletter };
-    })();
   }
 
   // ---------------------------------------------------------------------------
@@ -693,6 +799,69 @@ class CvDatabase {
   close() {
     this.db.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Row / shape helpers
+// ---------------------------------------------------------------------------
+
+function rowsToSettings(rows) {
+  const out = {};
+  for (const row of rows) {
+    out[row.key] = (row.value_num != null && row.value_unit != null)
+      ? { num: row.value_num, unit: row.value_unit }
+      : row.value;
+  }
+  return out;
+}
+
+function stripPrefix(obj, prefix) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) out[k.startsWith(prefix) ? k.slice(prefix.length) : k] = v;
+  return out;
+}
+
+/** Re-join {num,unit} setting objects into combined strings for the generator. */
+function combineUnits(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = (v && typeof v === 'object' && 'num' in v) ? String(v.num) + v.unit : v;
+  }
+  return out;
+}
+
+function rowToSection(s) {
+  return { id: s.id, personId: s.person_id, slug: s.slug, type: s.type, title: s.title, sortOrder: s.sort_order };
+}
+
+function rowToVariant(v) {
+  return { id: v.id, personId: v.person_id, name: v.name, kind: v.kind, created_at: v.created_at };
+}
+
+function mapDocToVariantSections(docRows, sectionIdBySlug) {
+  const out = [];
+  for (const d of docRows) {
+    const sectionId = sectionIdBySlug[d.sectionId];
+    if (sectionId == null) continue;
+    out.push({ sectionId, enabled: d.enabled !== false, sortOrder: typeof d.sortOrder === 'number' ? d.sortOrder : out.length });
+  }
+  return out;
+}
+
+function normTag(t) {
+  return String(t).trim().toLowerCase();
+}
+
+/** Lexicographic ordering key: [effective sort, master sort, id]. */
+function sortKey(override, master, id) {
+  return [override != null ? override : master, master, id];
+}
+
+function bySort(a, b) {
+  for (let i = 0; i < a._sort.length; i++) {
+    if (a._sort[i] !== b._sort[i]) return a._sort[i] - b._sort[i];
+  }
+  return 0;
 }
 
 module.exports = CvDatabase;
