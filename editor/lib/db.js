@@ -640,8 +640,18 @@ class CvDatabase {
   getPersonExport(personId) {
     const person = this.getPerson(personId);
     if (!person) return null;
+
+    // Overrides reference entry/item ids; export them by POSITION (section
+    // slug + indices) so a backup is portable across re-import (where ids change).
+    const entryPos = new Map(); // entryId -> { slug, ei }
+    const itemPos = new Map(); // itemId -> { slug, ei, ii }
+
     const sections = this.getSections(personId).map((s) => {
       const full = this.getSection(s.id);
+      full.entries.forEach((e, ei) => {
+        entryPos.set(e.id, { slug: full.slug, ei });
+        e.items.forEach((it, ii) => itemPos.set(it.id, { slug: full.slug, ei, ii }));
+      });
       return {
         slug: full.slug,
         type: full.type,
@@ -654,19 +664,37 @@ class CvDatabase {
         })),
       };
     });
-    const variants = this.getVariants(personId).map((v) => ({
-      name: v.name,
-      kind: v.kind,
-      rules: this.getVariantRules(v.id),
-      sections: this.getVariantSections(v.id).map((r) => ({
-        slug: this._slugForSection(r.sectionId),
-        enabled: r.enabled,
-        sortOrder: r.sortOrder,
-      })),
-      letterSections: v.kind === 'coverletter'
-        ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
-        : undefined,
-    }));
+
+    const variants = this.getVariants(personId).map((v) => {
+      const eov = this.getEntryOverrides(v.id);
+      const iov = this.getItemOverrides(v.id);
+      const entryOverrides = [];
+      for (const [eid, o] of eov) {
+        const pos = entryPos.get(eid);
+        if (pos) entryOverrides.push({ ...pos, included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+      }
+      const itemOverrides = [];
+      for (const [iid, o] of iov) {
+        const pos = itemPos.get(iid);
+        if (pos) itemOverrides.push({ ...pos, included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+      }
+      return {
+        name: v.name,
+        kind: v.kind,
+        rules: this.getVariantRules(v.id),
+        sections: this.getVariantSections(v.id).map((r) => ({
+          slug: this._slugForSection(r.sectionId),
+          enabled: r.enabled,
+          sortOrder: r.sortOrder,
+        })),
+        entryOverrides,
+        itemOverrides,
+        letterSections: v.kind === 'coverletter'
+          ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
+          : undefined,
+      };
+    });
+
     return {
       name: person.name,
       personal: this.getPersonal(personId),
@@ -679,6 +707,66 @@ class CvDatabase {
   _slugForSection(sectionId) {
     const s = this._stmts.getSection.get(sectionId);
     return s ? s.slug : null;
+  }
+
+  /**
+   * Import a per-person blob into an (empty) person. Dispatches on shape:
+   * `variants` present → new normalized export; otherwise the legacy
+   * {documents, resume_included} shape.
+   */
+  importPersonData(personId, data) {
+    if (Array.isArray(data.variants)) return this._importNewShape(personId, data);
+    return this.importLegacyData(personId, data);
+  }
+
+  _importNewShape(personId, data) {
+    const tx = this.db.transaction(() => {
+      if (data.personal) this.setPersonal(personId, data.personal);
+      if (data.coverletter) {
+        const header = {};
+        for (const [k, v] of Object.entries(data.coverletter)) header['coverletter.' + k] = v;
+        if (Object.keys(header).length) this.setPersonSettings(personId, header);
+      }
+
+      // Content, tracking ids by position for override mapping.
+      const sectionIdBySlug = {};
+      const entryIdByPos = {}; // `${slug}#${ei}` -> entryId
+      const itemIdByPos = {}; // `${slug}#${ei}#${ii}` -> itemId
+      for (const sec of (data.sections || [])) {
+        const sectionId = this.createSection(personId, sec.slug, sec.type, sec.title || '');
+        sectionIdBySlug[sec.slug] = sectionId;
+        (sec.entries || []).forEach((e, ei) => {
+          const entryId = this.createEntry(sectionId, e.fields || {});
+          entryIdByPos[`${sec.slug}#${ei}`] = entryId;
+          if (e.tags && e.tags.length) this.addEntryTags(entryId, e.tags);
+          (e.items || []).forEach((it, ii) => {
+            const itemId = this.createItem(entryId, it.content || '', it.title || '');
+            itemIdByPos[`${sec.slug}#${ei}#${ii}`] = itemId;
+            if (it.tags && it.tags.length) this.addItemTags(itemId, it.tags);
+          });
+        });
+      }
+
+      for (const v of (data.variants || [])) {
+        const variantId = this.createVariant(personId, v.name, v.kind);
+        if (v.rules) this.setVariantRules(variantId, v.rules);
+        if (Array.isArray(v.sections)) {
+          this.setVariantSections(variantId, v.sections
+            .map((r) => ({ sectionId: sectionIdBySlug[r.slug], enabled: r.enabled, sortOrder: r.sortOrder }))
+            .filter((r) => r.sectionId != null));
+        }
+        for (const o of (v.entryOverrides || [])) {
+          const eid = entryIdByPos[`${o.slug}#${o.ei}`];
+          if (eid != null) this.setEntryOverride(variantId, eid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+        }
+        for (const o of (v.itemOverrides || [])) {
+          const iid = itemIdByPos[`${o.slug}#${o.ei}#${o.ii}`];
+          if (iid != null) this.setItemOverride(variantId, iid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+        }
+        for (const s of (v.letterSections || [])) this.createLetterSection(variantId, s.title || '', s.body || '');
+      }
+    });
+    tx();
   }
 
   // ---------------------------------------------------------------------------
