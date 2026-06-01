@@ -28,9 +28,9 @@ function makeRequest(method, path, headers = {}) {
 }
 
 describe('CORS headers', () => {
-  test('GET /api/seed includes Access-Control-Allow-Origin', async () => {
-    // Use an origin from the default allowed list
-    const res = await makeRequest('GET', '/api/seed', {
+  // /api/catalog is static (no DB) — safe to hit without injecting a test DB.
+  test('GET /api/catalog includes Access-Control-Allow-Origin', async () => {
+    const res = await makeRequest('GET', '/api/catalog', {
       Origin: 'http://localhost:3001',
     });
     expect(res.status).toBe(200);
@@ -38,7 +38,7 @@ describe('CORS headers', () => {
   });
 
   test('OPTIONS preflight returns CORS headers', async () => {
-    const res = await makeRequest('OPTIONS', '/api/seed', {
+    const res = await makeRequest('OPTIONS', '/api/catalog', {
       Origin: 'http://localhost:3001',
       'Access-Control-Request-Method': 'GET',
     });
@@ -46,8 +46,10 @@ describe('CORS headers', () => {
     expect(res.headers['access-control-allow-origin']).toBeDefined();
   });
 
-  test('GET /api/pdf/cv includes Access-Control-Allow-Origin', async () => {
-    const res = await makeRequest('GET', '/api/pdf/cv', {
+  // CORS middleware runs before routing, so even an unmatched path (no DB
+  // access) carries the header.
+  test('unmatched /api path still includes Access-Control-Allow-Origin', async () => {
+    const res = await makeRequest('GET', '/api/does-not-exist', {
       Origin: 'http://localhost:3001',
     });
     expect(res.headers['access-control-allow-origin']).toBeDefined();
