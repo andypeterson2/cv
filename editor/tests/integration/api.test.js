@@ -1,39 +1,26 @@
 /**
- * Integration tests for the CV Editor server API.
- * Tests endpoints using an in-memory SQLite database.
+ * Integration tests for the normalized, stateless CV Editor API.
+ * Uses an in-memory SQLite DB; each test starts from a clean slate.
  */
 const http = require('http');
-const fs = require('fs');
-const path = require('path');
 const CvDatabase = require('../../lib/db');
-
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
 
 let server;
 let port;
+let db;
 
-// HTTP helper
 function request(method, urlPath, body) {
   return new Promise((resolve, reject) => {
-    const payload = body ? JSON.stringify(body) : null;
-    const options = {
-      hostname: 'localhost',
-      port,
-      path: urlPath,
-      method,
-      headers: payload
-        ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
-        : {}
-    };
-    const req = http.request(options, (res) => {
+    const payload = body !== undefined ? JSON.stringify(body) : null;
+    const req = http.request({
+      hostname: 'localhost', port, path: urlPath, method,
+      headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {},
+    }, (res) => {
       let data = '';
-      res.on('data', (chunk) => (data += chunk));
+      res.on('data', (c) => (data += c));
       res.on('end', () => {
-        try {
-          resolve({ status: res.statusCode, body: JSON.parse(data), raw: data });
-        } catch {
-          resolve({ status: res.statusCode, body: data, raw: data });
-        }
+        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
+        catch { resolve({ status: res.statusCode, body: data }); }
       });
     });
     req.on('error', reject);
@@ -43,476 +30,173 @@ function request(method, urlPath, body) {
 }
 
 beforeAll(async () => {
-  // Inject an in-memory DB so we don't touch any real files
   const app = require('../../server');
-  const db = new CvDatabase(':memory:');
+  db = new CvDatabase(':memory:');
   app.setDb(db);
+  await new Promise((resolve) => { server = app.listen(0, () => { port = server.address().port; resolve(); }); });
+});
 
-  await new Promise((resolve) => {
-    server = app.listen(0, () => {
-      port = server.address().port;
-      resolve();
-    });
+afterAll(async () => { if (server) await new Promise((r) => server.close(r)); });
+
+let pid;
+beforeEach(async () => {
+  db.clearAllContent();
+  pid = Number((await request('POST', '/api/persons', { name: 'Test' })).body.id);
+});
+
+// Build a small master CV for `pid`; returns created ids.
+async function buildMaster() {
+  const summary = (await request('POST', `/api/persons/${pid}/sections`, { slug: 'summary', type: 'summary', title: 'Summary' })).body.id;
+  const sEntry = (await request('POST', `/api/sections/${summary}/entries`, { fields: { text: 'Full summary' } })).body.id;
+  const exp = (await request('POST', `/api/persons/${pid}/sections`, { slug: 'experience', type: 'experience', title: 'Experience' })).body.id;
+  const e1 = (await request('POST', `/api/sections/${exp}/entries`, { fields: { position: 'Engineer' } })).body.id;
+  const i1 = (await request('POST', `/api/entries/${e1}/items`, { content: 'Built frontend' })).body.id;
+  const e2 = (await request('POST', `/api/sections/${exp}/entries`, { fields: { position: 'Intern' } })).body.id;
+  return { summary, sEntry, exp, e1, i1, e2 };
+}
+
+describe('Persons', () => {
+  test('create, list, get master, rename, delete', async () => {
+    expect((await request('GET', '/api/persons')).body.persons.map((p) => p.name)).toContain('Test');
+    const master = await request('GET', `/api/persons/${pid}`);
+    expect(master.status).toBe(200);
+    expect(master.body.person.name).toBe('Test');
+
+    expect((await request('PUT', `/api/persons/${pid}`, { name: 'Renamed' })).status).toBe(200);
+    expect((await request('GET', `/api/persons/${pid}`)).body.person.name).toBe('Renamed');
+
+    expect((await request('DELETE', `/api/persons/${pid}`)).status).toBe(200);
+    expect((await request('GET', `/api/persons/${pid}`)).status).toBe(404);
+  });
+
+  test('duplicate name → 409, invalid id → 400/404', async () => {
+    expect((await request('POST', '/api/persons', { name: 'Test' })).status).toBe(409);
+    expect((await request('GET', '/api/persons/abc')).status).toBe(400);
+    expect((await request('GET', '/api/persons/99999')).status).toBe(404);
+    expect((await request('POST', '/api/persons', {})).status).toBe(400);
   });
 });
 
-afterAll(async () => {
-  if (server) {
-    await new Promise((resolve) => server.close(resolve));
-  }
-});
-
-// ---- GET /api/seed ----
-
-describe('GET /api/seed', () => {
-  test('returns full state with all required keys', async () => {
-    const res = await request('GET', '/api/seed');
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('data');
-    expect(res.body).toHaveProperty('resumeConfig');
-    expect(res.body).toHaveProperty('document');
-    expect(res.body).toHaveProperty('sectionData');
-  });
-
-  test('document has sections array', async () => {
-    const res = await request('GET', '/api/seed');
-    expect(Array.isArray(res.body.document.sections)).toBe(true);
-    expect(res.body.document.sections.length).toBeGreaterThan(0);
-  });
-
-  test('each document section has file and enabled fields', async () => {
-    const res = await request('GET', '/api/seed');
-    for (const sec of res.body.document.sections) {
-      expect(sec).toHaveProperty('file');
-      expect(sec).toHaveProperty('enabled');
-    }
+describe('Personal info', () => {
+  test('patch then get', async () => {
+    expect((await request('PATCH', `/api/persons/${pid}/personal`, { firstName: 'Ada', lastName: 'Lovelace' })).status).toBe(200);
+    expect((await request('GET', `/api/persons/${pid}/personal`)).body.firstName).toBe('Ada');
   });
 });
 
-// ---- Sections API ----
+describe('Sections / entries / items', () => {
+  test('CRUD and ordering', async () => {
+    const { exp, e1, e2 } = await buildMaster();
+    const section = await request('GET', `/api/sections/${exp}`);
+    expect(section.body.entries).toHaveLength(2);
 
-describe('Sections API', () => {
-  test('returns 409 for duplicate section', async () => {
-    // 'experience' is seeded by default via Jane Doe data
-    const sections = await request('GET', '/api/sections');
-    if (sections.body.length > 0) {
-      const existingId = sections.body[0].id;
-      const res = await request('POST', '/api/sections', {
-        id: existingId,
-        type: 'experience',
-        title: 'Dup',
-      });
-      expect(res.status).toBe(409);
-    }
+    // reorder entries
+    await request('PATCH', `/api/sections/${exp}/entries/order`, { ids: [e2, e1] });
+    expect((await request('GET', `/api/sections/${exp}`)).body.entries.map((e) => e.id)).toEqual([e2, e1]);
+
+    // update + delete entry
+    await request('PUT', `/api/entries/${e1}`, { fields: { position: 'Senior Engineer' } });
+    expect((await request('GET', `/api/entries/${e1}`)).body.fields.position).toBe('Senior Engineer');
+    await request('DELETE', `/api/entries/${e2}`);
+    expect((await request('GET', `/api/sections/${exp}`)).body.entries).toHaveLength(1);
+  });
+
+  test('duplicate slug for same person → 409', async () => {
+    await request('POST', `/api/persons/${pid}/sections`, { slug: 'skills', type: 'skills', title: 'Skills' });
+    expect((await request('POST', `/api/persons/${pid}/sections`, { slug: 'skills', type: 'skills', title: 'Skills' })).status).toBe(409);
+  });
+
+  test('invalid section type → 400', async () => {
+    expect((await request('POST', `/api/persons/${pid}/sections`, { slug: 'x', type: 'bogus', title: 'X' })).status).toBe(400);
   });
 });
 
-// ---- Documents ----
-
-describe('PUT /api/documents/:variant', () => {
-  test('updates document sections', async () => {
-    const get = await request('GET', '/api/documents/cv');
-    const sections = get.body.sections;
-    if (sections.length < 2) return; // Need at least 2 to reorder
-
-    // Reorder
-    const reordered = [...sections].reverse();
-    await request('PUT', '/api/documents/cv', {
-      sections: reordered.map(s => ({ sectionId: s.sectionId, enabled: s.enabled })),
-    });
-
-    const get2 = await request('GET', '/api/documents/cv');
-    expect(get2.body.sections[0].sectionId).toBe(reordered[0].sectionId);
-
-    // Restore
-    await request('PUT', '/api/documents/cv', {
-      sections: sections.map(s => ({ sectionId: s.sectionId, enabled: s.enabled })),
-    });
+describe('Tags', () => {
+  test('add to entry + item, list, remove', async () => {
+    const { e1, i1 } = await buildMaster();
+    expect((await request('POST', `/api/entries/${e1}/tags`, { tags: ['Frontend', 'core'] })).status).toBe(200);
+    await request('POST', `/api/items/${i1}/tags`, { tags: ['frontend'] });
+    expect((await request('GET', `/api/persons/${pid}/tags`)).body.tags.sort()).toEqual(['core', 'frontend']);
+    await request('DELETE', `/api/entries/${e1}/tags/core`);
+    expect((await request('GET', `/api/entries/${e1}`)).body.tags).toEqual(['frontend']);
   });
 });
 
-// ---- Cover letter sections ----
+describe('Variants', () => {
+  test('create, rules, resolve filters by tag', async () => {
+    const { exp, e1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'FE', kind: 'resume' })).body.id;
+    await request('PUT', `/api/variants/${v}/rules`, { include: ['frontend'] });
 
-describe('Cover letter sections', () => {
-  test('GET returns seeded sections', async () => {
-    const res = await request('GET', '/api/coverletter/sections');
-    expect(res.status).toBe(200);
-    expect(res.body.length).toBeGreaterThanOrEqual(1);
+    const resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
+    const expSec = resolved.sections.find((s) => s.id === 'experience');
+    expect(expSec.entries.map((e) => e.fields.position)).toEqual(['Engineer']); // Intern (untagged) dropped
   });
 
-  test('POST creates section', async () => {
-    const res = await request('POST', '/api/coverletter/sections', {
-      title: 'New Section',
-      body: 'New body text.',
-    });
-    expect(res.status).toBe(201);
-
-    // Cleanup
-    await request('DELETE', `/api/coverletter/sections/${res.body.id}`);
+  test('override forces inclusion against tags', async () => {
+    const { e1, e2 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'resume' })).body.id;
+    await request('PUT', `/api/variants/${v}/rules`, { include: ['frontend'] });
+    await request('PUT', `/api/variants/${v}/overrides`, { targetType: 'entry', targetId: e2, included: true });
+    const resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
+    const positions = resolved.sections.find((s) => s.id === 'experience').entries.map((e) => e.fields.position).sort();
+    expect(positions).toEqual(['Engineer', 'Intern']);
   });
 
-  test('PUT updates section', async () => {
-    const all = await request('GET', '/api/coverletter/sections');
-    const id = all.body[0].id;
-
-    await request('PUT', `/api/coverletter/sections/${id}`, { title: 'Updated Title' });
-
-    const all2 = await request('GET', '/api/coverletter/sections');
-    expect(all2.body.find(s => s.id === id).title).toBe('Updated Title');
-
-    // Restore
-    await request('PUT', `/api/coverletter/sections/${id}`, { title: all.body[0].title });
+  test('variant section list controls presence/order', async () => {
+    const m = await buildMaster();
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id;
+    await request('PUT', `/api/variants/${v}/sections`, { sections: [
+      { sectionId: m.exp, enabled: true, sortOrder: 0 },
+      { sectionId: m.summary, enabled: false, sortOrder: 1 },
+    ] });
+    const resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
+    expect(resolved.sections.map((s) => s.id)).toEqual(['experience']); // summary disabled
   });
 
-  test('DELETE removes section', async () => {
-    const res = await request('POST', '/api/coverletter/sections', {
-      title: 'Delete Me',
-      body: 'x',
-    });
-    const del = await request('DELETE', `/api/coverletter/sections/${res.body.id}`);
-    expect(del.status).toBe(200);
+  test('coverletter variant: letter sections + resolve', async () => {
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'CL', kind: 'coverletter' })).body.id;
+    await request('POST', `/api/variants/${v}/letter-sections`, { title: 'Intro', body: 'Hello' });
+    const resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
+    expect(resolved.variant).toBe('coverletter');
+    expect(resolved.coverletter.sections.map((s) => s.title)).toEqual(['Intro']);
   });
 
-  test('PATCH reorders sections', async () => {
-    const all = await request('GET', '/api/coverletter/sections');
-    if (all.body.length < 2) return; // Need at least 2 to reorder
-    const ids = all.body.map(s => s.id);
-    const reversed = [...ids].reverse();
-
-    await request('PATCH', '/api/coverletter/sections/order', { ids: reversed });
-
-    const all2 = await request('GET', '/api/coverletter/sections');
-    expect(all2.body.map(s => s.id)).toEqual(reversed);
-
-    // Restore
-    await request('PATCH', '/api/coverletter/sections/order', { ids });
+  test('invalid kind → 400; unknown variant → 404', async () => {
+    expect((await request('POST', `/api/persons/${pid}/variants`, { name: 'X', kind: 'bad' })).status).toBe(400);
+    expect((await request('GET', '/api/variants/99999')).status).toBe(404);
+    expect((await request('GET', '/api/variants/99999/resolve')).status).toBe(404);
   });
 });
 
-// ---- Export + Health ----
+describe('Export / import round-trip', () => {
+  test('exported new-shape re-imports faithfully', async () => {
+    const { e1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    await request('PATCH', `/api/persons/${pid}/personal`, { firstName: 'Round' });
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'FE', kind: 'resume' })).body.id;
+    await request('PUT', `/api/variants/${v}/rules`, { include: ['frontend'] });
 
-describe('GET /api/export', () => {
-  test('returns full export', async () => {
-    const res = await request('GET', '/api/export');
-    expect(res.status).toBe(200);
-    expect(res.body.personal).toBeDefined();
-    expect(res.body.sections).toBeDefined();
+    const exported = (await request('GET', `/api/persons/${pid}/export`)).body;
+
+    const pid2 = (await request('POST', '/api/persons', { name: 'Clone' })).body.id;
+    expect((await request('POST', `/api/persons/${pid2}/import`, exported)).status).toBe(200);
+
+    const master = (await request('GET', `/api/persons/${pid2}`)).body;
+    expect(master.personal.firstName).toBe('Round');
+    expect(master.tags).toEqual(['frontend']);
+    const feVariant = master.variants.find((x) => x.name === 'FE');
+    expect(feVariant.rules.include).toEqual(['frontend']);
   });
 });
 
-describe('GET /api/health', () => {
-  test('returns ok', async () => {
-    const res = await request('GET', '/api/health');
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe('ok');
-  });
-});
-
-// ---- Validation ----
-
-describe('Request validation', () => {
-  test('rejects createSection with missing fields', async () => {
-    const res = await request('POST', '/api/sections', { id: 'x' });
-    expect(res.status).toBe(400);
-    expect(res.body.error).toBe('Validation failed');
-  });
-
-  test('rejects createEntry with missing fields', async () => {
-    const sections = await request('GET', '/api/sections');
-    if (sections.body.length > 0) {
-      const id = sections.body[0].id;
-      const res = await request('POST', `/api/sections/${id}/entries`, {});
-      expect(res.status).toBe(400);
-    }
-  });
-
-  test('rejects reorder with duplicate ids', async () => {
-    const sections = await request('GET', '/api/sections');
-    if (sections.body.length > 0) {
-      const id = sections.body[0].id;
-      const res = await request('PATCH', `/api/sections/${id}/entries/order`, {
-        ids: [1, 1, 2],
-      });
-      expect(res.status).toBe(400);
-    }
-  });
-});
-
-// ---- Static files ----
-
-describe('Static file serving', () => {
-  test('serves index.html at root', async () => {
-    const res = await request('GET', '/');
-    expect(res.status).toBe(200);
-    expect(res.raw).toContain('<html');
-  });
-});
-
-// ---- Persons API ----
-
-describe('Persons API', () => {
-  test('GET /api/persons returns persons with activePersonId', async () => {
-    const res = await request('GET', '/api/persons');
-    expect(res.status).toBe(200);
-    expect(res.body.persons).toBeInstanceOf(Array);
-    expect(res.body.persons.length).toBeGreaterThan(0);
-    expect(res.body.activePersonId).toBeTruthy();
-  });
-
-  test('POST /api/persons creates a new person', async () => {
-    const res = await request('POST', '/api/persons', { name: 'Test Person' });
-    expect(res.status).toBe(201);
-    expect(res.body.id).toBeGreaterThan(0);
-
-    const list = await request('GET', '/api/persons');
-    expect(list.body.persons.some(p => p.name === 'Test Person')).toBe(true);
-  });
-
-  test('POST /api/persons returns 409 for duplicate name', async () => {
-    await request('POST', '/api/persons', { name: 'Duplicate' });
-    const res = await request('POST', '/api/persons', { name: 'Duplicate' });
-    expect(res.status).toBe(409);
-  });
-
-  test('POST /api/persons returns 400 for missing name', async () => {
-    const res = await request('POST', '/api/persons', {});
-    expect(res.status).toBe(400);
-  });
-
-  test('PUT /api/persons/:id renames a person', async () => {
-    const create = await request('POST', '/api/persons', { name: 'Old Name' });
-    const id = create.body.id;
-
-    const res = await request('PUT', '/api/persons/' + id, { name: 'New Name' });
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-
-    const list = await request('GET', '/api/persons');
-    expect(list.body.persons.some(p => p.name === 'New Name')).toBe(true);
-    expect(list.body.persons.some(p => p.name === 'Old Name')).toBe(false);
-  });
-
-  test('DELETE /api/persons/:id deletes a non-active person', async () => {
-    const create = await request('POST', '/api/persons', { name: 'To Delete' });
-    const id = create.body.id;
-
-    const res = await request('DELETE', '/api/persons/' + id);
-    expect(res.status).toBe(200);
-
-    const list = await request('GET', '/api/persons');
-    expect(list.body.persons.some(p => p.name === 'To Delete')).toBe(false);
-  });
-
-  test('DELETE /api/persons/:id returns 400 for active person', async () => {
-    const list = await request('GET', '/api/persons');
-    const activeId = list.body.activePersonId;
-
-    const res = await request('DELETE', '/api/persons/' + activeId);
-    expect(res.status).toBe(400);
-  });
-
-  test('POST /api/persons/:id/switch switches active person', async () => {
-    const create = await request('POST', '/api/persons', { name: 'Switch Target' });
-    const newId = create.body.id;
-
-    const res = await request('POST', '/api/persons/' + newId + '/switch');
-    expect(res.status).toBe(200);
-
-    const list = await request('GET', '/api/persons');
-    expect(list.body.activePersonId).toBe(newId);
-
-    // Content should be empty (new person has no data)
-    const sections = await request('GET', '/api/sections');
-    expect(sections.body.length).toBe(0);
-  });
-
-  test('POST /api/persons/:id/switch returns 404 for non-existent person', async () => {
-    const res = await request('POST', '/api/persons/99999/switch');
-    expect(res.status).toBe(404);
-  });
-});
-
-// ---- Per-person JSON export ----
-
-describe('GET /api/persons/:id/export', () => {
-  test('returns the stored JSON for a non-active person', async () => {
-    // Seed the active person with some data first so save-on-switch captures it
-    await request('POST', '/api/import', {
-      personal: { firstName: 'Active', lastName: 'User' },
-      sections: [], documents: { cv: [], resume: [] }, coverletter: { sections: [] },
-    });
-    // Create a new person and seed their stored data via switch + import + save
-    const create = await request('POST', '/api/persons', { name: 'Export Target' });
-    const id = create.body.id;
-    await request('POST', '/api/persons/' + id + '/switch');
-    await request('POST', '/api/import', {
-      personal: { firstName: 'Stored', lastName: 'Snapshot' },
-      sections: [{ id: 's', type: 'cventries', title: 'S', entries: [] }],
-      documents: { cv: [{ sectionId: 's', enabled: true, sortOrder: 0 }], resume: [] },
-      coverletter: { sections: [] },
-    });
-    await request('POST', '/api/persons/' + id + '/save');
-    // Switch away so the request hits the non-active branch
-    const list = await request('GET', '/api/persons');
-    const otherId = list.body.persons.find(p => p.id !== id).id;
-    await request('POST', '/api/persons/' + otherId + '/switch');
-
-    const res = await request('GET', '/api/persons/' + id + '/export');
-    expect(res.status).toBe(200);
-    expect(res.body.personal.firstName).toBe('Stored');
-    expect(res.body.sections).toHaveLength(1);
-    expect(res.body.sections[0].id).toBe('s');
-  });
-
-  test('returns fresh working-state data for the active person (reads live tables)', async () => {
-    // Import data — leaves working tables populated but persons.data may be stale.
-    // The active-person export reads live working state, so it reflects this.
-    await request('POST', '/api/import', {
-      personal: { firstName: 'Fresh', lastName: 'Active' },
-      sections: [], documents: { cv: [], resume: [] }, coverletter: { sections: [] },
-    });
-    const list = await request('GET', '/api/persons');
-    const id = list.body.activePersonId;
-
-    const res = await request('GET', '/api/persons/' + id + '/export');
-    expect(res.status).toBe(200);
-    expect(res.body.personal.firstName).toBe('Fresh');
-  });
-
-  test('returns 404 for non-existent person', async () => {
-    const res = await request('GET', '/api/persons/99999/export');
-    expect(res.status).toBe(404);
-  });
-
-  test('returns 400 for non-numeric person id', async () => {
-    const res = await request('GET', '/api/persons/abc/export');
-    expect(res.status).toBe(400);
-  });
-});
-
-// ---- Per-person variant PDF ----
-//
-// These tests cover validation/error paths only — successful renders require
-// xelatex + font caches which aren't guaranteed outside the Docker image. The
-// happy path is exercised by /api/compile and the corresponding manual smoke
-// tests; the route shares the same generate+xelatex code path here.
-
-describe('GET /api/persons/:id/pdf/:variant', () => {
-  test('returns 400 for invalid variant', async () => {
-    const res = await request('GET', '/api/persons/1/pdf/not-a-variant');
-    expect(res.status).toBe(400);
-  });
-
-  test('returns 404 for non-existent person', async () => {
-    const res = await request('GET', '/api/persons/99999/pdf/cv');
-    expect(res.status).toBe(404);
-  });
-
-  test('returns 400 when the person row exists but has no data', async () => {
-    const create = await request('POST', '/api/persons', { name: 'Empty Person For PDF' });
-    const id = create.body.id;
-    const res = await request('GET', '/api/persons/' + id + '/pdf/cv');
-    expect(res.status).toBe(400);
-  });
-
-  test('returns 400 for non-numeric person id', async () => {
-    const res = await request('GET', '/api/persons/abc/pdf/cv');
-    expect(res.status).toBe(400);
-  });
-});
-
-// ---- Import API ----
-
-describe('Import API', () => {
-  test('POST /api/import imports data', async () => {
-    const importData = {
-      personal: { firstName: 'Imported', lastName: 'User' },
-      sections: [
-        {
-          id: 'work', type: 'cventries', title: 'Work',
-          entries: [
-            {
-              id: 1, section_id: 'work', sort_order: 0, resumeIncluded: true,
-              fields: { position: 'Tester', organization: 'Test Co', location: 'Remote', date: '2024' },
-              items: []
-            }
-          ]
-        }
-      ],
-      documents: { cv: [{ sectionId: 'work', enabled: true, sortOrder: 0 }], resume: [] },
-      coverletter: { recipientName: 'Nobody', sections: [] }
-    };
-
-    const res = await request('POST', '/api/import', importData);
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-
-    // Verify data was imported
-    const personal = await request('GET', '/api/settings?prefix=personal');
-    expect(personal.body['personal.firstName']).toBe('Imported');
-
-    const sections = await request('GET', '/api/sections');
-    expect(sections.body.length).toBe(1);
-    expect(sections.body[0].id).toBe('work');
-  });
-
-  test('POST /api/import returns 400 for invalid data', async () => {
-    const res = await request('POST', '/api/import', { invalid: true });
-    expect(res.status).toBe(400);
-  });
-});
-
-// ---- Person Switch Workflow ----
-
-describe('Person switch workflow', () => {
-  test('full round-trip: create, switch, modify, switch back', async () => {
-    // First, set up a known state: import Alice's data as current person
-    const aliceData = {
-      personal: { firstName: 'Alice', lastName: 'Wonder' },
-      sections: [
-        { id: 'work', type: 'cventries', title: 'Work',
-          entries: [{ id: 1, section_id: 'work', sort_order: 0, resumeIncluded: true,
-            fields: { position: 'Dev', organization: 'Co', location: 'NY', date: '2024' }, items: [] }] }
-      ],
-      documents: { cv: [{ sectionId: 'work', enabled: true, sortOrder: 0 }], resume: [] },
-      coverletter: { sections: [] }
-    };
-    await request('POST', '/api/import', aliceData);
-
-    const initial = await request('GET', '/api/persons');
-    const aliceId = initial.body.activePersonId;
-
-    // Create Bob
-    const bob = await request('POST', '/api/persons', { name: 'Bob Builder' });
-    const bobId = bob.body.id;
-
-    // Switch to Bob (saves Alice's data, loads Bob's empty data)
-    await request('POST', '/api/persons/' + bobId + '/switch');
-
-    // Verify Bob is active with empty content
-    let sections = await request('GET', '/api/sections');
-    expect(sections.body.length).toBe(0);
-
-    // Add data to Bob via import
-    await request('POST', '/api/import', {
-      personal: { firstName: 'Bob', lastName: 'Builder' },
-      sections: [],
-      documents: { cv: [], resume: [] },
-      coverletter: { sections: [] }
-    });
-
-    // Switch back to Alice
-    await request('POST', '/api/persons/' + aliceId + '/switch');
-
-    // Verify Alice's data is restored
-    const personal = await request('GET', '/api/settings?prefix=personal');
-    expect(personal.body['personal.firstName']).toBe('Alice');
-    sections = await request('GET', '/api/sections');
-    expect(sections.body.length).toBe(1);
-
-    // Switch back to Bob
-    await request('POST', '/api/persons/' + bobId + '/switch');
-    const bobPersonal = await request('GET', '/api/settings?prefix=personal');
-    expect(bobPersonal.body['personal.firstName']).toBe('Bob');
+describe('Catalog + health', () => {
+  test('catalog returns section types; health reports persons', async () => {
+    expect((await request('GET', '/api/catalog')).body.validSectionTypes).toContain('experience');
+    const health = await request('GET', '/api/health');
+    expect(health.body.status).toBe('ok');
+    expect(health.body.persons).toBeGreaterThanOrEqual(1);
   });
 });
