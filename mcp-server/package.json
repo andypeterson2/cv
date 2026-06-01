@@ -1,0 +1,22 @@
+{
+  "name": "cv-editor-mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Model Context Protocol server exposing CV editor REST endpoints as typed tools.",
+  "main": "server.mjs",
+  "bin": {
+    "cv-editor-mcp": "./server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "smoke": "node smoke-test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "ajv": "^8.17.1"
+  }
+}
