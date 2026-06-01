@@ -1,48 +1,48 @@
 const express = require('express');
 const { validate } = require('../lib/schema');
-const { NotFoundError, ConflictError } = require('../lib/errors');
+const { AppError, NotFoundError, ConflictError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
+
+function intId(value) {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n)) throw new AppError('Invalid id', 400);
+  return n;
+}
 
 module.exports = function createSectionsRouter(getDb) {
   const router = express.Router();
 
-  router.get('/', wrap((req, res) => {
-    res.json(getDb().getSections());
-  }));
-
   router.get('/:id', wrap((req, res) => {
-    const section = getDb().getSection(req.params.id);
+    const section = getDb().getSection(intId(req.params.id));
     if (!section) throw new NotFoundError('Section not found');
     res.json(section);
   }));
 
-  router.post('/', validate('createSection'), wrap((req, res) => {
+  router.put('/:id', validate('updateSection'), wrap((req, res) => {
+    const id = intId(req.params.id);
+    if (!getDb().getSection(id)) throw new NotFoundError('Section not found');
     try {
-      getDb().createSection(req.body.id, req.body.type, req.body.title);
+      getDb().updateSection(id, req.body);
+      res.json({ success: true });
     } catch (e) {
-      if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('Section already exists');
+      if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('A section with that slug already exists');
       throw e;
     }
-    res.status(201).json({ id: req.body.id });
-  }));
-
-  router.put('/:id', validate('updateSection'), wrap((req, res) => {
-    getDb().updateSection(req.params.id, { title: req.body.title });
-    res.json({ success: true });
   }));
 
   router.delete('/:id', wrap((req, res) => {
-    getDb().deleteSection(req.params.id);
+    getDb().deleteSection(intId(req.params.id));
     res.json({ success: true });
   }));
 
   router.post('/:id/entries', validate('createEntry'), wrap((req, res) => {
-    const entryId = getDb().createEntry(req.params.id, req.body.fields);
-    res.status(201).json({ id: Number(entryId) });
+    const id = intId(req.params.id);
+    if (!getDb().getSection(id)) throw new NotFoundError('Section not found');
+    res.status(201).json({ id: Number(getDb().createEntry(id, req.body.fields)) });
   }));
 
   router.patch('/:id/entries/order', validate('reorder'), wrap((req, res) => {
-    getDb().reorderEntries(req.params.id, req.body.ids);
+    getDb().reorderEntries(intId(req.params.id), req.body.ids);
     res.json({ success: true });
   }));
 

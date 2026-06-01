@@ -1,23 +1,22 @@
 /**
- * ajv JSON Schema definitions for API request validation.
+ * ajv JSON Schema definitions for API request validation (normalized model).
  *
- * Each schema validates the request body for a specific write endpoint.
- * Exported as compiled validator functions via ajv.compile().
+ * Each schema validates the request body for a write endpoint. Variants are
+ * addressed by id and carry a `kind` (cv/resume/coverletter); content is shaped
+ * per-variant via tags + overrides rather than a single resume_included flag.
  */
 
 const Ajv = require('ajv');
 const LATEX_UNITS = require('./latex-units');
+const { VALID_SEMANTIC_TYPES } = require('./latex-type-map');
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: false });
 
-// Canonical list — keep in sync with public/cv/section-types.js
-const { VALID_SEMANTIC_TYPES } = require('./latex-type-map');
-const VALID_SECTION_TYPES = VALID_SEMANTIC_TYPES;
-
-const VALID_VARIANTS = ['cv', 'resume', 'coverletter'];
+const VALID_KINDS = ['cv', 'resume', 'coverletter'];
+const SLUG = '^[a-z0-9_-]+$';
 
 // ---------------------------------------------------------------------------
-// Settings
+// Global settings (style / spacing / fonts)
 // ---------------------------------------------------------------------------
 
 const settingsSchema = {
@@ -28,10 +27,7 @@ const settingsSchema = {
         { type: 'string' },
         {
           type: 'object',
-          properties: {
-            num: { type: 'number' },
-            unit: { type: 'string', enum: LATEX_UNITS },
-          },
+          properties: { num: { type: 'number' }, unit: { type: 'string', enum: LATEX_UNITS } },
           required: ['num', 'unit'],
           additionalProperties: false,
         },
@@ -43,111 +39,146 @@ const settingsSchema = {
 };
 
 // ---------------------------------------------------------------------------
+// Persons + personal info
+// ---------------------------------------------------------------------------
+
+const createPersonSchema = {
+  type: 'object',
+  properties: { name: { type: 'string', minLength: 1, maxLength: 200 } },
+  required: ['name'],
+  additionalProperties: false,
+};
+
+const updatePersonSchema = createPersonSchema;
+
+const personalSchema = {
+  type: 'object',
+  patternProperties: { '^[a-zA-Z0-9_]+$': { type: 'string' } },
+  additionalProperties: false,
+  minProperties: 1,
+};
+
+// Import is intentionally permissive: accepts both the new export shape
+// ({personal, sections, variants, ...}) and the legacy shape ({personal,
+// sections, documents, coverletter}).
+const importSchema = { type: 'object', minProperties: 1 };
+
+// ---------------------------------------------------------------------------
 // Sections
 // ---------------------------------------------------------------------------
 
 const createSectionSchema = {
   type: 'object',
   properties: {
-    id: { type: 'string', minLength: 1, maxLength: 100, pattern: '^[a-z0-9_-]+$' },
-    type: {
-      type: 'string',
-      enum: VALID_SECTION_TYPES,
-    },
+    slug: { type: 'string', minLength: 1, maxLength: 100, pattern: SLUG },
+    type: { type: 'string', enum: VALID_SEMANTIC_TYPES },
     title: { type: 'string', maxLength: 200 },
   },
-  required: ['id', 'type', 'title'],
+  required: ['slug', 'type', 'title'],
   additionalProperties: false,
 };
 
 const updateSectionSchema = {
   type: 'object',
   properties: {
+    slug: { type: 'string', minLength: 1, maxLength: 100, pattern: SLUG },
+    type: { type: 'string', enum: VALID_SEMANTIC_TYPES },
     title: { type: 'string', maxLength: 200 },
   },
-  required: ['title'],
+  minProperties: 1,
   additionalProperties: false,
 };
 
 // ---------------------------------------------------------------------------
-// Entries
+// Entries + items
 // ---------------------------------------------------------------------------
 
 const entryFieldsSchema = {
   type: 'object',
-  patternProperties: {
-    '^[a-zA-Z0-9_]+$': { type: 'string' },
-  },
+  patternProperties: { '^[a-zA-Z0-9_]+$': { type: 'string' } },
   additionalProperties: false,
 };
 
 const createEntrySchema = {
   type: 'object',
-  properties: {
-    fields: entryFieldsSchema,
-  },
+  properties: { fields: entryFieldsSchema },
   required: ['fields'],
   additionalProperties: false,
 };
 
 const updateEntrySchema = {
   type: 'object',
-  properties: {
-    fields: entryFieldsSchema,
-    resumeIncluded: { type: 'boolean' },
-  },
-  minProperties: 1,
+  properties: { fields: entryFieldsSchema },
+  required: ['fields'],
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
-// Items (bullet points)
-// ---------------------------------------------------------------------------
-
 const createItemSchema = {
   type: 'object',
-  properties: {
-    content: { type: 'string' },
-    title: { type: 'string' },
-  },
+  properties: { content: { type: 'string' }, title: { type: 'string' } },
   required: ['content'],
   additionalProperties: false,
 };
 
 const updateItemSchema = {
   type: 'object',
-  properties: {
-    content: { type: 'string' },
-    resumeIncluded: { type: 'boolean' },
-    title: { type: 'string' },
-  },
+  properties: { content: { type: 'string' }, title: { type: 'string' } },
   minProperties: 1,
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
-// Reorder (shared schema for entries, items, coverletter sections)
-// ---------------------------------------------------------------------------
-
 const reorderSchema = {
   type: 'object',
   properties: {
-    ids: {
-      type: 'array',
-      items: { type: 'integer', minimum: 1 },
-      minItems: 1,
-      uniqueItems: true,
-    },
+    ids: { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1, uniqueItems: true },
   },
   required: ['ids'],
   additionalProperties: false,
 };
 
 // ---------------------------------------------------------------------------
-// Document sections
+// Tags
 // ---------------------------------------------------------------------------
 
-const documentSectionsSchema = {
+const addTagsSchema = {
+  type: 'object',
+  properties: {
+    tags: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 60 }, minItems: 1 },
+  },
+  required: ['tags'],
+  additionalProperties: false,
+};
+
+// ---------------------------------------------------------------------------
+// Variants
+// ---------------------------------------------------------------------------
+
+const createVariantSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 200 },
+    kind: { type: 'string', enum: VALID_KINDS },
+  },
+  required: ['name', 'kind'],
+  additionalProperties: false,
+};
+
+const updateVariantSchema = {
+  type: 'object',
+  properties: { name: { type: 'string', minLength: 1, maxLength: 200 } },
+  required: ['name'],
+  additionalProperties: false,
+};
+
+const tagList = { type: 'array', items: { type: 'string', minLength: 1, maxLength: 60 } };
+
+const variantRulesSchema = {
+  type: 'object',
+  properties: { include: tagList, exclude: tagList },
+  additionalProperties: false,
+};
+
+const variantSectionsSchema = {
   type: 'object',
   properties: {
     sections: {
@@ -155,9 +186,9 @@ const documentSectionsSchema = {
       items: {
         type: 'object',
         properties: {
-          sectionId: { type: 'string', minLength: 1 },
+          sectionId: { type: 'integer', minimum: 1 },
           enabled: { type: 'boolean' },
-          resumeParagraphText: { type: ['string', 'null'] },
+          sortOrder: { type: 'integer' },
         },
         required: ['sectionId'],
         additionalProperties: false,
@@ -168,97 +199,63 @@ const documentSectionsSchema = {
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
-// Cover letter sections
-// ---------------------------------------------------------------------------
-
-const createCoverletterSectionSchema = {
+const variantOverrideSchema = {
   type: 'object',
   properties: {
-    title: { type: 'string', maxLength: 200 },
-    body: { type: 'string' },
+    targetType: { type: 'string', enum: ['entry', 'item'] },
+    targetId: { type: 'integer', minimum: 1 },
+    included: { type: ['boolean', 'null'] },
+    textOverride: { type: ['string', 'null'] },
+    sortOverride: { type: ['integer', 'null'] },
   },
+  required: ['targetType', 'targetId'],
+  additionalProperties: false,
+};
+
+const createLetterSectionSchema = {
+  type: 'object',
+  properties: { title: { type: 'string', maxLength: 200 }, body: { type: 'string' } },
   required: ['title', 'body'],
   additionalProperties: false,
 };
 
-const updateCoverletterSectionSchema = {
+const updateLetterSectionSchema = {
   type: 'object',
-  properties: {
-    title: { type: 'string', maxLength: 200 },
-    body: { type: 'string' },
-  },
+  properties: { title: { type: 'string', maxLength: 200 }, body: { type: 'string' } },
   minProperties: 1,
   additionalProperties: false,
 };
 
 // ---------------------------------------------------------------------------
-// Compile
-// ---------------------------------------------------------------------------
 
-const variantSchema = {
-  type: 'string',
-  enum: VALID_VARIANTS,
+const schemas = {
+  settings: settingsSchema,
+  createPerson: createPersonSchema,
+  updatePerson: updatePersonSchema,
+  personal: personalSchema,
+  import: importSchema,
+  createSection: createSectionSchema,
+  updateSection: updateSectionSchema,
+  createEntry: createEntrySchema,
+  updateEntry: updateEntrySchema,
+  createItem: createItemSchema,
+  updateItem: updateItemSchema,
+  reorder: reorderSchema,
+  addTags: addTagsSchema,
+  createVariant: createVariantSchema,
+  updateVariant: updateVariantSchema,
+  variantRules: variantRulesSchema,
+  variantSections: variantSectionsSchema,
+  variantOverride: variantOverrideSchema,
+  createLetterSection: createLetterSectionSchema,
+  updateLetterSection: updateLetterSectionSchema,
 };
 
-// ---------------------------------------------------------------------------
-// Persons
-// ---------------------------------------------------------------------------
-
-const createPersonSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string', minLength: 1, maxLength: 200 },
-  },
-  required: ['name'],
-  additionalProperties: false,
-};
-
-const updatePersonSchema = {
-  type: 'object',
-  properties: {
-    name: { type: 'string', minLength: 1, maxLength: 200 },
-  },
-  required: ['name'],
-  additionalProperties: false,
-};
-
-const importDataSchema = {
-  type: 'object',
-  properties: {
-    personal: { type: 'object' },
-    sections: { type: 'array' },
-    documents: { type: 'object' },
-    coverletter: { type: 'object' },
-  },
-  required: ['personal', 'sections'],
-  additionalProperties: false,
-};
-
-// ---------------------------------------------------------------------------
-// Compile and export validators
-// ---------------------------------------------------------------------------
-
-const validators = {
-  settings: ajv.compile(settingsSchema),
-  createSection: ajv.compile(createSectionSchema),
-  updateSection: ajv.compile(updateSectionSchema),
-  createEntry: ajv.compile(createEntrySchema),
-  updateEntry: ajv.compile(updateEntrySchema),
-  createItem: ajv.compile(createItemSchema),
-  updateItem: ajv.compile(updateItemSchema),
-  reorder: ajv.compile(reorderSchema),
-  documentSections: ajv.compile(documentSectionsSchema),
-  createCoverletterSection: ajv.compile(createCoverletterSectionSchema),
-  updateCoverletterSection: ajv.compile(updateCoverletterSectionSchema),
-  createPerson: ajv.compile(createPersonSchema),
-  updatePerson: ajv.compile(updatePersonSchema),
-  importData: ajv.compile(importDataSchema),
-};
+const validators = {};
+for (const [name, schema] of Object.entries(schemas)) validators[name] = ajv.compile(schema);
 
 /**
- * Express middleware factory. Returns a middleware that validates req.body
- * against the named schema. Responds 400 with errors on failure.
+ * Express middleware factory: validates req.body against a named schema.
  */
 function validate(schemaName) {
   const validator = validators[schemaName];
@@ -267,41 +264,20 @@ function validate(schemaName) {
     if (validator(req.body)) {
       next();
     } else {
-      res.status(400).json({
-        error: 'Validation failed',
-        details: validator.errors,
-      });
+      res.status(400).json({ error: 'Validation failed', details: validator.errors });
     }
   };
 }
 
-/**
- * Check if a variant string is valid.
- */
-function isValidVariant(variant) {
-  return VALID_VARIANTS.includes(variant);
+/** A variant kind is one of cv / resume / coverletter. */
+function isValidKind(kind) {
+  return VALID_KINDS.includes(kind);
 }
 
 module.exports = {
   validators,
   validate,
-  isValidVariant,
-  VALID_VARIANTS,
-  // Export raw schemas for testing
-  schemas: {
-    settings: settingsSchema,
-    createSection: createSectionSchema,
-    updateSection: updateSectionSchema,
-    createEntry: createEntrySchema,
-    updateEntry: updateEntrySchema,
-    createItem: createItemSchema,
-    updateItem: updateItemSchema,
-    reorder: reorderSchema,
-    documentSections: documentSectionsSchema,
-    createCoverletterSection: createCoverletterSectionSchema,
-    updateCoverletterSection: updateCoverletterSectionSchema,
-    createPerson: createPersonSchema,
-    updatePerson: updatePersonSchema,
-    importData: importDataSchema,
-  },
+  isValidKind,
+  VALID_KINDS,
+  schemas,
 };
