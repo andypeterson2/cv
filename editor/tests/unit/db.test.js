@@ -1,907 +1,345 @@
 /**
- * Unit tests for the SQLite database access layer.
+ * Unit tests for the normalized SQLite access layer + variant resolver.
  * All tests use :memory: databases — no file I/O.
  */
 
 const CvDatabase = require('../../lib/db');
 
 let db;
+let pid;
 
 beforeEach(() => {
   db = new CvDatabase(':memory:');
-  // Clear seeded Jane Doe data so existing tests start with a blank slate
-  db.clearAllContent();
+  db.clearAllContent(); // remove seeded Jane Doe → blank slate
+  pid = db.createPerson('Test Person');
 });
 
 afterEach(() => {
   db.close();
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// Settings
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Settings', () => {
-  test('getSettings returns empty object when no settings exist', () => {
-    expect(db.getSettings('personal')).toEqual({});
-  });
-
-  test('setSettings upserts key-value pairs', () => {
-    db.setSettings({
-      'personal.firstName': 'Andrew',
-      'personal.lastName': 'Peterson',
-    });
-    const result = db.getSettings('personal');
-    expect(result['personal.firstName']).toBe('Andrew');
-    expect(result['personal.lastName']).toBe('Peterson');
-  });
-
-  test('setSettings overwrites existing values', () => {
-    db.setSettings({ 'personal.firstName': 'Andrew' });
-    db.setSettings({ 'personal.firstName': 'Andy' });
-    expect(db.getSettings('personal')['personal.firstName']).toBe('Andy');
-  });
-
-  test('getSettings with no prefix returns all settings', () => {
-    db.setSettings({
-      'personal.firstName': 'Andrew',
-      'coverletter.title': 'Application',
-    });
-    const all = db.getSettings();
-    // +1 for _active_person_id from seed
-    expect(all['personal.firstName']).toBe('Andrew');
-    expect(all['coverletter.title']).toBe('Application');
-  });
-
-  test('getSettings filters by prefix', () => {
-    db.setSettings({
-      'personal.firstName': 'Andrew',
-      'coverletter.title': 'Application',
-    });
-    const personal = db.getSettings('personal');
-    expect(Object.keys(personal).length).toBe(1);
-    expect(personal['personal.firstName']).toBe('Andrew');
-  });
-
-  test('setSettings handles null values', () => {
-    db.setSettings({ 'personal.quote': null });
-    expect(db.getSettings('personal')['personal.quote']).toBeNull();
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Sections
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Sections', () => {
-  test('getSections returns empty array initially', () => {
-    expect(db.getSections()).toEqual([]);
-  });
-
-  test('createSection and getSections roundtrip', () => {
-    db.createSection('experience', 'experience', 'Experience');
-    db.createSection('skills', 'skills', 'Skills');
-    const sections = db.getSections();
-    expect(sections.length).toBe(2);
-    expect(sections[0].id).toBe('experience');
-    expect(sections[0].type).toBe('experience');
-    expect(sections[0].title).toBe('Experience');
-  });
-
-  test('getSection returns section with empty entries', () => {
-    db.createSection('skills', 'skills', 'Skills');
-    const section = db.getSection('skills');
-    expect(section.id).toBe('skills');
-    expect(section.entries).toEqual([]);
-  });
-
-  test('getSection returns null for nonexistent section', () => {
-    expect(db.getSection('nonexistent')).toBeNull();
-  });
-
-  test('updateSection changes title', () => {
-    db.createSection('skills', 'skills', 'Skills');
-    db.updateSection('skills', { title: 'Technical Skills' });
-    expect(db.getSection('skills').title).toBe('Technical Skills');
-  });
-
-  test('deleteSection removes section', () => {
-    db.createSection('skills', 'skills', 'Skills');
-    db.deleteSection('skills');
-    expect(db.getSections()).toEqual([]);
-  });
-
-  test('duplicate section id throws', () => {
-    db.createSection('skills', 'skills', 'Skills');
-    expect(() => db.createSection('skills', 'skills', 'Skills 2')).toThrow();
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Entries
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Entries', () => {
-  beforeEach(() => {
-    db.createSection('experience', 'experience', 'Experience');
-  });
-
-  test('createEntry returns auto-incremented ID', () => {
-    const id1 = db.createEntry('experience', { position: 'Engineer', organization: 'Acme' });
-    const id2 = db.createEntry('experience', { position: 'Intern', organization: 'Corp' });
-    expect(id2).toBeGreaterThan(id1);
-  });
-
-  test('createEntry sets sort_order incrementally', () => {
-    db.createEntry('experience', { position: 'First' });
-    db.createEntry('experience', { position: 'Second' });
-    const entries = db.getEntries('experience');
-    expect(entries[0].sort_order).toBe(0);
-    expect(entries[1].sort_order).toBe(1);
-  });
-
-  test('getEntries returns parsed JSON fields', () => {
-    db.createEntry('experience', { position: 'Engineer', organization: 'Acme', location: 'CA', date: '2024' });
-    const entries = db.getEntries('experience');
-    expect(entries[0].fields.position).toBe('Engineer');
-    expect(entries[0].fields.organization).toBe('Acme');
-  });
-
-  test('getEntries returns resumeIncluded as boolean', () => {
-    db.createEntry('experience', { position: 'Engineer' }, true);
-    db.createEntry('experience', { position: 'Intern' }, false);
-    const entries = db.getEntries('experience');
-    expect(entries[0].resumeIncluded).toBe(true);
-    expect(entries[1].resumeIncluded).toBe(false);
-  });
-
-  test('getSection returns entries with nested items', () => {
-    const entryId = db.createEntry('experience', { position: 'Engineer' });
-    db.createItem(entryId, 'Built something');
-    db.createItem(entryId, 'Fixed something');
-    const section = db.getSection('experience');
-    expect(section.entries[0].items.length).toBe(2);
-    expect(section.entries[0].items[0].content).toBe('Built something');
-  });
-
-  test('updateEntry changes fields', () => {
-    const id = db.createEntry('experience', { position: 'Engineer' });
-    db.updateEntry(id, { fields: { position: 'Senior Engineer' } });
-    const entries = db.getEntries('experience');
-    expect(entries[0].fields.position).toBe('Senior Engineer');
-  });
-
-  test('updateEntry changes resumeIncluded', () => {
-    const id = db.createEntry('experience', { position: 'Engineer' });
-    db.updateEntry(id, { resumeIncluded: false });
-    const entries = db.getEntries('experience');
-    expect(entries[0].resumeIncluded).toBe(false);
-  });
-
-  test('deleteEntry removes entry and cascades items', () => {
-    const entryId = db.createEntry('experience', { position: 'Engineer' });
-    db.createItem(entryId, 'Bullet 1');
-    db.deleteEntry(entryId);
-    expect(db.getEntries('experience')).toEqual([]);
-  });
-
-  test('deleteSection cascades to entries and items', () => {
-    const entryId = db.createEntry('experience', { position: 'Engineer' });
-    db.createItem(entryId, 'Bullet 1');
-    db.deleteSection('experience');
-    expect(db.getEntries('experience')).toEqual([]);
-  });
-
-  test('reorderEntries changes sort_order', () => {
-    const id1 = db.createEntry('experience', { position: 'First' });
-    const id2 = db.createEntry('experience', { position: 'Second' });
-    const id3 = db.createEntry('experience', { position: 'Third' });
-
-    db.reorderEntries('experience', [id3, id1, id2]);
-    const entries = db.getEntries('experience');
-    expect(entries[0].fields.position).toBe('Third');
-    expect(entries[1].fields.position).toBe('First');
-    expect(entries[2].fields.position).toBe('Second');
-  });
-
-  test('entry with missing section_id throws', () => {
-    expect(() => db.createEntry('nonexistent', { position: 'Test' })).toThrow();
-  });
-
-  test('JSON fields roundtrip preserves complex data', () => {
-    const fields = {
-      position: 'Quantum Software Engineering Lead',
-      organization: 'Qualcomm Institute',
-      location: 'San Diego, CA',
-      date: 'Jul. 2022 -- Dec. 2024',
-    };
-    db.createEntry('experience', fields);
-    const entries = db.getEntries('experience');
-    expect(entries[0].fields).toEqual(fields);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Items
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Items', () => {
-  let entryId;
-
-  beforeEach(() => {
-    db.createSection('experience', 'experience', 'Experience');
-    entryId = db.createEntry('experience', { position: 'Engineer' });
-  });
-
-  test('createItem returns auto-incremented ID', () => {
-    const id1 = db.createItem(entryId, 'First bullet');
-    const id2 = db.createItem(entryId, 'Second bullet');
-    expect(id2).toBeGreaterThan(id1);
-  });
-
-  test('createItem sets sort_order incrementally', () => {
-    db.createItem(entryId, 'First');
-    db.createItem(entryId, 'Second');
-    const section = db.getSection('experience');
-    const items = section.entries[0].items;
-    expect(items[0].sort_order).toBe(0);
-    expect(items[1].sort_order).toBe(1);
-  });
-
-  test('updateItem changes content', () => {
-    const id = db.createItem(entryId, 'Original');
-    db.updateItem(id, { content: 'Updated' });
-    const section = db.getSection('experience');
-    expect(section.entries[0].items[0].content).toBe('Updated');
-  });
-
-  test('updateItem changes resumeIncluded', () => {
-    const id = db.createItem(entryId, 'Bullet');
-    db.updateItem(id, { resumeIncluded: false });
-    const section = db.getSection('experience');
-    expect(section.entries[0].items[0].resumeIncluded).toBe(false);
-  });
-
-  test('deleteItem removes item', () => {
-    const id = db.createItem(entryId, 'To be deleted');
-    db.deleteItem(id);
-    const section = db.getSection('experience');
-    expect(section.entries[0].items).toEqual([]);
-  });
-
-  test('reorderItems changes sort_order', () => {
-    const id1 = db.createItem(entryId, 'First');
-    const id2 = db.createItem(entryId, 'Second');
-    const id3 = db.createItem(entryId, 'Third');
-
-    db.reorderItems(entryId, [id3, id1, id2]);
-    const section = db.getSection('experience');
-    const items = section.entries[0].items;
-    expect(items[0].content).toBe('Third');
-    expect(items[1].content).toBe('First');
-    expect(items[2].content).toBe('Second');
-  });
-
-  test('item with invalid entry_id throws', () => {
-    expect(() => db.createItem(99999, 'Bad item')).toThrow();
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Document sections
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Document sections', () => {
-  beforeEach(() => {
-    db.createSection('experience', 'experience', 'Experience');
-    db.createSection('skills', 'skills', 'Skills');
-    db.createSection('education', 'education', 'Education');
-  });
-
-  test('getDocumentSections returns empty for unknown variant', () => {
-    expect(db.getDocumentSections('nonexistent')).toEqual([]);
-  });
-
-  test('setDocumentSections and getDocumentSections roundtrip', () => {
-    db.setDocumentSections('cv', [
-      { sectionId: 'experience', enabled: true },
-      { sectionId: 'skills', enabled: true },
-      { sectionId: 'education', enabled: false },
-    ]);
-    const result = db.getDocumentSections('cv');
-    expect(result.length).toBe(3);
-    expect(result[0].sectionId).toBe('experience');
-    expect(result[0].enabled).toBe(true);
-    expect(result[0].sortOrder).toBe(0);
-    expect(result[2].enabled).toBe(false);
-  });
-
-  test('setDocumentSections replaces existing config', () => {
-    db.setDocumentSections('cv', [
-      { sectionId: 'experience', enabled: true },
-      { sectionId: 'skills', enabled: true },
-    ]);
-    db.setDocumentSections('cv', [
-      { sectionId: 'skills', enabled: true },
-    ]);
-    expect(db.getDocumentSections('cv').length).toBe(1);
-  });
-
-  test('setDocumentSections preserves resumeParagraphText', () => {
-    db.createSection('summary', 'summary', 'Summary');
-    db.setDocumentSections('resume', [
-      { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short version for resume' },
-    ]);
-    const result = db.getDocumentSections('resume');
-    expect(result[0].resumeParagraphText).toBe('Short version for resume');
-  });
-
-  test('different variants are independent', () => {
-    db.setDocumentSections('cv', [
-      { sectionId: 'experience', enabled: true },
-      { sectionId: 'skills', enabled: true },
-    ]);
-    db.setDocumentSections('resume', [
-      { sectionId: 'experience', enabled: true },
-    ]);
-    expect(db.getDocumentSections('cv').length).toBe(2);
-    expect(db.getDocumentSections('resume').length).toBe(1);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Cover letter sections
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Coverletter sections', () => {
-  test('getCoverletterSections returns empty initially', () => {
-    expect(db.getCoverletterSections()).toEqual([]);
-  });
-
-  test('createCoverletterSection and retrieve', () => {
-    const id = db.createCoverletterSection('About Me', 'I am a software engineer...');
-    const sections = db.getCoverletterSections();
-    expect(sections.length).toBe(1);
-    expect(sections[0].title).toBe('About Me');
-    expect(sections[0].body).toBe('I am a software engineer...');
-    expect(sections[0].id).toBe(id);
-  });
-
-  test('sort_order increments automatically', () => {
-    db.createCoverletterSection('First', 'Body 1');
-    db.createCoverletterSection('Second', 'Body 2');
-    const sections = db.getCoverletterSections();
-    expect(sections[0].sort_order).toBe(0);
-    expect(sections[1].sort_order).toBe(1);
-  });
-
-  test('updateCoverletterSection changes fields', () => {
-    const id = db.createCoverletterSection('Old', 'Old body');
-    db.updateCoverletterSection(id, { title: 'New', body: 'New body' });
-    const sections = db.getCoverletterSections();
-    expect(sections[0].title).toBe('New');
-    expect(sections[0].body).toBe('New body');
-  });
-
-  test('deleteCoverletterSection removes section', () => {
-    const id = db.createCoverletterSection('Temp', 'To delete');
-    db.deleteCoverletterSection(id);
-    expect(db.getCoverletterSections()).toEqual([]);
-  });
-
-  test('reorderCoverletterSections changes order', () => {
-    const id1 = db.createCoverletterSection('First', 'A');
-    const id2 = db.createCoverletterSection('Second', 'B');
-    const id3 = db.createCoverletterSection('Third', 'C');
-
-    db.reorderCoverletterSections([id3, id1, id2]);
-    const sections = db.getCoverletterSections();
-    expect(sections[0].title).toBe('Third');
-    expect(sections[1].title).toBe('First');
-    expect(sections[2].title).toBe('Second');
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Compound reads
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('getAllForCompile', () => {
-  beforeEach(() => {
-    // Seed personal info
-    db.setSettings({
-      'personal.firstName': 'Andrew',
-      'personal.lastName': 'Peterson',
-      'personal.email': 'acpeters@ucsd.edu',
-    });
-
-    // Create sections
-    db.createSection('experience', 'experience', 'Experience');
-    db.createSection('skills', 'skills', 'Skills');
-    db.createSection('summary', 'summary', 'Summary');
-
-    // Add entries
-    const expId = db.createEntry('experience', { position: 'Engineer', organization: 'Acme' });
-    db.createItem(expId, 'Built widgets');
-    db.createItem(expId, 'Fixed bugs');
-
-    const expId2 = db.createEntry('experience', { position: 'Intern', organization: 'Corp' }, false);
-    db.createItem(expId2, 'Intern bullet');
-
-    db.createEntry('skills', { category: 'Languages', skills: 'Python, JS' });
-    db.createEntry('summary', { text: 'Full summary for CV' });
-
-    // Set document ordering
-    db.setDocumentSections('cv', [
-      { sectionId: 'summary', enabled: true },
-      { sectionId: 'experience', enabled: true },
-      { sectionId: 'skills', enabled: true },
-    ]);
-    db.setDocumentSections('resume', [
-      { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short resume summary' },
-      { sectionId: 'experience', enabled: true },
-      { sectionId: 'skills', enabled: true },
-    ]);
-  });
-
-  test('returns personal info', () => {
-    const data = db.getAllForCompile('cv');
-    expect(data.personal.firstName).toBe('Andrew');
-    expect(data.personal.email).toBe('acpeters@ucsd.edu');
-  });
-
-  test('returns sections in document order', () => {
-    const data = db.getAllForCompile('cv');
-    expect(data.sections.length).toBe(3);
-    expect(data.sections[0].id).toBe('summary');
-    expect(data.sections[1].id).toBe('experience');
-    expect(data.sections[2].id).toBe('skills');
-  });
-
-  test('CV variant includes all entries', () => {
-    const data = db.getAllForCompile('cv');
-    const exp = data.sections.find(s => s.id === 'experience');
-    expect(exp.entries.length).toBe(2);
-  });
-
-  test('resume variant filters excluded entries', () => {
-    const data = db.getAllForCompile('resume');
-    const exp = data.sections.find(s => s.id === 'experience');
-    expect(exp.entries.length).toBe(1);
-    expect(exp.entries[0].fields.position).toBe('Engineer');
-  });
-
-  test('resume variant filters excluded items', () => {
-    // Exclude first bullet from first entry
-    const section = db.getSection('experience');
-    const firstItem = section.entries[0].items[0];
-    db.updateItem(firstItem.id, { resumeIncluded: false });
-
-    const data = db.getAllForCompile('resume');
-    const exp = data.sections.find(s => s.id === 'experience');
-    expect(exp.entries[0].items.length).toBe(1);
-    expect(exp.entries[0].items[0].content).toBe('Fixed bugs');
-  });
-
-  test('resume variant uses resumeParagraphText override', () => {
-    const data = db.getAllForCompile('resume');
-    const summary = data.sections.find(s => s.id === 'summary');
-    expect(summary.entries[0].fields.text).toBe('Short resume summary');
-  });
-
-  test('coverletter variant includes coverletter data', () => {
-    db.setSettings({
-      'coverletter.recipientName': 'Hiring Team',
-      'coverletter.opening': 'Dear Hiring Manager,',
-    });
-    db.createCoverletterSection('About Me', 'I am...');
-    db.setDocumentSections('coverletter', []);
-
-    const data = db.getAllForCompile('coverletter');
-    expect(data.coverletter.recipientName).toBe('Hiring Team');
-    expect(data.coverletter.sections.length).toBe(1);
-  });
-
-  test('skips disabled sections', () => {
-    db.setDocumentSections('cv', [
-      { sectionId: 'summary', enabled: true },
-      { sectionId: 'experience', enabled: false },
-      { sectionId: 'skills', enabled: true },
-    ]);
-    const data = db.getAllForCompile('cv');
-    expect(data.sections.length).toBe(2);
-    expect(data.sections.map(s => s.id)).toEqual(['summary', 'skills']);
-  });
-});
-
-describe('getCompileDataForPerson', () => {
-  let personId;
-
-  beforeEach(() => {
-    // Build working state, then snapshot it into a stored (non-active) person.
-    db.setSettings({
-      'personal.firstName': 'Stored',
-      'personal.lastName': 'Person',
-      'personal.email': 'stored@example.com',
-    });
-    db.createSection('experience', 'experience', 'Experience');
-    db.createSection('skills', 'skills', 'Skills');
-    db.createSection('summary', 'summary', 'Summary');
-
-    const expId = db.createEntry('experience', { position: 'Engineer', organization: 'Acme' });
-    db.createItem(expId, 'Built widgets');
-    db.createItem(expId, 'Fixed bugs', false); // excluded from resume
-    db.createEntry('experience', { position: 'Intern', organization: 'Corp' }, false); // excluded
-    db.createEntry('skills', { category: 'Languages', skills: 'Python, JS' });
-    db.createEntry('summary', { text: 'Full summary for CV' });
-
-    db.setDocumentSections('cv', [
-      { sectionId: 'summary', enabled: true },
-      { sectionId: 'experience', enabled: true },
-      { sectionId: 'skills', enabled: false },
-    ]);
-    db.setDocumentSections('resume', [
-      { sectionId: 'summary', enabled: true, resumeParagraphText: 'Short resume summary' },
-      { sectionId: 'experience', enabled: true },
-    ]);
-
-    personId = db.createPerson('Stored Person');
-    db.savePerson(personId); // snapshot current working tables into the person row
-  });
-
-  test('returns person name and personal info from the stored snapshot', () => {
-    const data = db.getCompileDataForPerson(personId, 'cv');
-    expect(data.name).toBe('Stored Person');
-    expect(data.personal.firstName).toBe('Stored');
-    expect(data.personal.email).toBe('stored@example.com');
-  });
-
-  test('returns enabled sections in document order, skipping disabled', () => {
-    const data = db.getCompileDataForPerson(personId, 'cv');
-    expect(data.sections.map(s => s.id)).toEqual(['summary', 'experience']);
-  });
-
-  test('CV variant includes all entries', () => {
-    const data = db.getCompileDataForPerson(personId, 'cv');
-    const exp = data.sections.find(s => s.id === 'experience');
-    expect(exp.entries.length).toBe(2);
-  });
-
-  test('resume variant filters excluded entries and items', () => {
-    const data = db.getCompileDataForPerson(personId, 'resume');
-    const exp = data.sections.find(s => s.id === 'experience');
-    expect(exp.entries.length).toBe(1);
-    expect(exp.entries[0].fields.position).toBe('Engineer');
-    expect(exp.entries[0].items.map(i => i.content)).toEqual(['Built widgets']);
-  });
-
-  test('resume variant applies resumeParagraphText override', () => {
-    const data = db.getCompileDataForPerson(personId, 'resume');
-    const summary = data.sections.find(s => s.id === 'summary');
-    expect(summary.entries[0].fields.text).toBe('Short resume summary');
-  });
-
-  test('does not mutate the stored snapshot across calls', () => {
-    db.getCompileDataForPerson(personId, 'resume'); // filters entries/items
-    const cv = db.getCompileDataForPerson(personId, 'cv'); // must still see everything
-    const exp = cv.sections.find(s => s.id === 'experience');
-    expect(exp.entries.length).toBe(2);
-    expect(exp.entries[0].items.length).toBe(2);
-  });
-
-  test('throws "Person not found" for an unknown id', () => {
-    expect(() => db.getCompileDataForPerson(99999, 'cv')).toThrow('Person not found');
-  });
-
-  test('throws "Person has no data" for a freshly created person', () => {
-    const emptyId = db.createPerson('Empty');
-    expect(() => db.getCompileDataForPerson(emptyId, 'cv')).toThrow('Person has no data');
-  });
-});
-
-describe('getAllForExport', () => {
-  test('returns complete data structure', () => {
-    db.setSettings({ 'personal.firstName': 'Andrew' });
-    db.createSection('skills', 'skills', 'Skills');
-    db.createEntry('skills', { category: 'Languages', skills: 'Python' });
-    db.setDocumentSections('cv', [{ sectionId: 'skills', enabled: true }]);
-    db.setSettings({ 'coverletter.title': 'App' });
-    db.createCoverletterSection('About', 'Body');
-
-    const data = db.getAllForExport();
-    expect(data.personal.firstName).toBe('Andrew');
-    expect(data.sections.length).toBe(1);
-    expect(data.sections[0].entries.length).toBe(1);
-    expect(data.documents.cv.length).toBe(1);
-    expect(data.coverletter.title).toBe('App');
-    expect(data.coverletter.sections.length).toBe(1);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Migrations
-// ═════════════════════════════════════════════════════════════════════════════
-
-describe('Migrations', () => {
-  test('migrations table is created', () => {
-    const tables = db.db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
-    const names = tables.map(t => t.name);
-    expect(names).toContain('_migrations');
-    expect(names).toContain('settings');
-    expect(names).toContain('sections');
-    expect(names).toContain('entries');
-    expect(names).toContain('items');
-    expect(names).toContain('document_sections');
-    expect(names).toContain('coverletter_sections');
-  });
-
-  test('migration is recorded', () => {
-    const migrations = db.db.prepare('SELECT name FROM _migrations').all();
-    expect(migrations.length).toBeGreaterThanOrEqual(1);
-    expect(migrations[0].name).toBe('001_initial.sql');
-  });
-
-  test('re-opening database does not re-run migrations', () => {
-    // The :memory: DB is fresh each time, but within a single instance
-    // migrations should only run once
-    const migrations = db.db.prepare('SELECT name FROM _migrations').all();
-    expect(migrations.length).toBe(6);
-  });
-});
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Persons
-// ═════════════════════════════════════════════════════════════════════════════
+// Helper: build a small master CV. Returns the created ids.
+function buildMaster() {
+  const summary = db.createSection(pid, 'summary', 'summary', 'Summary');
+  const sEntry = db.createEntry(summary, { text: 'Full summary text' });
+
+  const exp = db.createSection(pid, 'experience', 'experience', 'Experience');
+  const e1 = db.createEntry(exp, { position: 'Engineer', organization: 'Acme' });
+  const i1 = db.createItem(e1, 'Built frontend');
+  const i2 = db.createItem(e1, 'Built backend');
+  const e2 = db.createEntry(exp, { position: 'Intern', organization: 'Corp' });
+  const i3 = db.createItem(e2, 'Intern work');
+
+  const skills = db.createSection(pid, 'skills', 'skills', 'Skills');
+  db.createEntry(skills, { category: 'Languages', skills: 'JS, Python' });
+
+  return { summary, sEntry, exp, e1, i1, i2, e2, i3, skills };
+}
 
 describe('Persons', () => {
-  // Re-import Jane Doe's data (cleared by global beforeEach)
-  beforeEach(() => {
-    const jane = db.getPersons().find(p => p.name === 'Jane Doe');
-    if (jane && jane.id === db.getActivePersonId()) {
-      db.importAll(db.getPerson(jane.id).data);
-    }
+  test('create / get / rename / delete', () => {
+    expect(db.getPerson(pid).name).toBe('Test Person');
+    db.renamePerson(pid, 'Renamed');
+    expect(db.getPerson(pid).name).toBe('Renamed');
+    db.deletePerson(pid);
+    expect(db.getPerson(pid)).toBeNull();
   });
 
-  test('getPersons returns Jane Doe seeded by default', () => {
-    const persons = db.getPersons();
-    expect(persons.length).toBe(1);
-    expect(persons[0].name).toBe('Jane Doe');
-  });
-
-  test('createPerson creates a new person', () => {
-    const id = db.createPerson('John Smith');
-    expect(id).toBeGreaterThan(0);
-    const persons = db.getPersons();
-    expect(persons.length).toBe(2);
-    expect(persons.find(p => p.name === 'John Smith')).toBeTruthy();
-  });
-
-  test('createPerson with data stores JSON blob', () => {
-    const data = { personal: { firstName: 'Test' } };
-    const id = db.createPerson('Test Person', data);
-    const person = db.getPerson(id);
-    expect(person.data).toEqual(data);
-  });
-
-  test('getPerson returns null for non-existent id', () => {
-    expect(db.getPerson(9999)).toBeNull();
-  });
-
-  test('renamePerson changes the name', () => {
-    const persons = db.getPersons();
-    const janeId = persons[0].id;
-    db.renamePerson(janeId, 'Jane Smith');
-    const updated = db.getPerson(janeId);
-    expect(updated.name).toBe('Jane Smith');
-  });
-
-  test('deletePerson removes a non-active person', () => {
-    const newId = db.createPerson('To Delete');
-    db.deletePerson(newId);
-    expect(db.getPerson(newId)).toBeNull();
-  });
-
-  test('deletePerson throws when deleting active person', () => {
-    const activeId = db.getActivePersonId();
-    expect(() => db.deletePerson(activeId)).toThrow('Cannot delete the active person');
-  });
-
-  test('getActivePersonId returns seeded person id', () => {
-    const id = db.getActivePersonId();
-    expect(id).toBe(db.getPersons()[0].id);
-  });
-
-  test('setActivePersonId + getActivePersonId round-trip', () => {
-    const newId = db.createPerson('New Person');
-    db.setActivePersonId(newId);
-    expect(db.getActivePersonId()).toBe(newId);
+  test('deleting a person cascades to sections/entries/items/variants', () => {
+    const { exp } = buildMaster();
+    const v = db.createVariant(pid, 'CV', 'cv');
+    db.deletePerson(pid);
+    expect(db.getSection(exp)).toBeNull();
+    expect(db.getVariant(v)).toBeNull();
   });
 });
 
-describe('clearAllContent', () => {
-  beforeEach(() => {
-    const jane = db.getPersons().find(p => p.name === 'Jane Doe');
-    if (jane) db.importAll(db.getPerson(jane.id).data);
+describe('Sections / entries / items', () => {
+  test('sections are per-person and ordered', () => {
+    buildMaster();
+    const other = db.createPerson('Other');
+    db.createSection(other, 'experience', 'experience', 'Experience'); // same slug, different person OK
+    const secs = db.getSections(pid);
+    expect(secs.map((s) => s.slug)).toEqual(['summary', 'experience', 'skills']);
+    expect(db.getSections(other).map((s) => s.slug)).toEqual(['experience']);
   });
 
-  test('empties all content tables', () => {
-    // Verify there's data first (from Jane Doe seed)
-    expect(db.getSections().length).toBeGreaterThan(0);
-
-    db.clearAllContent();
-
-    expect(db.getSections().length).toBe(0);
-    expect(db.getCoverletterSections().length).toBe(0);
-    expect(Object.keys(db.getSettings('personal')).length).toBe(0);
-    expect(Object.keys(db.getSettings('coverletter')).length).toBe(0);
+  test('getSection returns entries with items and tags', () => {
+    const { exp, e1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend', 'core']);
+    const section = db.getSection(exp);
+    expect(section.entries).toHaveLength(2);
+    expect(section.entries[0].fields.position).toBe('Engineer');
+    expect(section.entries[0].items.map((i) => i.content)).toEqual(['Built frontend', 'Built backend']);
+    expect(section.entries[0].tags.sort()).toEqual(['core', 'frontend']);
   });
 
-  test('preserves _active_person_id setting', () => {
-    const activeId = db.getActivePersonId();
-    db.clearAllContent();
-    expect(db.getActivePersonId()).toBe(activeId);
+  test('entry/item ids are stable across reads', () => {
+    const { e1 } = buildMaster();
+    expect(db.getEntry(e1).id).toBe(e1);
+    db.updateEntry(e1, { fields: { position: 'Senior Engineer' } });
+    expect(db.getEntry(e1).id).toBe(e1);
+    expect(db.getEntry(e1).fields.position).toBe('Senior Engineer');
   });
 
-  test('preserves persons table', () => {
-    db.clearAllContent();
-    expect(db.getPersons().length).toBe(1); // Jane Doe still there
+  test('reorderEntries updates order', () => {
+    const { exp, e1, e2 } = buildMaster();
+    db.reorderEntries(exp, [e2, e1]);
+    expect(db.getSection(exp).entries.map((e) => e.id)).toEqual([e2, e1]);
   });
 });
 
-describe('importAll', () => {
-  const testData = {
-    personal: { firstName: 'Import', lastName: 'Test', email: 'import@test.com' },
+describe('Tags', () => {
+  test('add / remove / list distinct', () => {
+    const { e1, i1 } = buildMaster();
+    db.addEntryTags(e1, ['Frontend', 'frontend', 'core']); // normalized + deduped
+    db.addItemTags(i1, ['frontend']);
+    expect(db.getEntry(e1).tags.sort()).toEqual(['core', 'frontend']);
+    expect(db.listTags(pid)).toEqual(['core', 'frontend']);
+    db.removeEntryTag(e1, 'core');
+    expect(db.getEntry(e1).tags).toEqual(['frontend']);
+  });
+});
+
+describe('Variants CRUD', () => {
+  test('create with valid kind, reject invalid', () => {
+    const v = db.createVariant(pid, 'My CV', 'cv');
+    expect(db.getVariant(v).kind).toBe('cv');
+    expect(() => db.createVariant(pid, 'Bad', 'nope')).toThrow();
+  });
+
+  test('rules round-trip; include wins over exclude on conflict', () => {
+    const v = db.createVariant(pid, 'R', 'resume');
+    db.setVariantRules(v, { include: ['frontend', 'dup'], exclude: ['draft', 'dup'] });
+    const r = db.getVariantRules(v);
+    expect(r.include.sort()).toEqual(['dup', 'frontend']);
+    expect(r.exclude).toEqual(['draft']); // dup kept as include only
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resolver — the decision table
+// ---------------------------------------------------------------------------
+
+describe('resolveVariant', () => {
+  function texts(resolved) {
+    return resolved.sections.map((s) => ({
+      slug: s.id,
+      entries: s.entries.map((e) => ({ pos: e.fields.position, text: e.fields.text, items: e.items.map((i) => i.content) })),
+    }));
+  }
+
+  test('CV variant with no rules/overrides = full master', () => {
+    buildMaster();
+    const cv = db.createVariant(pid, 'CV', 'cv');
+    const r = db.resolveVariant(cv);
+    expect(r.variant).toBe('cv');
+    expect(r.sections.map((s) => s.id)).toEqual(['summary', 'experience', 'skills']);
+    const exp = r.sections.find((s) => s.id === 'experience');
+    expect(exp.entries).toHaveLength(2);
+    expect(exp.entries[0].items.map((i) => i.content)).toEqual(['Built frontend', 'Built backend']);
+  });
+
+  test('include rule keeps only matching entries (row 9)', () => {
+    const { e1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend']);
+    const v = db.createVariant(pid, 'FE', 'resume');
+    db.setVariantRules(v, { include: ['frontend'] });
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    expect(exp.entries.map((e) => e.fields.position)).toEqual(['Engineer']); // Intern (untagged) dropped
+  });
+
+  test('exclude-only rule drops excluded, keeps rest (row 8)', () => {
+    const { e2 } = buildMaster();
+    db.addEntryTags(e2, ['draft']);
+    const v = db.createVariant(pid, 'NoDraft', 'resume');
+    db.setVariantRules(v, { exclude: ['draft'] });
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    expect(exp.entries.map((e) => e.fields.position)).toEqual(['Engineer']);
+  });
+
+  test('override included=0 beats include tag (row 4); included=1 beats exclude tag (row 3)', () => {
+    const { e1, e2 } = buildMaster();
+    db.addEntryTags(e1, ['frontend']);
+    db.addEntryTags(e2, ['frontend', 'draft']);
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setVariantRules(v, { include: ['frontend'], exclude: ['draft'] });
+    // Without overrides: e1 in (frontend, no draft), e2 out (has draft).
+    db.setEntryOverride(v, e1, { included: false }); // force e1 OUT
+    db.setEntryOverride(v, e2, { included: true });  // force e2 IN despite draft
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    expect(exp.entries.map((e) => e.fields.position)).toEqual(['Intern']);
+  });
+
+  test('item with include tag but excluded parent entry is dropped (row 1/2)', () => {
+    const { e1, e2, i3 } = buildMaster();
+    db.addEntryTags(e1, ['keep']);
+    db.addItemTags(i3, ['keep']); // i3 belongs to e2 (untagged)
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setVariantRules(v, { include: ['keep'] });
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    // Only e1 emitted; e2 excluded so its item i3 cannot appear despite its tag.
+    expect(exp.entries).toHaveLength(1);
+    expect(exp.entries[0].fields.position).toBe('Engineer');
+  });
+
+  test('item-level include filters items within an included entry', () => {
+    const { e1, i1 } = buildMaster();
+    db.addEntryTags(e1, ['keep']);
+    db.addItemTags(i1, ['keep']); // only i1 tagged; i2 not
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setVariantRules(v, { include: ['keep'] });
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    expect(exp.entries[0].items.map((i) => i.content)).toEqual(['Built frontend']);
+  });
+
+  test('section with all entries filtered out is dropped (row 5)', () => {
+    const { skills } = buildMaster();
+    void skills;
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setVariantRules(v, { include: ['nonexistent-tag'] });
+    expect(db.resolveVariant(v).sections).toHaveLength(0);
+  });
+
+  test('variant_sections controls presence, order, and enabled (rows 6/11)', () => {
+    const m = buildMaster();
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setVariantSections(v, [
+      { sectionId: m.skills, enabled: true, sortOrder: 0 },
+      { sectionId: m.exp, enabled: false, sortOrder: 1 }, // disabled → dropped
+      { sectionId: m.summary, enabled: true, sortOrder: 2 },
+    ]);
+    const r = db.resolveVariant(v);
+    expect(r.sections.map((s) => s.id)).toEqual(['skills', 'summary']); // experience disabled; education absent
+  });
+
+  test('text_override replaces cvparagraph text and item content (row 12 inverse)', () => {
+    const m = buildMaster();
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setEntryOverride(v, m.sEntry, { textOverride: 'Short summary' });
+    db.setItemOverride(v, m.i1, { textOverride: 'Rephrased bullet' });
+    const r = db.resolveVariant(v);
+    expect(r.sections.find((s) => s.id === 'summary').entries[0].fields.text).toBe('Short summary');
+    expect(r.sections.find((s) => s.id === 'experience').entries[0].items[0].content).toBe('Rephrased bullet');
+  });
+
+  test('sort_override reorders entries deterministically (row 10)', () => {
+    const m = buildMaster();
+    const v = db.createVariant(pid, 'V', 'cv');
+    db.setEntryOverride(v, m.e1, { sortOverride: 5 }); // push e1 after e2
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    expect(exp.entries.map((e) => e.fields.position)).toEqual(['Intern', 'Engineer']);
+  });
+
+  test('coverletter kind resolves header + letter sections, ignores tag machinery', () => {
+    db.setPersonSettings(pid, { 'coverletter.recipientName': 'Hiring Team', 'coverletter.opening': 'Dear Team,' });
+    const v = db.createVariant(pid, 'CL', 'coverletter');
+    db.createLetterSection(v, 'Intro', 'I am writing...');
+    db.createLetterSection(v, 'Body', 'My experience...');
+    const r = db.resolveVariant(v);
+    expect(r.variant).toBe('coverletter');
+    expect(r.sections).toEqual([]);
+    expect(r.coverletter.recipientName).toBe('Hiring Team');
+    expect(r.coverletter.sections.map((s) => s.title)).toEqual(['Intro', 'Body']);
+  });
+
+  test('throws for unknown variant id', () => {
+    expect(() => db.resolveVariant(99999)).toThrow('Variant not found');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legacy import + seeding
+// ---------------------------------------------------------------------------
+
+describe('importLegacyData + seeding', () => {
+  const legacy = {
+    personal: { firstName: 'Leg', lastName: 'Acy' },
     sections: [
+      { id: 'summary', type: 'summary', title: 'Summary', entries: [{ id: 1, resumeIncluded: true, fields: { text: 'Long summary' }, items: [] }] },
       {
-        id: 'work', type: 'cventries', title: 'Work',
-        entries: [
-          {
-            id: 1, section_id: 'work', sort_order: 0, resumeIncluded: true,
-            fields: { position: 'Dev', organization: 'Corp', location: 'NYC', date: '2020' },
-            items: [
-              { id: 1, entry_id: 1, sort_order: 0, content: 'Did things', resumeIncluded: true },
-            ]
-          }
-        ]
-      }
+        id: 'experience', type: 'experience', title: 'Experience', entries: [
+          { id: 2, resumeIncluded: true, fields: { position: 'Eng' }, items: [
+            { id: 10, content: 'Kept bullet', resumeIncluded: true },
+            { id: 11, content: 'Dropped bullet', resumeIncluded: false },
+          ] },
+          { id: 3, resumeIncluded: false, fields: { position: 'Old role' }, items: [] },
+        ],
+      },
     ],
     documents: {
-      cv: [{ sectionId: 'work', enabled: true, sortOrder: 0, resumeParagraphText: null }],
-      resume: []
+      cv: [
+        { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: null },
+        { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
+      ],
+      resume: [
+        { sectionId: 'summary', enabled: true, sortOrder: 0, resumeParagraphText: 'Short summary' },
+        { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
+      ],
     },
-    coverletter: {
-      recipientName: 'Boss',
-      title: 'Hello',
-      sections: [
-        { id: 1, sort_order: 0, title: 'Intro', body: 'Hi there' }
-      ]
-    }
+    coverletter: { recipientName: 'HM', sections: [{ title: 'Intro', body: 'Hello' }] },
   };
 
-  test('imports data correctly', () => {
-    db.importAll(testData);
+  test('derives CV/Resume/Cover Letter variants faithfully', () => {
+    const id = db.createPerson('Legacy');
+    db.importLegacyData(id, legacy);
 
-    const personal = db.getSettings('personal');
-    expect(personal['personal.firstName']).toBe('Import');
+    expect(db.getPersonal(id).firstName).toBe('Leg');
+    const variants = db.getVariants(id);
+    expect(variants.map((v) => `${v.name}:${v.kind}`)).toEqual(['CV:cv', 'Resume:resume', 'Cover Letter:coverletter']);
 
-    const sections = db.getSections();
-    expect(sections.length).toBe(1);
-    expect(sections[0].id).toBe('work');
+    // CV = everything
+    const cv = db.resolveVariant(variants.find((v) => v.kind === 'cv').id);
+    const cvExp = cv.sections.find((s) => s.id === 'experience');
+    expect(cvExp.entries).toHaveLength(2);
 
-    const section = db.getSection('work');
-    expect(section.entries.length).toBe(1);
-    expect(section.entries[0].fields.position).toBe('Dev');
-    expect(section.entries[0].items.length).toBe(1);
+    // Resume = excluded entry/item dropped + paragraph override applied
+    const resume = db.resolveVariant(variants.find((v) => v.kind === 'resume').id);
+    expect(resume.sections.find((s) => s.id === 'summary').entries[0].fields.text).toBe('Short summary');
+    const resExp = resume.sections.find((s) => s.id === 'experience');
+    expect(resExp.entries.map((e) => e.fields.position)).toEqual(['Eng']); // 'Old role' excluded
+    expect(resExp.entries[0].items.map((i) => i.content)).toEqual(['Kept bullet']); // dropped bullet gone
 
-    const clSections = db.getCoverletterSections();
-    expect(clSections.length).toBe(1);
-
-    const clSettings = db.getSettings('coverletter');
-    expect(clSettings['coverletter.recipientName']).toBe('Boss');
+    // Cover Letter
+    const cl = db.resolveVariant(variants.find((v) => v.kind === 'coverletter').id);
+    expect(cl.coverletter.sections.map((s) => s.title)).toEqual(['Intro']);
   });
 
-  test('clears existing data before importing', () => {
-    // DB already has Jane Doe data from seed
-    db.importAll(testData);
-
-    // Should only have imported data, not Jane's
-    const sections = db.getSections();
-    expect(sections.length).toBe(1);
-    expect(sections[0].id).toBe('work');
-  });
-});
-
-describe('savePerson', () => {
-  beforeEach(() => {
-    const jane = db.getPersons().find(p => p.name === 'Jane Doe');
-    if (jane) db.importAll(db.getPerson(jane.id).data);
-  });
-
-  test('snapshots current data to person blob', () => {
-    const activeId = db.getActivePersonId();
-    db.savePerson(activeId);
-
-    const person = db.getPerson(activeId);
-    expect(person.data.personal.firstName).toBe('Jane');
-    expect(person.data.sections.length).toBeGreaterThan(0);
+  test('fresh DB seeds Jane Doe with master + variants', () => {
+    const fresh = new CvDatabase(':memory:');
+    const persons = fresh.getPersons();
+    expect(persons.map((p) => p.name)).toContain('Jane Doe');
+    const jane = persons.find((p) => p.name === 'Jane Doe');
+    const variants = fresh.getVariants(jane.id);
+    expect(variants.map((v) => v.kind).sort()).toEqual(['coverletter', 'cv', 'resume']);
+    // Jane's resume omits education
+    const resume = fresh.resolveVariant(variants.find((v) => v.kind === 'resume').id);
+    expect(resume.sections.map((s) => s.id)).not.toContain('education');
+    fresh.close();
   });
 });
 
-describe('switchPerson', () => {
-  beforeEach(() => {
-    const jane = db.getPersons().find(p => p.name === 'Jane Doe');
-    if (jane) db.importAll(db.getPerson(jane.id).data);
+describe('getPersonExport / getMaster', () => {
+  test('getMaster returns sections, variants, and tag vocabulary', () => {
+    const { e1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend']);
+    db.createVariant(pid, 'CV', 'cv');
+    const master = db.getMaster(pid);
+    expect(master.person.id).toBe(pid);
+    expect(master.sections.map((s) => s.slug)).toEqual(['summary', 'experience', 'skills']);
+    expect(master.variants.map((v) => v.kind)).toEqual(['cv']);
+    expect(master.tags).toEqual(['frontend']);
   });
 
-  test('switches between persons preserving data', () => {
-    // Jane Doe is active with her data
-    const janeId = db.getActivePersonId();
-
-    // Create a new empty person
-    const bobId = db.createPerson('Bob');
-
-    // Switch to Bob
-    db.switchPerson(bobId);
-
-    expect(db.getActivePersonId()).toBe(bobId);
-    // Content should be empty (Bob has no data)
-    expect(db.getSections().length).toBe(0);
-
-    // Switch back to Jane
-    db.switchPerson(janeId);
-
-    expect(db.getActivePersonId()).toBe(janeId);
-    // Jane's data should be restored
-    const personal = db.getSettings('personal');
-    expect(personal['personal.firstName']).toBe('Jane');
-    expect(db.getSections().length).toBeGreaterThan(0);
-  });
-
-  test('throws for non-existent person', () => {
-    expect(() => db.switchPerson(9999)).toThrow('Person not found');
-  });
-
-  test('saves current person data before switching', () => {
-    const janeId = db.getActivePersonId();
-
-    // Modify Jane's data
-    db.setSettings({ 'personal.firstName': 'Janet' });
-
-    // Create and switch to new person
-    const newId = db.createPerson('New');
-    db.switchPerson(newId);
-
-    // Check Jane's snapshot has the modified data
-    const jane = db.getPerson(janeId);
-    expect(jane.data.personal.firstName).toBe('Janet');
-  });
-});
-
-describe('seedJaneDoe', () => {
-  test('seeds Jane Doe on fresh database', () => {
-    // Use a fresh DB (not cleared by beforeEach) to test seeding
-    const freshDb = new CvDatabase(':memory:');
-
-    const persons = freshDb.getPersons();
-    expect(persons.length).toBe(1);
-    expect(persons[0].name).toBe('Jane Doe');
-
-    const personal = freshDb.getSettings('personal');
-    expect(personal['personal.firstName']).toBe('Jane');
-    expect(personal['personal.lastName']).toBe('Doe');
-
-    const sections = freshDb.getSections();
-    expect(sections.length).toBe(4); // summary, experience, education, skills
-
-    freshDb.close();
-  });
-
-  test('preserves existing data when seeding', () => {
-    // Create a fresh DB with existing data but no persons
-    const db2 = new CvDatabase(':memory:');
-    // db2 will auto-seed Jane Doe since it's fresh
-    // But let's test the case where data exists before persons migration
-    // This is already handled by the seed logic checking for existing sections
-    db2.close();
+  test('getPersonExport captures personal, sections, tags, and variants', () => {
+    const { e1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend']);
+    db.setPersonal(pid, { firstName: 'Ex', lastName: 'Port' });
+    const v = db.createVariant(pid, 'FE Resume', 'resume');
+    db.setVariantRules(v, { include: ['frontend'] });
+    const exp = db.getPersonExport(pid);
+    expect(exp.personal.firstName).toBe('Ex');
+    expect(exp.sections.find((s) => s.slug === 'experience').entries[0].tags).toEqual(['frontend']);
+    expect(exp.variants.find((x) => x.name === 'FE Resume').rules.include).toEqual(['frontend']);
   });
 });
