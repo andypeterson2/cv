@@ -101,6 +101,66 @@ describe('Tags', () => {
   });
 });
 
+describe('Tag catalog + suggestion', () => {
+  test('catalog upsert normalizes + alias-folds the tag and dedupes on PK', () => {
+    db.setTagAlias(pid, 'fe', 'frontend');
+    db.setCatalogTag(pid, 'Front End', { category: 'skill' }); // → front-end (normalized)
+    db.setCatalogTag(pid, 'fe', { description: 'aliased' });     // → frontend (alias-folded)
+    db.setCatalogTag(pid, 'frontend', { description: 'updated' }); // upsert same PK
+    const cat = db.getTagCatalog(pid);
+    const tags = cat.map((c) => c.tag).sort();
+    expect(tags).toEqual(['front-end', 'frontend']);
+    expect(cat.find((c) => c.tag === 'frontend').description).toBe('updated');
+  });
+
+  test('deleteCatalogTag removes; catalog cascades on deletePerson', () => {
+    db.setCatalogTag(pid, 'frontend');
+    db.deleteCatalogTag(pid, 'frontend');
+    expect(db.getTagCatalog(pid)).toEqual([]);
+    db.setCatalogTag(pid, 'react');
+    db.deletePerson(pid);
+    expect(db.getTagCatalog(pid)).toEqual([]); // gone with the person
+  });
+
+  test('suggestTags unions catalog + usage and never invents a tag', async () => {
+    const { e1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend']);            // usage vocab
+    db.setCatalogTag(pid, 'react');               // catalog-only (count 0)
+    const { results } = await db.suggestTags(pid, 'Built the React frontend', { minScore: 0.35 });
+    const tags = results.map((r) => r.tag);
+    expect(tags).toContain('react');
+    expect(tags).toContain('frontend');
+    expect(results.find((r) => r.tag === 'react').inCatalog).toBe(true);
+    // Never returns a word that isn't an existing tag.
+    expect(tags).not.toContain('built');
+    expect(tags.every((t) => ['react', 'frontend'].includes(t))).toBe(true);
+  });
+
+  test('seedCatalogFromUsage promotes the usage vocabulary into the catalog', () => {
+    const { e1, i1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend', 'core']);
+    db.addItemTags(i1, ['python']);
+    const { added } = db.seedCatalogFromUsage(pid);
+    expect(added).toBe(3);
+    expect(db.getTagCatalog(pid).map((c) => c.tag).sort()).toEqual(['core', 'frontend', 'python']);
+    // idempotent: seeding again adds nothing
+    expect(db.seedCatalogFromUsage(pid).added).toBe(0);
+  });
+
+  test('suggestBulk returns per entry/item candidates and writes nothing', async () => {
+    const { e1, i1 } = buildMaster();
+    db.addEntryTags(e1, ['frontend']); // seed a vocab so something matches
+    const before = db.listTags(pid);
+    const bulk = await db.suggestBulk(pid, { minScore: 0.35 });
+    expect(bulk.count).toBeGreaterThan(0);
+    const i1row = bulk.items.find((x) => x.target === 'item' && x.id === i1); // "Built frontend"
+    expect(i1row.suggestions.map((s) => s.tag)).toContain('frontend');
+    // suggest-only: vocab + tags are unchanged
+    expect(db.listTags(pid)).toEqual(before);
+    expect(db.getEntry(e1).items.find((i) => i.id === i1).tags).toEqual([]);
+  });
+});
+
 describe('Variants CRUD', () => {
   test('create with valid kind, reject invalid', () => {
     const v = db.createVariant(pid, 'My CV', 'cv');
