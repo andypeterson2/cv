@@ -10,7 +10,9 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "smoke": "node smoke-test.mjs"
+    "smoke": "node smoke-test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:smoke": "node run-smoke-ci.mjs"
   },
   "engines": {
     "node": ">=18"
