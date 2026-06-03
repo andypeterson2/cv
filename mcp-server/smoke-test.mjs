@@ -59,7 +59,8 @@ try {
   const list = await send('tools/list', {});
   const names = list.tools.map((t) => t.name);
   check('tools/list returns >=20 tools', list.tools.length >= 20, `got ${list.tools.length}`);
-  for (const t of ['cv_get_master', 'cv_tag', 'cv_create_variant', 'cv_set_variant_rules', 'cv_resolve_variant', 'cv_get_pdf']) {
+  for (const t of ['cv_get_master', 'cv_tag', 'cv_create_variant', 'cv_set_variant_rules', 'cv_resolve_variant', 'cv_get_pdf',
+    'cv_suggest_tags', 'cv_list_tag_catalog', 'cv_add_catalog_tag']) {
     check(`${t} present`, names.includes(t));
   }
   check('old modal tools removed', !names.includes('cv_switch_to_person') && !names.includes('cv_import_data'));
@@ -86,6 +87,12 @@ try {
   const e2 = json(await call('cv_add_entry', { section_id: sid, fields: { position: 'Intern' } })).id;
   json(await call('cv_add_bullet', { entry_id: e1, content: 'Built the thing' }));
   check('content created', Number.isInteger(sid) && Number.isInteger(e1) && Number.isInteger(e2));
+
+  // Smart tagging: catalog + suggest → confirm with cv_tag → exact resolution.
+  await call('cv_add_catalog_tag', { person_id: pid, tag: 'frontend' });
+  const sug = json(await call('cv_suggest_tags', { person_id: pid, text: 'Built a React frontend component library' }));
+  check('cv_suggest_tags suggests an existing tag', sug.results?.some((r) => r.tag === 'frontend'),
+    `got ${sug.results?.map((r) => r.tag).join(',') || 'none'}`);
 
   const tagRes = await call('cv_tag', { target: 'entry', id: e1, tags: ['frontend'] });
   check('cv_tag entry', !tagRes.isError);
