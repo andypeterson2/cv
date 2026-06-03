@@ -5,6 +5,8 @@ const { execFile } = require('child_process');
 const { validate } = require('../lib/schema');
 const { AppError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
+const { rateLimit } = require('express-rate-limit');
+const { createLimiter } = require('../lib/limiter');
 
 function intId(value, label = 'id') {
   const n = parseInt(value, 10);
@@ -140,6 +142,36 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   }));
 
   // ---- Compile to PDF (resolve → generate → xelatex) ----
+  //
+  // The compile endpoints are the one real DoS lever (each spawns xelatex for up
+  // to 30s). Two guards: a per-IP rate limit on inflow, and a concurrency cap so
+  // a burst queues instead of forking N LaTeX processes at once.
+  const compileLimit = createLimiter(process.env.CV_COMPILE_CONCURRENCY || 2);
+  const compileRateLimit = rateLimit({
+    windowMs: 60 * 1000,
+    max: Number(process.env.CV_COMPILE_RATE_MAX) || 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, log: 'Too many compile requests — please wait a moment.' },
+  });
+
+  function runLatex(buildDir, mainTexFile) {
+    return new Promise((resolve) => {
+      execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
+        execFile('xelatex', ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', path.basename(mainTexFile)], {
+          cwd: buildDir,
+          timeout: 30000,
+        }, (error, stdout, stderr) => {
+          const pdfPath = path.join(buildDir, path.basename(mainTexFile, '.tex') + '.pdf');
+          if (error || !fs.existsSync(pdfPath)) {
+            resolve({ ok: false, log: stdout + (stderr ? '\n' + stderr : '') });
+          } else {
+            resolve({ ok: true, pdfPath, log: stdout });
+          }
+        });
+      });
+    });
+  }
 
   function compileVariant(id, res, { inline }) {
     let compileData, variant;
@@ -163,31 +195,31 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       return res.status(500).json({ success: false, log: 'File generation failed: ' + e.message });
     }
 
-    execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
-      execFile('xelatex', ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', path.basename(mainTexFile)], {
-        cwd: buildDir,
-        timeout: 30000,
-      }, (error, stdout, stderr) => {
-        const pdfPath = path.join(buildDir, path.basename(mainTexFile, '.tex') + '.pdf');
-        if (error || !fs.existsSync(pdfPath)) {
+    // Queue the expensive xelatex run behind the concurrency limiter.
+    compileLimit(() => runLatex(buildDir, mainTexFile))
+      .then((result) => {
+        if (!result.ok) {
           cleanupDir(buildDir);
-          return res.status(500).json({ success: false, log: stdout + (stderr ? '\n' + stderr : '') });
+          return res.status(500).json({ success: false, log: result.log });
         }
         if (inline) {
           const filename = `${slugifyName(variant.name)}-${variant.kind}.pdf`;
           res.setHeader('Content-Type', 'application/pdf');
           res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
-          res.sendFile(pdfPath, () => cleanupDir(buildDir));
+          res.sendFile(result.pdfPath, () => cleanupDir(buildDir));
         } else {
-          res.json({ success: true, log: stdout });
+          res.json({ success: true, log: result.log });
           cleanupDir(buildDir);
         }
+      })
+      .catch((e) => {
+        cleanupDir(buildDir);
+        res.status(500).json({ success: false, log: 'Compile failed: ' + e.message });
       });
-    });
   }
 
-  router.get('/:id/pdf', (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }));
-  router.post('/:id/compile', (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }));
+  router.get('/:id/pdf', compileRateLimit, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }));
+  router.post('/:id/compile', compileRateLimit, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }));
 
   return router;
 };
