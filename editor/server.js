@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const CvDatabase = require('./lib/db');
+const { tokenAuth } = require('./lib/auth');
 
 // Route modules
 const createSettingsRouter = require('./routes/settings');
@@ -35,6 +36,10 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Optional app-level auth on the API (defense in depth behind the reverse proxy).
+// No-op unless CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated.
+app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN));
 
 // ---------------------------------------------------------------------------
 // Mount routers — every content route is id-addressable; there is no active
