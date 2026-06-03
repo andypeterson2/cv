@@ -1,0 +1,15 @@
+# Build-context hygiene. Critically, exclude host (macOS) node_modules so
+# `COPY editor/ ./` can't overlay them onto the baked Linux node_modules.
+**/node_modules
+build/
+cv.db
+cv.db-shm
+cv.db-wal
+cv.db.bak*
+*.log
+.DS_Store
+.git
+.github
+mcp-server/
+# legacy root LaTeX outputs — the image builds its own under /app/build
+*.pdf
