@@ -320,3 +320,16 @@ describe('Catalog + health', () => {
     expect(health.body.persons).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('Compile endpoint hardening', () => {
+  test('the compile route is rate-limited (429 once the per-window cap is exceeded)', async () => {
+    // Hit a non-existent variant so each request returns fast (404) without xelatex;
+    // the rate-limit middleware runs first and should begin rejecting with 429.
+    const statuses = [];
+    for (let i = 0; i < 12; i++) {
+      statuses.push((await request('GET', '/api/variants/999999/pdf')).status);
+    }
+    expect(statuses.filter((s) => s === 429).length).toBeGreaterThan(0);
+    expect(statuses.every((s) => s === 404 || s === 429)).toBe(true);
+  });
+});
