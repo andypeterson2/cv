@@ -122,6 +122,126 @@ describe('Tags', () => {
   });
 });
 
+describe('Fuzzy tags', () => {
+  test('normalization folds case/separator variants and de-dupes', async () => {
+    const { e1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['Front End', 'front_end', 'Machine Learning'] });
+    expect((await request('GET', `/api/entries/${e1}`)).body.tags).toEqual(['front-end', 'machine-learning']);
+    expect((await request('GET', `/api/persons/${pid}/tags`)).body.tags).toEqual(['front-end', 'machine-learning']);
+  });
+
+  test('tags?withCounts returns usage counts', async () => {
+    const { e1, i1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    await request('POST', `/api/items/${i1}/tags`, { tags: ['frontend'] });
+    const body = (await request('GET', `/api/persons/${pid}/tags?withCounts=1`)).body;
+    expect(body.tags).toEqual([{ tag: 'frontend', count: 2 }]);
+  });
+
+  test('search finds a typo + reports score/via; missing q → 400', async () => {
+    const { e1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend', 'kubernetes'] });
+    const res = (await request('GET', `/api/persons/${pid}/tags/search?q=fronend`)).body;
+    expect(res.results[0].tag).toBe('frontend');
+    expect(res.results[0].score).toBeGreaterThan(0.5);
+    expect(res.results.find((r) => r.tag === 'kubernetes')).toBeUndefined();
+    expect((await request('GET', `/api/persons/${pid}/tags/search`)).status).toBe(400);
+  });
+
+  test('alias folds existing + future tags into the canonical', async () => {
+    const { e1, e2 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['ml'] }); // before the alias exists
+    expect((await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'ml', canonical: 'machine-learning' })).status).toBe(200);
+
+    // existing 'ml' was folded retroactively
+    expect((await request('GET', `/api/entries/${e1}`)).body.tags).toEqual(['machine-learning']);
+    // future writes of the alias store the canonical
+    await request('POST', `/api/entries/${e2}/tags`, { tags: ['ml'] });
+    expect((await request('GET', `/api/entries/${e2}`)).body.tags).toEqual(['machine-learning']);
+    expect((await request('GET', `/api/persons/${pid}/tag-aliases`)).body.aliases).toEqual([
+      { alias: 'ml', canonical: 'machine-learning', source: 'manual' },
+    ]);
+  });
+
+  test('alias search surfaces the canonical as an exact hit', async () => {
+    const { e1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['machine-learning'] });
+    await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'ml', canonical: 'machine-learning' });
+    const res = (await request('GET', `/api/persons/${pid}/tags/search?q=ml`)).body;
+    expect(res.results[0]).toMatchObject({ tag: 'machine-learning', via: 'alias', score: 1 });
+  });
+
+  test('self-alias and cycles are rejected with 409', async () => {
+    expect((await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'x', canonical: 'x' })).status).toBe(409);
+    expect((await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'a', canonical: 'b' })).status).toBe(200);
+    expect((await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'b', canonical: 'a' })).status).toBe(409);
+  });
+
+  test('rule expansion materializes near-miss tags; resolution stays exact', async () => {
+    const { e1, e2 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    await request('POST', `/api/entries/${e2}/tags`, { tags: ['front-end'] });
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'FE', kind: 'resume' })).body.id;
+    await request('PUT', `/api/variants/${v}/rules`, { include: ['frontend'] });
+
+    // Exact rule catches only e1.
+    let resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
+    expect(resolved.sections.find((s) => s.id === 'experience').entries.map((e) => e.fields.position)).toEqual(['Engineer']);
+
+    // Expand grows the include set to the near-miss tag, written back concretely.
+    const exp = (await request('POST', `/api/variants/${v}/rules/expand`, { threshold: 0.6 })).body;
+    expect(exp.added.map((a) => a.tag)).toContain('front-end');
+    expect((await request('GET', `/api/variants/${v}`)).body.rules.include.sort()).toEqual(['front-end', 'frontend']);
+
+    // Now both entries resolve — via concrete tags, not fuzzy matching at render time.
+    resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
+    expect(resolved.sections.find((s) => s.id === 'experience').entries.map((e) => e.fields.position).sort())
+      .toEqual(['Engineer', 'Intern']);
+  });
+});
+
+describe('Tag catalog + suggestion', () => {
+  test('catalog PUT → GET → DELETE round-trip', async () => {
+    expect((await request('PUT', `/api/persons/${pid}/tags/catalog`, { tag: 'Front End', category: 'skill' })).status).toBe(200);
+    let cat = (await request('GET', `/api/persons/${pid}/tags/catalog`)).body.catalog;
+    expect(cat).toEqual([{ tag: 'front-end', description: null, category: 'skill' }]);
+    expect((await request('DELETE', `/api/persons/${pid}/tags/catalog/front-end`)).status).toBe(200);
+    expect((await request('GET', `/api/persons/${pid}/tags/catalog`)).body.catalog).toEqual([]);
+  });
+
+  test('suggest returns ranked existing tags and does NOT mutate the vocabulary', async () => {
+    const { e1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    await request('PUT', `/api/persons/${pid}/tags/catalog`, { tag: 'react' });
+    const before = (await request('GET', `/api/persons/${pid}/tags`)).body.tags;
+
+    const res = (await request('POST', `/api/persons/${pid}/tags/suggest`, { text: 'Built the React frontend library' })).body;
+    const tags = res.results.map((r) => r.tag);
+    expect(tags).toContain('frontend');
+    expect(tags).toContain('react');
+    expect(res.results.find((r) => r.tag === 'react').inCatalog).toBe(true);
+
+    // suggest-not-apply: the tag vocabulary is unchanged
+    expect((await request('GET', `/api/persons/${pid}/tags`)).body.tags).toEqual(before);
+  });
+
+  test('seed promotes usage vocab; suggest-bulk returns per-item candidates', async () => {
+    const { e1, i1 } = await buildMaster();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    expect((await request('POST', `/api/persons/${pid}/tags/catalog/seed`)).body.added).toBe(1);
+
+    const bulk = (await request('POST', `/api/persons/${pid}/tags/suggest-bulk`, {})).body;
+    expect(bulk.count).toBeGreaterThan(0);
+    const i1row = bulk.items.find((x) => x.target === 'item' && x.id === i1); // "Built frontend"
+    expect(i1row.suggestions.map((s) => s.tag)).toContain('frontend');
+  });
+
+  test('400s: suggest without text, catalog without tag', async () => {
+    expect((await request('POST', `/api/persons/${pid}/tags/suggest`, {})).status).toBe(400);
+    expect((await request('PUT', `/api/persons/${pid}/tags/catalog`, { description: 'no tag' })).status).toBe(400);
+  });
+});
+
 describe('Variants', () => {
   test('create, rules, resolve filters by tag', async () => {
     const { exp, e1 } = await buildMaster();

@@ -73,6 +73,15 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     res.json({ success: true });
   }));
 
+  // Author-time fuzzy expansion: grow the include set from the current seed tags
+  // and write the concrete result back. Resolution stays exact (see lib/db).
+  router.post('/:id/rules/expand', validate('expandRules'), wrap((req, res) => {
+    const id = intId(req.params.id, 'variant id');
+    requireVariant(id);
+    const result = getDb().expandVariantRules(id, { threshold: req.body.threshold, limit: req.body.limit });
+    res.json({ success: true, ...result });
+  }));
+
   router.put('/:id/sections', validate('variantSections'), wrap((req, res) => {
     const id = intId(req.params.id, 'variant id');
     requireVariant(id);
