@@ -18,8 +18,10 @@ cv.db
 cv.db-wal
 cv.db-shm
 
-# SQLite manual backups (contain real CV data — never commit)
+# SQLite manual backups (contain real CV data — never commit).
+# scripts/backup-db.sh writes timestamped snapshots into backups/.
 cv.db.bak*
+backups/
 
 # Generated build output
 build/
