@@ -1,18 +1,29 @@
 services:
+  # Local DEV container: source is bind-mounted and node --watch hot-reloads.
+  # node_modules + the baked embedding model come from the image's `dev` target
+  # and are held in the cv_node_modules volume so the host's (macOS) node_modules
+  # never shadow the container's (linux) ones.
+  #
+  # NOTE: after changing editor/package.json deps, recreate the volume so the
+  # newly-baked node_modules are re-seeded:
+  #   docker compose up -d --build --force-recreate --renew-anon-volumes cv-editor
+  # (or `docker compose down -v` first).
   cv-editor:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dev
     ports:
       - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
     environment:
       PORT: ${PORT:-3001}
       HOST: 0.0.0.0
+      NODE_ENV: development
     volumes:
       - .:/app
       - cv_node_modules:/app/editor/node_modules
     working_dir: /app/editor
-    command: sh -c "npm install --production && node server.js"
+    command: npm run dev
 
 volumes:
   cv_node_modules:
