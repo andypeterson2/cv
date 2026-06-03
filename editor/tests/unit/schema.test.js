@@ -71,6 +71,27 @@ describe('addTags schema', () => {
   });
 });
 
+describe('setCatalogTag schema', () => {
+  const v = validators.setCatalogTag;
+  it('requires tag; description/category optional', () => {
+    expect(v({ tag: 'frontend' })).toBe(true);
+    expect(v({ tag: 'frontend', description: 'UI work', category: 'skill' })).toBe(true);
+    expect(v({})).toBe(false);
+    expect(v({ tag: 123 })).toBe(false); // wrong type rejected (extra props are stripped, not rejected)
+  });
+});
+
+describe('suggestTags schema', () => {
+  const v = validators.suggestTags;
+  it('requires text; bounds limit/minScore; scorer enum', () => {
+    expect(v({ text: 'built a react app' })).toBe(true);
+    expect(v({ text: 'x', limit: 5, minScore: 0.4, scorer: 'embedding' })).toBe(true);
+    expect(v({})).toBe(false);
+    expect(v({ text: 'x', minScore: 2 })).toBe(false);
+    expect(v({ text: 'x', scorer: 'magic' })).toBe(false);
+  });
+});
+
 describe('variant schemas', () => {
   it('createVariant requires name + valid kind', () => {
     expect(validators.createVariant({ name: 'FE', kind: 'resume' })).toBe(true);

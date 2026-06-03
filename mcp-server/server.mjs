@@ -11,6 +11,9 @@
  * Configuration:
  *   CV_EDITOR_URL  — base URL of the running cv-editor (default
  *                    http://localhost:3001)
+ *   CV_EDITOR_AUTH — optional Authorization header value sent with every request,
+ *                    for deployments behind a reverse proxy that requires auth,
+ *                    e.g. "Basic <base64(user:pass)>" or "Bearer <token>".
  *   CV_MCP_PDF_DIR — directory where compiled PDFs are saved (default
  *                    $TMPDIR/cv-mcp-pdfs)
  */
@@ -24,6 +27,7 @@ import { tmpdir } from 'node:os';
 import Ajv from 'ajv';
 
 const BASE_URL = (process.env.CV_EDITOR_URL || 'http://localhost:3001').replace(/\/$/, '');
+const AUTH = process.env.CV_EDITOR_AUTH; // e.g. "Basic <base64>" when behind an auth proxy
 const PDF_DIR = process.env.CV_MCP_PDF_DIR || join(tmpdir(), 'cv-mcp-pdfs');
 
 const enc = encodeURIComponent;
@@ -37,7 +41,10 @@ async function api(method, path, body, { expectBinary = false } = {}) {
   try {
     res = await fetch(BASE_URL + path, {
       method,
-      headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+      headers: {
+        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(AUTH ? { Authorization: AUTH } : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (e) {
@@ -89,7 +96,7 @@ const toolDefs = [
     description:
       'Return a person\'s FULL master CV with stable ids: {person, personal, coverletter, ' +
       'sections:[{id,slug,type,title,sortOrder,entries:[{id,fields,tags,items:[{id,content,title,tags}]}]}], ' +
-      'variants:[{id,name,kind,rules,sections}], tags}. Read this once, then edit by id. This is the ' +
+      'variants:[{id,name,kind,rules,sections}], tags, tagAliases}. Read this once, then edit by id. This is the ' +
       'canonical read — ids here are valid for every edit/tag/override tool.',
     inputSchema: { type: 'object', properties: { person_id: personId }, required: ['person_id'], additionalProperties: false },
     handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}`),
@@ -184,7 +191,9 @@ const toolDefs = [
   },
   {
     name: 'cv_add_bullet',
-    description: 'Add a bullet to an entry. Returns {id}.',
+    description:
+      'Add a bullet to an entry. Returns {id}. After adding, tag it consistently: call cv_suggest_tags with the ' +
+      'bullet text and apply the fitting existing tags via cv_tag.',
     inputSchema: { type: 'object', properties: { entry_id: { type: 'integer' }, content: { type: 'string' }, title: { type: 'string' } }, required: ['entry_id', 'content'], additionalProperties: false },
     handler: (a) => api('POST', `/api/entries/${enc(a.entry_id)}/items`, { content: a.content, ...(a.title !== undefined ? { title: a.title } : {}) }),
   },
@@ -209,7 +218,11 @@ const toolDefs = [
   // ---- Tags ----
   {
     name: 'cv_tag',
-    description: 'Add one or more tags to an entry or bullet. Tags drive variant inclusion. target: "entry" or "bullet".',
+    description:
+      'Add one or more tags to an entry or bullet. Tags drive variant inclusion and are matched exactly (after ' +
+      'case/separator normalization + alias folding). target: "entry" or "bullet". To choose tags for a new or ' +
+      'edited bullet/entry, call cv_suggest_tags with its TEXT first and apply the fitting existing tags; only coin ' +
+      'a new tag (and promote it with cv_add_catalog_tag) when nothing suggested fits. Keeps the vocabulary consistent.',
     inputSchema: {
       type: 'object',
       properties: { target: { type: 'string', enum: ['entry', 'bullet'] }, id: { type: 'integer' }, tags: tagList },
@@ -228,6 +241,162 @@ const toolDefs = [
       additionalProperties: false,
     },
     handler: (a) => api('DELETE', `/api/${a.target === 'bullet' ? 'items' : 'entries'}/${enc(a.id)}/tags/${enc(a.tag)}`),
+  },
+  {
+    name: 'cv_search_tags',
+    description:
+      'Fuzzy-search a person\'s existing tag vocabulary — tolerant of typos, case/separator variants, prefixes, and ' +
+      'aliases. Returns {query, results:[{tag, score, count, via}]} ranked best-first (score in 0..1). Call this ' +
+      'BEFORE coining a new tag and reuse a close existing one (score ~0.7+) so the vocabulary does not fragment, and ' +
+      'before writing variant rules to find the exact tags to include. Approximate — never auto-applied to a render.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        person_id: personId,
+        q: { type: 'string', minLength: 1, description: 'Search text' },
+        limit: { type: 'integer', minimum: 1, maximum: 100, description: 'Max results (default 10)' },
+        min_score: { type: 'number', minimum: 0, maximum: 1, description: 'Score floor (default 0.3)' },
+      },
+      required: ['person_id', 'q'],
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const qs = [`q=${enc(a.q)}`];
+      if (a.limit !== undefined) qs.push(`limit=${enc(a.limit)}`);
+      if (a.min_score !== undefined) qs.push(`min_score=${enc(a.min_score)}`);
+      return api('GET', `/api/persons/${enc(a.person_id)}/tags/search?${qs.join('&')}`);
+    },
+  },
+  {
+    name: 'cv_alias_tag',
+    description:
+      'Define a tag alias (alias → canonical), e.g. "ml" → "machine-learning" or "js" → "javascript". Bridges true ' +
+      'synonyms that fuzzy matching cannot. Once set, tagging or writing a rule with the alias stores the canonical ' +
+      'instead, and existing uses of the alias are folded into the canonical — the vocabulary converges. Rejects ' +
+      'self-aliases and cycles (409).',
+    inputSchema: {
+      type: 'object',
+      properties: { person_id: personId, alias: { type: 'string', minLength: 1 }, canonical: { type: 'string', minLength: 1 } },
+      required: ['person_id', 'alias', 'canonical'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('PUT', `/api/persons/${enc(a.person_id)}/tag-aliases`, { alias: a.alias, canonical: a.canonical }),
+  },
+  {
+    name: 'cv_unalias_tag',
+    description: 'Remove a tag alias. Tags already folded into the canonical are left as-is.',
+    inputSchema: {
+      type: 'object',
+      properties: { person_id: personId, alias: { type: 'string', minLength: 1 } },
+      required: ['person_id', 'alias'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('DELETE', `/api/persons/${enc(a.person_id)}/tag-aliases/${enc(a.alias)}`),
+  },
+  {
+    name: 'cv_suggest_tags',
+    description:
+      'Given a piece of bullet/entry TEXT, return EXISTING tags that fit it, ranked best-first, drawn from the ' +
+      'person\'s tag catalog (controlled vocabulary) + current usage vocabulary: {query, results:[{tag, score, ' +
+      'inCatalog, count, via}]}. This is the smart-tagging primitive — call it when adding or editing content, then ' +
+      'apply the high-scoring existing tags with cv_tag instead of coining near-duplicates. Suggestions are ' +
+      'candidates only; nothing is written until you call cv_tag. Prefer tags where inCatalog is true.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        person_id: personId,
+        text: { type: 'string', minLength: 1, description: 'The bullet/entry text to tag' },
+        limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Max suggestions (default 8)' },
+        min_score: { type: 'number', minimum: 0, maximum: 1, description: 'Score floor (default 0.35)' },
+        scorer: { type: 'string', enum: ['lexical', 'embedding'], description: 'Ranking method; lexical (default) needs no model. embedding is an optional local semantic scorer for bulk/offline use.' },
+      },
+      required: ['person_id', 'text'],
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const body = { text: a.text };
+      if (a.limit !== undefined) body.limit = a.limit;
+      if (a.min_score !== undefined) body.minScore = a.min_score;
+      if (a.scorer !== undefined) body.scorer = a.scorer;
+      return api('POST', `/api/persons/${enc(a.person_id)}/tags/suggest`, body);
+    },
+  },
+  {
+    name: 'cv_list_tag_catalog',
+    description:
+      'List the person\'s tag catalog — the curated controlled vocabulary: [{tag, description, category}]. This is ' +
+      'the preferred target set for tagging; cv_suggest_tags ranks catalog members first.',
+    inputSchema: { type: 'object', properties: { person_id: personId }, required: ['person_id'], additionalProperties: false },
+    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/tags/catalog`),
+  },
+  {
+    name: 'cv_add_catalog_tag',
+    description:
+      'Add/define a canonical tag in the catalog (optional description + category like "skill"/"domain"/"role"). ' +
+      'Use when a genuinely new concept appears that no existing or suggested tag covers — promoting it makes future ' +
+      'content tag to it consistently. The tag is normalized + alias-folded before storing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        person_id: personId,
+        tag: { type: 'string', minLength: 1 },
+        description: { type: 'string' },
+        category: { type: 'string' },
+      },
+      required: ['person_id', 'tag'],
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const body = { tag: a.tag };
+      if (a.description !== undefined) body.description = a.description;
+      if (a.category !== undefined) body.category = a.category;
+      return api('PUT', `/api/persons/${enc(a.person_id)}/tags/catalog`, body);
+    },
+  },
+  {
+    name: 'cv_remove_catalog_tag',
+    description: 'Remove a tag from the catalog. Does not touch content already tagged with it.',
+    inputSchema: {
+      type: 'object',
+      properties: { person_id: personId, tag: { type: 'string', minLength: 1 } },
+      required: ['person_id', 'tag'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('DELETE', `/api/persons/${enc(a.person_id)}/tags/catalog/${enc(a.tag)}`),
+  },
+  {
+    name: 'cv_seed_catalog',
+    description:
+      'Bootstrap the catalog by promoting all currently-used tags into it (one-time convenience; then prune/curate). ' +
+      'Returns {added}.',
+    inputSchema: { type: 'object', properties: { person_id: personId }, required: ['person_id'], additionalProperties: false },
+    handler: (a) => api('POST', `/api/persons/${enc(a.person_id)}/tags/catalog/seed`),
+  },
+  {
+    name: 'cv_suggest_tags_bulk',
+    description:
+      'Suggest tags for EVERY entry and bullet of a person in one call — use right after importing an untagged CV to ' +
+      'tag the whole thing efficiently. Returns {count, items:[{target, id, text, current, suggestions:[…]}]}. ' +
+      'Suggest-only: nothing is written. Review and apply the good ones with cv_tag. Pass scorer:"embedding" for ' +
+      'local semantic ranking over many items without per-item frontier cost.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        person_id: personId,
+        limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Max suggestions per item (default 5)' },
+        min_score: { type: 'number', minimum: 0, maximum: 1, description: 'Score floor (default 0.4)' },
+        scorer: { type: 'string', enum: ['lexical', 'embedding'] },
+      },
+      required: ['person_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const body = {};
+      if (a.limit !== undefined) body.limit = a.limit;
+      if (a.min_score !== undefined) body.minScore = a.min_score;
+      if (a.scorer !== undefined) body.scorer = a.scorer;
+      return api('POST', `/api/persons/${enc(a.person_id)}/tags/suggest-bulk`, body);
+    },
   },
   // ---- Variants ----
   {
@@ -263,7 +432,9 @@ const toolDefs = [
     name: 'cv_set_variant_rules',
     description:
       'Set a variant\'s tag query (replaces existing). include: entries/bullets must carry ≥1 of these (empty = all). ' +
-      'exclude: drop anything carrying these (exclude beats include). No rules = the full master.',
+      'exclude: drop anything carrying these (exclude beats include). No rules = the full master. Tags are matched ' +
+      'EXACTLY (after case/separator normalization + alias folding) — use cv_search_tags to find the right tags, or ' +
+      'cv_expand_variant_rules to fuzzy-grow the include set in one step.',
     inputSchema: {
       type: 'object',
       properties: { variant_id: variantId, include: tagList, exclude: tagList },
@@ -271,6 +442,27 @@ const toolDefs = [
       additionalProperties: false,
     },
     handler: (a) => api('PUT', `/api/variants/${enc(a.variant_id)}/rules`, { include: a.include || [], exclude: a.exclude || [] }),
+  },
+  {
+    name: 'cv_expand_variant_rules',
+    description:
+      'Grow a variant\'s include rules by fuzzy-matching each current include tag against the vocabulary and adding ' +
+      'every tag scoring >= threshold (default 0.6), then writing the concrete expanded list back. Catches near-miss ' +
+      'tags (e.g. front-end vs frontend) WITHOUT making resolution fuzzy — the expansion is materialized in the rule, ' +
+      'so what renders stays exact and inspectable. Set the include seeds first (cv_set_variant_rules). Returns ' +
+      '{before, after, added:[{tag, from, score, via}]}.',
+    inputSchema: {
+      type: 'object',
+      properties: { variant_id: variantId, threshold: { type: 'number', minimum: 0, maximum: 1 }, limit: { type: 'integer', minimum: 1, maximum: 100 } },
+      required: ['variant_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      const body = {};
+      if (a.threshold !== undefined) body.threshold = a.threshold;
+      if (a.limit !== undefined) body.limit = a.limit;
+      return api('POST', `/api/variants/${enc(a.variant_id)}/rules/expand`, body);
+    },
   },
   {
     name: 'cv_set_variant_sections',
