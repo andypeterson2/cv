@@ -24,6 +24,7 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 
 const BASE_URL = (process.env.CV_EDITOR_URL || 'http://localhost:3001').replace(/\/$/, '');
@@ -574,5 +575,12 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 });
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
+// Start the stdio transport only when run as the entrypoint (CLI / smoke test),
+// so tests can import the tool catalog, validators, and api() helper without
+// opening a connection.
+if (fileURLToPath(import.meta.url) === process.argv[1]) {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+export { toolDefs, tools, toolMap, validators, callTool, api };
