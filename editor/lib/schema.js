@@ -149,6 +149,51 @@ const addTagsSchema = {
   additionalProperties: false,
 };
 
+const setTagAliasSchema = {
+  type: 'object',
+  properties: {
+    alias: { type: 'string', minLength: 1, maxLength: 60 },
+    canonical: { type: 'string', minLength: 1, maxLength: 60 },
+  },
+  required: ['alias', 'canonical'],
+  additionalProperties: false,
+};
+
+// Author-time fuzzy expansion of a variant's include rules. Both fields optional.
+const expandRulesSchema = {
+  type: 'object',
+  properties: {
+    threshold: { type: 'number', minimum: 0, maximum: 1 },
+    limit: { type: 'integer', minimum: 1, maximum: 100 },
+  },
+  additionalProperties: false,
+};
+
+// Tag catalog (controlled vocabulary) upsert.
+const setCatalogTagSchema = {
+  type: 'object',
+  properties: {
+    tag: { type: 'string', minLength: 1, maxLength: 60 },
+    description: { type: 'string', maxLength: 200 },
+    category: { type: 'string', maxLength: 60 },
+  },
+  required: ['tag'],
+  additionalProperties: false,
+};
+
+// Suggest tags for a piece of free text (bullet/entry content).
+const suggestTagsSchema = {
+  type: 'object',
+  properties: {
+    text: { type: 'string', minLength: 1, maxLength: 5000 },
+    limit: { type: 'integer', minimum: 1, maximum: 50 },
+    minScore: { type: 'number', minimum: 0, maximum: 1 },
+    scorer: { type: 'string', enum: ['lexical', 'embedding'] },
+  },
+  required: ['text'],
+  additionalProperties: false,
+};
+
 // ---------------------------------------------------------------------------
 // Variants
 // ---------------------------------------------------------------------------
@@ -242,6 +287,10 @@ const schemas = {
   updateItem: updateItemSchema,
   reorder: reorderSchema,
   addTags: addTagsSchema,
+  setTagAlias: setTagAliasSchema,
+  expandRules: expandRulesSchema,
+  setCatalogTag: setCatalogTagSchema,
+  suggestTags: suggestTagsSchema,
   createVariant: createVariantSchema,
   updateVariant: updateVariantSchema,
   variantRules: variantRulesSchema,
