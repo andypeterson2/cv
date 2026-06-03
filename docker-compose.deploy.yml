@@ -1,0 +1,71 @@
+# Self-contained DEPLOY composition — host-ambiguous (laptop or remote).
+# Run:  CV_DOMAIN=cv.example.com CV_USER=me CV_PASS_HASH='<bcrypt>' \
+#         docker compose -f docker-compose.deploy.yml up -d --build
+#
+# Caddy terminates TLS + Basic-Auth and is the ONLY published service. cv-editor
+# (unauthenticated full-CRUD + per-request xelatex) is NOT published to the host
+# — it's reachable only by Caddy over the internal network, so auth can't be
+# bypassed. Every route is gated, including the compile GET/POST DoS lever.
+#
+#   CV_DOMAIN     real hostname (auto-HTTPS) or `localhost` for local testing.
+#   CV_USER       Basic-Auth username.
+#   CV_PASS_HASH  bcrypt hash:  caddy hash-password --plaintext '<secret>'
+#                 (escape each `$` as `$$` here / in a .env file).
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      CV_DOMAIN: ${CV_DOMAIN:-localhost}
+      CV_USER: ${CV_USER:-admin}
+      CV_PASS_HASH: ${CV_PASS_HASH:?set CV_PASS_HASH to a bcrypt hash from `caddy hash-password`}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # ACME certs — persist across redeploys
+      - caddy_config:/config
+    depends_on:
+      - cv-editor
+    networks: [web]
+
+  cv-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deploy
+    image: cv-editor:latest
+    restart: unless-stopped
+    # NOT published to the host — only Caddy reaches it (service name cv-editor:3001).
+    expose:
+      - "3001"
+    environment:
+      PORT: 3001
+      HOST: 0.0.0.0
+      CV_DB_PATH: /data/cv.db
+      CV_EMBED_OFFLINE: "1"
+      CV_CORS_ORIGINS: ${CV_CORS_ORIGINS:-}   # set to the real origin, e.g. https://cv.example.com
+    volumes:
+      - cv_data:/data        # cv.db persists across redeploys (local disk — WAL is unsafe on networked FS)
+      - cv_fonts:/app/fonts  # future user-uploaded fonts (font-extensibility seam)
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [web]
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+
+networks:
+  web:
+
+volumes:
+  cv_data:
+  cv_fonts:
+  caddy_data:
+  caddy_config:
