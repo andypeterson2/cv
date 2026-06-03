@@ -26,6 +26,9 @@ backups/
 # Generated build output
 build/
 
+# Test coverage reports
+coverage/
+
 # Editor dependencies
 editor/node_modules/
 
