@@ -1,0 +1,21 @@
+# Reverse proxy + TLS + Basic-Auth in front of the (unauthenticated) cv-editor.
+# The app is NOT published to the host; only Caddy is reachable, so auth can't
+# be bypassed. Every route is gated (the compile GET/POST is a DoS lever).
+#
+#   CV_DOMAIN     real hostname for auto-HTTPS (Let's Encrypt), or `localhost`
+#                 for local testing (Caddy issues an internal cert → curl -k).
+#   CV_USER       Basic-Auth username.
+#   CV_PASS_HASH  bcrypt hash from:  caddy hash-password --plaintext '<secret>'
+#                 (in docker-compose env, escape each `$` as `$$`).
+{
+	# Quieter ACME logs; auto-HTTPS is on by default for non-local domains.
+	auto_https disable_redirects
+}
+
+{$CV_DOMAIN:localhost} {
+	basic_auth {
+		{$CV_USER:admin} {$CV_PASS_HASH}
+	}
+	encode gzip
+	reverse_proxy cv-editor:3001
+}

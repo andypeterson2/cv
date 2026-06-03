@@ -18,23 +18,48 @@ The editor frontend runs entirely in the browser and connects to a local backend
 
 ## Quick start
 
-### Local
+### Local (fastest dev loop)
+
+The host needs **XeLaTeX plus the Source Sans 3 and Roboto fonts** installed. On macOS that's MacTeX (or BasicTeX + the packages below) and the two font families in `~/Library/Fonts`. On Debian/Ubuntu: `texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-pictures` plus the fonts. (FontAwesome ships bundled in `templates/`.)
 
 ```bash
 cd editor
 npm install
-npm start          # http://localhost:3000
+npm run dev        # node --watch — hot-reloads on source changes — http://localhost:3001
+# or: npm start    # no watch
 ```
 
-LaTeX compilation requires `texlive-xetex`, `texlive-fonts-extra`, and `texlive-fonts-recommended` on the host.
+`npm run dev` restarts the server when `server.js` / `lib/` / `routes/` change. Compiles shell out to the host `xelatex`, so no container is required locally. Only one process can own the port — stop the Docker container first if it's running.
 
-### Docker (recommended)
+### Docker — dev container
 
 ```bash
-docker compose up --build    # http://localhost:3001
+docker compose up -d --build    # http://localhost:3001  (Dockerfile target: dev)
 ```
 
-All LaTeX dependencies and fonts are pre-installed in the container.
+The `dev` target bind-mounts your source and runs `node --watch`; production deps **and the embedding model are baked into the image**, so there is no per-boot `npm install` (boot is seconds). All LaTeX dependencies and fonts are pre-installed. After changing `editor/package.json` deps, re-seed the node_modules volume: `docker compose down -v && docker compose up -d --build`.
+
+### Remote / production deploy
+
+`docker-compose.deploy.yml` builds the **self-contained** `deploy` image (app code + deps + model COPYd in — no bind mounts) and runs it **behind a Caddy reverse proxy** that terminates TLS and enforces Basic-Auth. The app itself is **not** published to the host — only Caddy is reachable, so its lack of built-in auth can't be bypassed.
+
+**Why a proxy and not an app token:** the API is unauthenticated full CRUD, and *both* compile routes (`GET /api/variants/:id/pdf`, `POST /api/variants/:id/compile`) shell out to a 30 s `xelatex` — a DoS lever — so every route must be gated. Basic-Auth + TLS need no app changes and the browser handles the login natively; a bearer token would still need a TLS proxy *and* a login flow in the frontend. CORS is **not** a security control.
+
+```bash
+# 1. Generate a bcrypt password hash (uses the caddy image; no local install):
+docker run --rm caddy:2 caddy hash-password --plaintext 'your-secret'
+
+# 2. Run (set the env; escape every `$` in the hash as `$$` for compose):
+CV_DOMAIN=cv.example.com CV_USER=me CV_PASS_HASH='<bcrypt-hash>' \
+  docker compose -f docker-compose.deploy.yml up -d --build
+```
+
+- **TLS** is automatic for a real `CV_DOMAIN` (Let's Encrypt; needs a DNS A-record + ports 80/443 reachable). Use `CV_DOMAIN=localhost` to test with Caddy's internal CA.
+- **Clients send the credential.** Browser: native auth dialog. MCP server: set `CV_EDITOR_URL=https://cv.example.com` and `CV_EDITOR_AUTH="Basic $(printf 'me:your-secret' | base64)"`.
+- Persists `cv.db` in the `cv_data` volume (`CV_DB_PATH=/data/cv.db`); certs persist in `caddy_data`. Keep volumes on local disk — SQLite WAL is unsafe on networked filesystems. Back up with `sqlite3 /data/cv.db ".backup …"` (never `cp` a live WAL DB).
+- Set `CV_CORS_ORIGINS` to the real browser origin. Embedding runs fully offline (`CV_EMBED_OFFLINE=1`, model baked) — no network at runtime.
+
+**Alternative (no open ports, per-person access):** put it behind a **Cloudflare Tunnel + Access** (or a **Tailscale** tailnet) instead of Caddy — the edge provides TLS and identity-based auth (grant people by email), the app stays unchanged, and the MCP server authenticates with a service token. Prefer this over a shared password when several distinct people need access.
 
 ## Architecture
 
@@ -107,8 +132,9 @@ All endpoints return JSON. Base path: `/api`.
 |---|---|---|
 | `PORT` | `3000` | Server port |
 | `HOST` | `127.0.0.1` | Bind address |
-| `CV_DB_PATH` | `../cv.db` | SQLite database path |
+| `CV_DB_PATH` | `../cv.db` | SQLite database path (set to `/data/cv.db` for the deploy volume) |
 | `CV_CORS_ORIGINS` | *(localhost ports)* | Comma-separated allowed origins |
+| `CV_EMBED_OFFLINE` | *(unset)* | Set to `1` to forbid any runtime model download (deploy/dev images set this; the model is baked in) |
 
 ## Testing
 
