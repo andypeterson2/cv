@@ -71,10 +71,9 @@ describe('WP #665 — E2E navigation between documents', () => {
   });
 
   test('server API supports all three document types', () => {
-    const schema = readFile('editor/lib/schema.js');
-    expect(schema).toContain("'resume'");
-    expect(schema).toContain("'cv'");
-    expect(schema).toContain("'coverletter'");
+    // Behavioural check (the kind literals live in shared/constants.js now).
+    const { VALID_KINDS } = require('../lib/schema');
+    expect(VALID_KINDS).toEqual(expect.arrayContaining(['cv', 'resume', 'coverletter']));
   });
 
   test('server mounts the persons router to load profiles', () => {
