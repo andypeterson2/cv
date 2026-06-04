@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
+import shared from '../shared/constants.js'; // canonical enums/patterns (CJS interop)
 
 const BASE_URL = (process.env.CV_EDITOR_URL || 'http://localhost:3001').replace(/\/$/, '');
 const AUTH = process.env.CV_EDITOR_AUTH; // e.g. "Basic <base64>" when behind an auth proxy
@@ -136,7 +137,7 @@ const toolDefs = [
     description: 'Add a section to a person. slug is kebab-case (unique per person). type: experience, education, projects, skills, certifications, references, summary, honors, writing, … Returns {id}.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, slug: { type: 'string', pattern: '^[a-z0-9_-]+$' }, type: { type: 'string' }, title: { type: 'string' } },
+      properties: { person_id: personId, slug: { type: 'string', pattern: shared.SLUG_PATTERN }, type: { type: 'string' }, title: { type: 'string' } },
       required: ['person_id', 'slug', 'type', 'title'],
       additionalProperties: false,
     },
@@ -147,7 +148,7 @@ const toolDefs = [
     description: 'Update a section\'s title (and optionally slug/type). Pass at least one of slug, type, title.',
     inputSchema: {
       type: 'object',
-      properties: { section_id: { type: 'integer' }, slug: { type: 'string', pattern: '^[a-z0-9_-]+$' }, type: { type: 'string' }, title: { type: 'string' } },
+      properties: { section_id: { type: 'integer' }, slug: { type: 'string', pattern: shared.SLUG_PATTERN }, type: { type: 'string' }, title: { type: 'string' } },
       required: ['section_id'],
       additionalProperties: false,
     },
@@ -309,7 +310,7 @@ const toolDefs = [
         text: { type: 'string', minLength: 1, description: 'The bullet/entry text to tag' },
         limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Max suggestions (default 8)' },
         min_score: { type: 'number', minimum: 0, maximum: 1, description: 'Score floor (default 0.35)' },
-        scorer: { type: 'string', enum: ['lexical', 'embedding'], description: 'Ranking method; lexical (default) needs no model. embedding is an optional local semantic scorer for bulk/offline use.' },
+        scorer: { type: 'string', enum: shared.SCORER_METHODS, description: 'Ranking method; lexical (default) needs no model. embedding is an optional local semantic scorer for bulk/offline use.' },
       },
       required: ['person_id', 'text'],
       additionalProperties: false,
@@ -386,7 +387,7 @@ const toolDefs = [
         person_id: personId,
         limit: { type: 'integer', minimum: 1, maximum: 50, description: 'Max suggestions per item (default 5)' },
         min_score: { type: 'number', minimum: 0, maximum: 1, description: 'Score floor (default 0.4)' },
-        scorer: { type: 'string', enum: ['lexical', 'embedding'] },
+        scorer: { type: 'string', enum: shared.SCORER_METHODS },
       },
       required: ['person_id'],
       additionalProperties: false,
@@ -417,7 +418,7 @@ const toolDefs = [
     description: 'Create a variant. kind selects the render: "cv" (no rules = the full master), "resume", or "coverletter". name is free ("Frontend Resume"). Returns {id}.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, name: { type: 'string', minLength: 1 }, kind: { type: 'string', enum: ['cv', 'resume', 'coverletter'] } },
+      properties: { person_id: personId, name: { type: 'string', minLength: 1 }, kind: { type: 'string', enum: shared.VARIANT_KINDS } },
       required: ['person_id', 'name', 'kind'],
       additionalProperties: false,
     },

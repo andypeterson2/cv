@@ -12,8 +12,10 @@ const { VALID_SEMANTIC_TYPES } = require('./latex-type-map');
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: false });
 
-const VALID_KINDS = ['cv', 'resume', 'coverletter'];
-const SLUG = '^[a-z0-9_-]+$';
+// Canonical constants shared with the MCP server (see packages/cv/shared).
+const { VARIANT_KINDS, SLUG_PATTERN, SCORER_METHODS } = require('../../shared/constants');
+const VALID_KINDS = VARIANT_KINDS;
+const SLUG = SLUG_PATTERN;
 
 // ---------------------------------------------------------------------------
 // Global settings (style / spacing / fonts)
@@ -188,7 +190,7 @@ const suggestTagsSchema = {
     text: { type: 'string', minLength: 1, maxLength: 5000 },
     limit: { type: 'integer', minimum: 1, maximum: 50 },
     minScore: { type: 'number', minimum: 0, maximum: 1 },
-    scorer: { type: 'string', enum: ['lexical', 'embedding'] },
+    scorer: { type: 'string', enum: SCORER_METHODS },
   },
   required: ['text'],
   additionalProperties: false,
