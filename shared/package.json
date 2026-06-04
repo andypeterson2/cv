@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "type": "commonjs",
+  "description": "CommonJS constants shared by the cv editor (require) and MCP server (import). Pins the module type so it stays CJS regardless of any parent package.json (e.g. the superproject root sets type:module)."
+}
