@@ -21,6 +21,10 @@ const { JANE_DOE_DATA } = require('./seed-data');
 const { getLatexType, normalizeType } = require('./latex-type-map');
 const fuzzy = require('./fuzzy');
 const suggest = require('./suggest');
+const {
+  rowsToSettings, stripPrefix, combineUnits, rowToSection, rowToVariant,
+  mapDocToVariantSections, normTag, entryText, sortKey, bySort,
+} = require('./db/helpers');
 
 const KINDS = ['cv', 'resume', 'coverletter'];
 
@@ -160,61 +164,7 @@ class CvDatabase {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Global settings (style / spacing / fonts)
-  // ---------------------------------------------------------------------------
-
-  getSettings(prefix) {
-    const rows = this._stmts.getSettings.all(prefix ? prefix + '.' : '');
-    return rowsToSettings(rows);
-  }
-
-  setSettings(map) {
-    const tx = this.db.transaction((entries) => {
-      for (const [key, val] of entries) {
-        if (val && typeof val === 'object' && 'num' in val && 'unit' in val) {
-          this._stmts.upsertSettingUnit.run(key, String(val.num) + val.unit, val.num, val.unit);
-        } else {
-          this._stmts.upsertSetting.run(key, val);
-        }
-      }
-    });
-    tx(Object.entries(map));
-  }
-
-  // ---------------------------------------------------------------------------
-  // Person settings (personal.* / coverletter.*)
-  // ---------------------------------------------------------------------------
-
-  getPersonSettings(personId, prefix) {
-    const rows = this._stmts.getPersonSettings.all(personId, prefix ? prefix + '.' : '');
-    return rowsToSettings(rows);
-  }
-
-  setPersonSettings(personId, map) {
-    const tx = this.db.transaction(() => {
-      for (const [key, val] of Object.entries(map)) {
-        this._stmts.upsertPersonSetting.run(personId, key, val == null ? null : String(val));
-      }
-    });
-    tx();
-  }
-
-  /** personal.* settings → flat object with the prefix stripped. */
-  getPersonal(personId) {
-    return stripPrefix(this.getPersonSettings(personId, 'personal'), 'personal.');
-  }
-
-  setPersonal(personId, fields) {
-    const map = {};
-    for (const [k, v] of Object.entries(fields)) map['personal.' + k] = v;
-    this.setPersonSettings(personId, map);
-  }
-
-  /** coverletter.* header settings → flat object (no `sections`). */
-  getCoverletterHeader(personId) {
-    return stripPrefix(this.getPersonSettings(personId, 'coverletter'), 'coverletter.');
-  }
+  // Settings methods (global + per-person) are mixed in from ./db/settings.js.
 
   // ---------------------------------------------------------------------------
   // Persons
@@ -1172,83 +1122,11 @@ class CvDatabase {
 // Row / shape helpers
 // ---------------------------------------------------------------------------
 
-function rowsToSettings(rows) {
-  const out = {};
-  for (const row of rows) {
-    out[row.key] = (row.value_num != null && row.value_unit != null)
-      ? { num: row.value_num, unit: row.value_unit }
-      : row.value;
-  }
-  return out;
-}
+// Row / shape / text helpers now live in ./db/helpers.js (imported at the top).
 
-function stripPrefix(obj, prefix) {
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) out[k.startsWith(prefix) ? k.slice(prefix.length) : k] = v;
-  return out;
-}
-
-/** Re-join {num,unit} setting objects into combined strings for the generator. */
-function combineUnits(obj) {
-  const out = {};
-  for (const [k, v] of Object.entries(obj)) {
-    out[k] = (v && typeof v === 'object' && 'num' in v) ? String(v.num) + v.unit : v;
-  }
-  return out;
-}
-
-function rowToSection(s) {
-  return { id: s.id, personId: s.person_id, slug: s.slug, type: s.type, title: s.title, sortOrder: s.sort_order };
-}
-
-function rowToVariant(v) {
-  return { id: v.id, personId: v.person_id, name: v.name, kind: v.kind, created_at: v.created_at };
-}
-
-function mapDocToVariantSections(docRows, sectionIdBySlug) {
-  const out = [];
-  for (const d of docRows) {
-    const sectionId = sectionIdBySlug[d.sectionId];
-    if (sectionId == null) continue;
-    out.push({ sectionId, enabled: d.enabled !== false, sortOrder: typeof d.sortOrder === 'number' ? d.sortOrder : out.length });
-  }
-  return out;
-}
-
-/**
- * Canonicalize a tag for storage and exact matching. Conservative on purpose:
- * case, unicode accents, and separator STYLE (whitespace/underscore → hyphen)
- * are folded so "Front End", "front_end", and "front-end" converge — but
- * distinct words are never stemmed or merged ("java" ≠ "javascript"). Anything
- * looser (typos, true synonyms) is handled by fuzzy search + the alias map, not
- * here. Mirrored by the frozen snapshot in migrations/008_fuzzy_tags.js.
- */
-function normTag(t) {
-  return String(t)
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '') // strip combining diacritics
-    .trim()
-    .toLowerCase()
-    .replace(/[\s_]+/g, '-') // unify whitespace / underscores → hyphen
-    .replace(/-+/g, '-') // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
-}
-
-/** Flatten an entry's string field values into one text blob for suggestion. */
-function entryText(fields) {
-  return Object.values(fields || {}).filter((v) => typeof v === 'string').join(' ').trim();
-}
-
-/** Lexicographic ordering key: [effective sort, master sort, id]. */
-function sortKey(override, master, id) {
-  return [override != null ? override : master, master, id];
-}
-
-function bySort(a, b) {
-  for (let i = 0; i < a._sort.length; i++) {
-    if (a._sort[i] !== b._sort[i]) return a._sort[i] - b._sort[i];
-  }
-  return 0;
-}
+// Method clusters live in lib/db/ and are mixed onto the prototype here so the
+// public surface (and getDb()) is unchanged. Settings is extracted; the larger
+// clusters (tags, variants, import/export) follow this same pattern.
+Object.assign(CvDatabase.prototype, require('./db/settings'));
 
 module.exports = CvDatabase;
