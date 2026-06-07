@@ -158,9 +158,12 @@ describe('WP #672 — Content stored in SQLite database', () => {
     expect(fileExists('editor/lib/db.js')).toBe(true);
     const db = readFile('editor/lib/db.js');
     expect(db).toContain('class CvDatabase');
-    expect(db).toContain('getSettings');
-    expect(db).toContain('getSections');
-    expect(db).toContain('resolveVariant');
+    // Methods are composed from focused lib/db/ modules — assert the assembled
+    // public surface rather than source-text literals.
+    const CvDatabase = require('../lib/db');
+    for (const m of ['getSettings', 'getSections', 'resolveVariant']) {
+      expect(typeof CvDatabase.prototype[m]).toBe('function');
+    }
   });
 
   test('migration script exists', () => {
