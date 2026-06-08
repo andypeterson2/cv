@@ -16,7 +16,7 @@ const createVariantsRouter = require('./routes/variants');
 const createDataRouter = require('./routes/data');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 const DB_PATH = process.env.CV_DB_PATH || path.join(PROJECT_ROOT, 'cv.db');

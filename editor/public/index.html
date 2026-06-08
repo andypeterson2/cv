@@ -504,7 +504,7 @@
 
   <script src="https://andypeterson2.github.io/ui-kit/icons.js"></script>
   <script src="https://andypeterson2.github.io/ui-kit/ui-kit.js"></script>
-  <script>const API_BASE = (typeof ServiceConfig !== 'undefined' && ServiceConfig.get) ? ServiceConfig.get("cv", "https://localhost:3000") : "https://localhost:3000";</script>
+  <script>const API_BASE = (typeof ServiceConfig !== 'undefined' && ServiceConfig.get) ? ServiceConfig.get("cv", "http://localhost:3001") : "http://localhost:3001";</script>
   <script src="/storage.js"></script>
   <script src="/app.js"></script>
   <script>
@@ -514,7 +514,7 @@
         UIKit.initConnect(el, {
           service: 'cv',
           defaultHost: 'localhost',
-          defaultPort: 3000,
+          defaultPort: 3001,
           label: 'Backend'
         });
       }
