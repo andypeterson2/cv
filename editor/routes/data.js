@@ -1,4 +1,5 @@
 const express = require('express');
+const { buildHealth } = require('../lib/health');
 
 module.exports = function createDataRouter(getDb) {
   const router = express.Router();
@@ -19,9 +20,9 @@ module.exports = function createDataRouter(getDb) {
 
   router.get('/health', (req, res) => {
     try {
-      res.json({ status: 'ok', service: 'cv', persons: getDb().getPersons().length });
+      res.json(buildHealth(getDb));
     } catch (e) {
-      res.status(500).json({ status: 'error', service: 'cv', error: e.message });
+      res.status(500).json({ error: { code: 'internal_error', message: e.message } });
     }
   });
 
