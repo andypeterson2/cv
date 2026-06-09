@@ -1,0 +1,38 @@
+<# Cover letter document. Shares the same preamble (and personal data) as the
+   CV, then emits the awesome-cv letter structure. #>
+<% include "templates/partials/preamble.njk" %>
+
+\recipient
+  {<<coverletter.recipientName | tex>>}
+  {<<coverletter.recipientAddress | tex>>}
+\letterdate{\today}
+\lettertitle{<<coverletter.title | tex>>}
+\letteropening{<<coverletter.opening | tex>>}
+\letterclosing{<<coverletter.closing | tex>>}
+\letterenclosure[<<(coverletter.enclosureLabel or 'Attached') | tex>>]{<<coverletter.enclosureContent | tex>>}
+
+\begin{document}
+
+\makecvheader[R]
+
+\makecvfooter
+  {\today}
+  {<<personal.firstName | tex>> <<personal.lastName | tex>>~~~\cdotp~~~Cover Letter}
+  {}
+
+\makelettertitle
+
+\begin{cvletter}
+
+<% if coverletter.sections %>
+<% for sec in coverletter.sections %>
+\lettersection{<<sec.title | tex>>}
+<<sec.body | tex>>
+<% endfor %>
+<% endif %>
+
+\end{cvletter}
+
+\makeletterclosing
+
+\end{document}

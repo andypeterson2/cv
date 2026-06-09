@@ -1,12 +1,11 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const { execFile } = require('child_process');
 const { validate } = require('../lib/schema');
 const { AppError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
 const { rateLimit } = require('express-rate-limit');
-const { createLimiter } = require('../lib/limiter');
+const { queuedCompile } = require('../lib/render/latex');
 
 function intId(value, label = 'id') {
   const n = parseInt(value, 10);
@@ -26,9 +25,11 @@ function cleanupDir(dir) {
   try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
 }
 
+const { renderVariant } = require('../lib/render/host');
+const { selectLayout } = require('../lib/render/select');
+
 module.exports = function createVariantsRouter(getDb, projectRoot) {
   const router = express.Router();
-  const TEMPLATES_DIR = path.join(projectRoot, 'templates');
   const ASSETS_DIR = path.join(projectRoot, 'assets');
 
   const requireVariant = (id) => {
@@ -64,6 +65,27 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   router.delete('/:id', wrap((req, res) => {
     getDb().deleteVariant(intId(req.params.id, 'variant id'));
     res.json({ success: true });
+  }));
+
+  // Choose this variant's layout. `layout_id: null` (or "") reverts to the
+  // global default. A non-null id must exist, be active, and support the kind.
+  router.put('/:id/layout', wrap((req, res) => {
+    const id = intId(req.params.id, 'variant id');
+    const v = requireVariant(id);
+    const layoutId = req.body ? req.body.layout_id : undefined;
+    if (layoutId == null || layoutId === '') {
+      getDb().setVariantLayout(id, null);
+      return res.json({ success: true, layout_id: null });
+    }
+    if (typeof layoutId !== 'string') throw new AppError('layout_id must be a string or null', 400);
+    const layout = getDb().getLayout(layoutId);
+    if (!layout) throw new NotFoundError('Layout not found');
+    if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
+    if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
+      throw new AppError(`Layout "${layoutId}" does not support ${v.kind}`, 409);
+    }
+    getDb().setVariantLayout(id, layoutId);
+    res.json({ success: true, layout_id: layoutId });
   }));
 
   // ---- Rules / sections / overrides ----
@@ -144,9 +166,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // ---- Compile to PDF (resolve → generate → xelatex) ----
   //
   // The compile endpoints are the one real DoS lever (each spawns xelatex for up
-  // to 30s). Two guards: a per-IP rate limit on inflow, and a concurrency cap so
-  // a burst queues instead of forking N LaTeX processes at once.
-  const compileLimit = createLimiter(process.env.CV_COMPILE_CONCURRENCY || 2);
+  // to 30s). Two guards: a per-IP rate limit on inflow, and the shared
+  // concurrency cap in lib/render/latex so a burst queues instead of forking N
+  // LaTeX processes at once (also shared with the verification harness).
   const compileRateLimit = rateLimit({
     windowMs: 60 * 1000,
     max: Number(process.env.CV_COMPILE_RATE_MAX) || 10,
@@ -154,24 +176,6 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     legacyHeaders: false,
     message: { success: false, log: 'Too many compile requests — please wait a moment.' },
   });
-
-  function runLatex(buildDir, mainTexFile) {
-    return new Promise((resolve) => {
-      execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
-        execFile('xelatex', ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', path.basename(mainTexFile)], {
-          cwd: buildDir,
-          timeout: 30000,
-        }, (error, stdout, stderr) => {
-          const pdfPath = path.join(buildDir, path.basename(mainTexFile, '.tex') + '.pdf');
-          if (error || !fs.existsSync(pdfPath)) {
-            resolve({ ok: false, log: stdout + (stderr ? '\n' + stderr : '') });
-          } else {
-            resolve({ ok: true, pdfPath, log: stdout });
-          }
-        });
-      });
-    });
-  }
 
   function compileVariant(id, res, { inline }) {
     let compileData, variant;
@@ -188,15 +192,16 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     try {
       fs.mkdirSync(personDir, { recursive: true });
       buildDir = fs.mkdtempSync(path.join(personDir, variant.kind + '-'));
-      const { generateAll } = require('../lib/generator');
-      mainTexFile = generateAll(compileData, buildDir, TEMPLATES_DIR, ASSETS_DIR);
+      // Resolve the layout: variant.layout_id ?? global default ?? builtin.
+      const { dir: layoutDir } = selectLayout(getDb(), variant);
+      mainTexFile = renderVariant(compileData, buildDir, { layoutDir, assetsDir: ASSETS_DIR });
     } catch (e) {
       if (buildDir) cleanupDir(buildDir);
       return res.status(500).json({ success: false, log: 'File generation failed: ' + e.message });
     }
 
-    // Queue the expensive xelatex run behind the concurrency limiter.
-    compileLimit(() => runLatex(buildDir, mainTexFile))
+    // Queue the expensive xelatex run behind the shared concurrency limiter.
+    queuedCompile(buildDir, mainTexFile)
       .then((result) => {
         if (!result.ok) {
           cleanupDir(buildDir);

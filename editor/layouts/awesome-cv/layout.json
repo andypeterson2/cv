@@ -1,0 +1,16 @@
+{
+  "id": "awesome-cv",
+  "name": "Awesome CV",
+  "version": "1.0.0",
+  "description": "The original Awesome-CV layout — single-column CV/resume with a colored accent, social header, and matching cover letter. The reference implementation of the layout contract.",
+  "author": "builtin",
+  "engine": "nunjucks",
+  "contextVersion": 1,
+  "kinds": ["cv", "resume", "coverletter"],
+  "entry": {
+    "document": "templates/document.tex.njk",
+    "coverletter": "templates/coverletter.tex.njk"
+  },
+  "main": "{kind}.tex",
+  "classFiles": ["class/awesome-cv.cls"]
+}

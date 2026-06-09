@@ -14,6 +14,8 @@ const createEntriesRouter = require('./routes/entries');
 const createItemsRouter = require('./routes/items');
 const createVariantsRouter = require('./routes/variants');
 const createDataRouter = require('./routes/data');
+const createLayoutsRouter = require('./routes/layouts');
+const { seedBuiltinLayouts } = require('./lib/render/seed');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,7 +25,10 @@ const DB_PATH = process.env.CV_DB_PATH || path.join(PROJECT_ROOT, 'cv.db');
 let db;
 
 function getDb() {
-  if (!db) db = new CvDatabase(DB_PATH);
+  if (!db) {
+    db = new CvDatabase(DB_PATH);
+    seedBuiltinLayouts(db); // register builtin layout bundles + set default
+  }
   return db;
 }
 
@@ -131,6 +136,7 @@ app.use('/api/sections', createSectionsRouter(getDb));     // section by id + it
 app.use('/api/entries', createEntriesRouter(getDb));       // entry by id + its items + tags
 app.use('/api/items', createItemsRouter(getDb));           // item by id + tags
 app.use('/api/variants', createVariantsRouter(getDb, PROJECT_ROOT)); // variant by id + rules/sections/overrides/resolve/pdf
+app.use('/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)); // layout list/get/upload/verify/delete + default
 app.use('/api', createDataRouter(getDb));                  // catalog + health
 
 // ---------------------------------------------------------------------------

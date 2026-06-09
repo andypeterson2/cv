@@ -1,0 +1,46 @@
+<# Classic CV / resume — stock article class, xelatex. Single self-contained
+   .tex. Demonstrates a layout authored from scratch against the data contract
+   (no awesome-cv class). #>
+<% import "templates/partials/sections.njk" as S %>
+\documentclass[<<style.fontSize>>,<<style.pageSize>>]{article}
+\usepackage[margin=<<spacing.horizontalMargin>>]{geometry}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage[hidelinks]{hyperref}
+\definecolor{accent}{HTML}{<<style.accent.hex>>}
+\setlist[itemize]{leftmargin=1.4em,nosep,topsep=1pt}
+\titleformat{\section}{\large\bfseries\color{accent}}{}{0pt}{}[{\color{accent}\titlerule[1pt]}]
+\titlespacing{\section}{0pt}{10pt}{4pt}
+\setlength{\parindent}{0pt}
+\pagestyle{empty}
+
+\begin{document}
+
+<% if personal.photo and personal.photo.enabled and personal.photo.file %>
+\noindent\begin{minipage}[t]{0.74\textwidth}
+<% endif %>
+{\Huge\bfseries <<personal.firstName | tex>> <<personal.lastName | tex>>}\par
+<% if personal.position %>
+\smallskip{\large\color{accent}<<personal.position | tex>>}\par
+<% endif %>
+\smallskip
+{\small%
+<% if personal.email %><<personal.email | tex>>\quad{}<% endif %>
+<% if personal.mobile %><<personal.mobile | tex>>\quad{}<% endif %>
+<% if personal.address %><<personal.address | tex>>\quad{}<% endif %>
+<% for soc in personal.socials %><<soc.key | tex>>:~<<soc.values | join(' ') | tex>>\quad{}<% endfor %>
+}\par
+<% if personal.photo and personal.photo.enabled and personal.photo.file %>
+\end{minipage}\hfill\begin{minipage}[t]{0.22\textwidth}\raggedleft\vspace{0pt}\includegraphics[width=\linewidth]{<<personal.photo.file>>}\end{minipage}
+<% endif %>
+\bigskip
+
+<% if personal.quote %>
+\begin{center}\itshape ``<<personal.quote | tex>>''\end{center}
+<% endif %>
+<% for s in sections %>
+<<S.section(s)>>
+<% endfor %>
+\end{document}
