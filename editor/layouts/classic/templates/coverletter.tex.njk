@@ -1,0 +1,45 @@
+<# Classic cover letter — stock article class. Block tags stay on their own
+   lines so each content line keeps its trailing newline: under trimBlocks a
+   \par must be followed by whitespace, never butted against the next word. #>
+\documentclass[<<style.fontSize>>,<<style.pageSize>>]{article}
+\usepackage[margin=<<spacing.horizontalMargin>>]{geometry}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+\definecolor{accent}{HTML}{<<style.accent.hex>>}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\pagestyle{empty}
+
+\begin{document}
+
+{\LARGE\bfseries\color{accent}<<personal.firstName | tex>> <<personal.lastName | tex>>}\par
+<% if personal.email or personal.mobile %>
+{\small <<personal.email | tex>><% if personal.email and personal.mobile %> \textbullet{} <% endif %><<personal.mobile | tex>>}\par
+<% endif %>
+\bigskip
+
+\today\par
+<% if coverletter.recipientName %>
+<<coverletter.recipientName | tex>>\par
+<% endif %>
+<% if coverletter.recipientAddress %>
+<<coverletter.recipientAddress | tex>>\par
+<% endif %>
+\bigskip
+
+<% if coverletter.title %>
+{\bfseries <<coverletter.title | tex>>}\par
+<% endif %>
+<<coverletter.opening | tex>>\par
+
+<% for sec in coverletter.sections %>
+<% if sec.title %>
+{\bfseries <<sec.title | tex>>}\par
+<% endif %>
+<<sec.body | tex>>\par
+<% endfor %>
+
+<<coverletter.closing | tex>>\par
+\bigskip
+<<personal.firstName | tex>> <<personal.lastName | tex>>\par
+\end{document}

@@ -1,0 +1,65 @@
+<# Classic section macros — stock article markup (\section + \par + \hfill +
+   itemize), nothing awesome-cv-specific. Each reproduces a section type from
+   the data contract. \par (not \\) keeps line breaks robust before lists. #>
+
+<% macro cventries(s) %>
+\section{<<s.title | tex>>}
+<% for e in s.entries %>
+{\bfseries <<e.position | tex>>}\hfill <<e.date | tex>>\par
+<% if e.organization or e.location %>
+{\itshape <<e.organization | tex>><% if e.organization and e.location %>, <% endif %><<e.location | tex>>}\par
+<% endif %>
+<% if e.items and e.items.length > 0 %>
+\begin{itemize}
+<% for item in e.items %>
+\item <<item | tex>>
+<% endfor %>
+\end{itemize}
+<% endif %>
+\smallskip
+<% endfor %>
+<% endmacro %>
+
+<% macro cvskills(s) %>
+\section{<<s.title | tex>>}
+<% for e in s.entries %>
+{\bfseries <<e.category | tex>>:}~<<e.skills | tex>>\par
+<% endfor %>
+<% endmacro %>
+
+<% macro cvhonors(s) %>
+\section{<<s.title | tex>>}
+<% for e in s.entries %>
+{\bfseries <<e.award | tex>>}<% if e.issuer %>, <<e.issuer | tex>><% endif %>\hfill <<e.date | tex>>\par
+<% if e.location %>{\itshape <<e.location | tex>>}\par<% endif %>
+\smallskip
+<% endfor %>
+<% endmacro %>
+
+<% macro cvreferences(s) %>
+\section{<<s.title | tex>>}
+<% for e in s.entries %>
+{\bfseries <<e.name | tex>>}<% if e.relation %> --- <<e.relation | tex>><% endif %>\par
+<% if e.phone or e.email %><<e.phone | tex>><% if e.phone and e.email %> \textbullet{} <% endif %><<e.email | tex>>\par<% endif %>
+\smallskip
+<% endfor %>
+<% endmacro %>
+
+<% macro cvparagraph(s) %>
+\section{<<s.title | tex>>}
+<<s.text | tex>>\par
+<% endmacro %>
+
+<% macro section(s) %>
+<% if s.latexType == 'cventries' %>
+<<cventries(s)>>
+<% elif s.latexType == 'cvskills' %>
+<<cvskills(s)>>
+<% elif s.latexType == 'cvhonors' %>
+<<cvhonors(s)>>
+<% elif s.latexType == 'cvreferences' %>
+<<cvreferences(s)>>
+<% elif s.latexType == 'cvparagraph' %>
+<<cvparagraph(s)>>
+<% endif %>
+<% endmacro %>

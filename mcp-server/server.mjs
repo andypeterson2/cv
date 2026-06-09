@@ -21,8 +21,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { writeFile, mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { writeFile, mkdir, readFile } from 'node:fs/promises';
+import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
@@ -62,14 +62,43 @@ async function api(method, path, body, { expectBinary = false } = {}) {
   if (ct.includes('application/json')) {
     const data = await res.json();
     if (!res.ok) {
-      const detail = data && (data.error || data.message) ? `: ${data.error || data.message}` : '';
-      throw new Error(`HTTP ${res.status} ${method} ${path}${detail}`);
+      // Contract error envelope: {error:{code,message,details?}}. Tolerate a
+      // bare-string error or a top-level message for resilience/back-compat.
+      const e = data && data.error;
+      const msg = e && typeof e === 'object'
+        ? [e.message, e.code && `(${e.code})`].filter(Boolean).join(' ')
+        : (e || (data && data.message) || '');
+      throw new Error(`HTTP ${res.status} ${method} ${path}${msg ? `: ${msg}` : ''}`);
     }
     return data;
   }
   const text = (await res.text()).slice(0, 200);
   if (!res.ok) throw new Error(`HTTP ${res.status} ${method} ${path}: ${text}`);
   return text;
+}
+
+// Multipart upload of a local .zip layout bundle. On rejection, surfaces the
+// failing verification checks so the author knows what to fix.
+async function uploadBundle(zipPath) {
+  let buf;
+  try { buf = await readFile(zipPath); }
+  catch (e) { throw new Error(`Could not read zip at ${zipPath}: ${e.message}`); }
+  const form = new FormData();
+  form.append('bundle', new Blob([buf], { type: 'application/zip' }), basename(zipPath));
+  let res;
+  try {
+    res = await fetch(BASE_URL + '/api/layouts', { method: 'POST', headers: { ...(AUTH ? { Authorization: AUTH } : {}) }, body: form });
+  } catch (e) {
+    throw new Error(`Could not reach cv-editor at ${BASE_URL}: ${e.message}. Make sure the cv-editor server is running.`);
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const report = data && data.error && data.error.details;
+    const failed = report && Array.isArray(report.checks) ? report.checks.filter((c) => !c.ok).map((c) => `${c.name}: ${c.detail}`) : [];
+    const msg = failed.length ? failed.join('; ') : (data && data.error ? data.error.message : `HTTP ${res.status}`);
+    throw new Error(`Layout rejected: ${msg}`);
+  }
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,11 +108,12 @@ async function api(method, path, body, { expectBinary = false } = {}) {
 const personId = { type: 'integer', description: 'Person id (from cv_list_persons)' };
 const variantId = { type: 'integer', description: 'Variant id (from cv_list_variants / cv_get_master)' };
 const tagList = { type: 'array', items: { type: 'string' }, description: 'Tag names (free strings)' };
+const layoutId = { type: 'string', description: 'Layout id (slug, from cv_list_layouts)' };
 
 const toolDefs = [
   {
     name: 'cv_health',
-    description: 'Ping the cv-editor backend. Returns {status, service, persons}. Call first if other tools error.',
+    description: 'Ping the cv-editor backend. Returns {status, service, version, uptime_s, persons}. Call first if other tools error.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: () => api('GET', '/api/health'),
   },
@@ -539,6 +569,60 @@ const toolDefs = [
       await writeFile(path, Buffer.from(bytes));
       return { path, size: bytes.byteLength };
     },
+  },
+
+  // ---- Layouts ----
+  {
+    name: 'cv_list_layouts',
+    description:
+      'List installed LaTeX layouts and the global default: {layouts:[{id,name,version,kinds,status,source,builtin}], default}. ' +
+      'A layout decides how a variant is typeset; "awesome-cv" is the builtin default. Pick one per variant with ' +
+      'cv_set_variant_layout, or change the global default with cv_set_default_layout.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: () => api('GET', '/api/layouts'),
+  },
+  {
+    name: 'cv_set_default_layout',
+    description: 'Set the global default layout (used by any variant that has not chosen its own). layout_id from cv_list_layouts.',
+    inputSchema: { type: 'object', properties: { layout_id: layoutId }, required: ['layout_id'], additionalProperties: false },
+    handler: (a) => api('PUT', '/api/layouts/default', { layout_id: a.layout_id }),
+  },
+  {
+    name: 'cv_set_variant_layout',
+    description:
+      'Choose a variant\'s layout. Pass a layout_id (from cv_list_layouts) to override, or null to revert to the global ' +
+      'default. The layout must support the variant\'s kind (cv/resume/coverletter).',
+    inputSchema: {
+      type: 'object',
+      properties: { variant_id: variantId, layout_id: { type: ['string', 'null'], description: 'Layout id, or null to revert to the default' } },
+      required: ['variant_id', 'layout_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('PUT', `/api/variants/${enc(a.variant_id)}/layout`, { layout_id: a.layout_id }),
+  },
+  {
+    name: 'cv_install_layout',
+    description:
+      'Install a new layout from a local .zip bundle (a layout.json manifest + templates/ + class/). The server runs the ' +
+      'contract gate — manifest + security scan + compiling the kitchen-sink fixture AND your real CVs — and installs the ' +
+      'layout only if it passes. On failure, returns the failing checks so you can fix the bundle. zip_path is on the ' +
+      'machine running this MCP server.',
+    inputSchema: { type: 'object', properties: { zip_path: { type: 'string', minLength: 1 } }, required: ['zip_path'], additionalProperties: false },
+    handler: (a) => uploadBundle(a.zip_path),
+  },
+  {
+    name: 'cv_verify_layout',
+    description:
+      'Re-run the contract gate on an installed layout (e.g. after adding new content). Returns the report; a layout that ' +
+      'now fails is marked invalid and variants using it fall back to the default until fixed.',
+    inputSchema: { type: 'object', properties: { layout_id: layoutId }, required: ['layout_id'], additionalProperties: false },
+    handler: (a) => api('POST', `/api/layouts/${enc(a.layout_id)}/verify`),
+  },
+  {
+    name: 'cv_delete_layout',
+    description: 'Delete an uploaded layout (builtins cannot be deleted). Variants using it revert to the global default.',
+    inputSchema: { type: 'object', properties: { layout_id: layoutId }, required: ['layout_id'], additionalProperties: false },
+    handler: (a) => api('DELETE', `/api/layouts/${enc(a.layout_id)}`),
   },
 ];
 
