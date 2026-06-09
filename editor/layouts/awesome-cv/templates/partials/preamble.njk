@@ -1,0 +1,119 @@
+%!TEX TS-program = xelatex
+%!TEX encoding = UTF-8 Unicode
+
+\documentclass[<<style.fontSize>>, <<style.pageSize>>]{awesome-cv}
+
+% Page geometry — horizontalMargin applies to both left and right
+\geometry{left=<<spacing.horizontalMargin>>, top=<<spacing.marginTop>>, right=<<spacing.horizontalMargin>>, bottom=<<spacing.marginBottom>>, footskip=<<spacing.footskip>>}
+
+% Accent color
+<% if style.accent.kind == 'preset' %>
+\colorlet{awesome}{<<style.accent.value>>}
+<% elif style.accent.kind == 'hex' %>
+\definecolor{awesome}{HTML}{<<style.accent.value>>}
+<% endif %>
+
+\setbool{acvSectionColorHighlight}{true}
+
+\renewcommand{\acvHeaderSocialSep}{\quad\textbar\quad}
+
+<% if style.fontFamily == 'roboto' %>
+\setmainfont{Roboto}[
+  UprightFont=*,
+  ItalicFont=*-Italic,
+  BoldFont=*-Bold,
+  BoldItalicFont=*-BoldItalic,
+  FontFace={l}{n}{Font=*-Light},
+  FontFace={l}{it}{Font=*-LightItalic},
+]
+\setsansfont{Roboto}[
+  UprightFont=*,
+  ItalicFont=*-Italic,
+  BoldFont=*-Bold,
+  BoldItalicFont=*-BoldItalic,
+  FontFace={l}{n}{Font=*-Light},
+  FontFace={l}{it}{Font=*-LightItalic},
+]
+<% endif %>
+% Header spacing overrides — headerLineGap applies to name and position rows
+\renewcommand{\acvHeaderAfterNameSkip}{<<spacing.headerLineGap>>}
+\renewcommand{\acvHeaderAfterPositionSkip}{<<spacing.headerLineGap>>}
+\renewcommand{\acvHeaderAfterAddressSkip}{<<spacing.headerAfterAddressSkip>>}
+\renewcommand{\acvHeaderAfterSocialSkip}{<<spacing.headerAfterSocialSkip>>}
+\renewcommand{\acvHeaderAfterQuoteSkip}{<<spacing.headerAfterQuoteSkip>>}
+
+% Section spacing overrides
+\renewcommand{\acvSectionTopSkip}{<<spacing.sectionTopSkip>>}
+\renewcommand{\acvSectionContentTopSkip}{<<spacing.sectionContentTopSkip>>}
+
+% Font size overrides
+\renewcommand*{\headerfirstnamestyle}[1]{{\fontsize{<<fonts.headerNameSize>>}{1em}\headerfontlight\color{graytext} #1}}
+\renewcommand*{\headerlastnamestyle}[1]{{\fontsize{<<fonts.headerNameSize>>}{1em}\headerfont\bfseries\color{text} #1}}
+\renewcommand*{\headerpositionstyle}[1]{{\fontsize{<<fonts.headerPositionSize>>}{1em}\bodyfont\scshape\color{awesome} #1}}
+\renewcommand*{\headersocialstyle}[1]{{\fontsize{<<fonts.headerSocialSize>>}{1em}\headerfont\color{text} #1}}
+\renewcommand*{\headeraddressstyle}[1]{{\fontsize{<<fonts.secondaryTextSize>>}{1em}\headerfont\itshape\color{lighttext} #1}}
+\renewcommand*{\footerstyle}[1]{{\fontsize{<<fonts.secondaryTextSize>>}{1em}\footerfont\scshape\color{lighttext} #1}}
+\renewcommand*{\entrypositionstyle}[1]{{\fontsize{<<fonts.secondaryTextSize>>}{1em}\bodyfont\scshape\color{graytext} #1}}
+\renewcommand*{\entrydatestyle}[1]{{\fontsize{<<fonts.secondaryTextSize>>}{1em}\bodyfontlight\slshape\color{graytext} #1}}
+\renewcommand*{\headerquotestyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfont\itshape\color{darktext} #1}}
+\renewcommand{\paragraphstyle}{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfontlight\upshape\color{text}}
+\renewcommand*{\entrylocationstyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfontlight\slshape\color{awesome} #1}}
+\renewcommand*{\descriptionstyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfontlight\upshape\color{text} #1}}
+\renewcommand*{\honortitlestyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfont\color{graytext} #1}}
+\renewcommand*{\honorpositionstyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfont\bfseries\color{darktext} #1}}
+\renewcommand*{\honordatestyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfont\color{graytext} #1}}
+\renewcommand*{\honorlocationstyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfontlight\slshape\color{awesome} #1}}
+\renewcommand*{\skillsetstyle}[1]{{\fontsize{<<fonts.contentTextSize>>}{1em}\bodyfontlight\color{text} #1}}
+\renewcommand*{\entrytitlestyle}[1]{{\fontsize{<<fonts.itemTitleSize>>}{1em}\bodyfont\bfseries\color{darktext} #1}}
+\renewcommand*{\skilltypestyle}[1]{{\fontsize{<<fonts.itemTitleSize>>}{1em}\bodyfont\bfseries\color{darktext} #1}}
+\renewcommand*{\sectionstyleface}[1]{{\fontsize{<<fonts.sectionTitleSize>>}{1em}\bodyfont\bfseries #1}}
+\renewcommand*{\subsectionstyle}[1]{{\fontsize{<<fonts.subsectionTitleSize>>}{1em}\bodyfont\scshape\textcolor{text}{#1}}}
+
+% Entry box: contentTopAdjust nudges each entry up to tighten vertical rhythm
+\renewcommand*{\cventry}[5]{%
+  \vspace{<<spacing.contentTopAdjust>>}%
+  \setlength\tabcolsep{0pt}%
+  \setlength{\extrarowheight}{0pt}%
+  \begin{tabular*}{\textwidth}{@{\extracolsep{\fill}} L{\textwidth - 4.5cm} R{4.5cm}}
+    \ifempty{#2#3}
+      {\entrypositionstyle{#1} & \entrydatestyle{#4} \\}
+      {\entrytitlestyle{#2} & \entrylocationstyle{#3} \\
+      \entrypositionstyle{#1} & \entrydatestyle{#4} \\}
+    \ifstrempty{#5}
+      {}
+      {\multicolumn{2}{L{\textwidth}}{\descriptionstyle{#5}} \\}
+  \end{tabular*}%
+}
+
+\renewenvironment{cvitems}{%
+  \vspace{<<spacing.itemsTopSkip>>}
+  \begin{justify}
+  \begin{itemize}[leftmargin=<<spacing.itemsLeftMargin>>, nosep, noitemsep]
+    \setlength{\parskip}{0pt}
+    \renewcommand{\labelitemi}{\bullet}
+}{%
+  \end{itemize}
+  \end{justify}
+  \vspace{<<spacing.itemsBottomSkip>>}
+}
+
+\renewenvironment{cvskills}{%
+  \vspace{\acvSectionContentTopSkip}
+  \vspace{<<spacing.contentTopAdjust>>}
+    \setlength\tabcolsep{<<spacing.skillsColSep>>}
+    \setlength{\extrarowheight}{0pt}
+    \tabularx{\textwidth}{r>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}X}
+}{%
+\endtabularx\par
+}
+
+\renewenvironment{cvparagraph}{%
+  \vspace{\acvSectionContentTopSkip}
+  \vspace{<<spacing.paragraphTopAdjust>>}
+  \paragraphstyle
+}{%
+  \par
+  \vspace{<<spacing.paragraphBottomSkip>>}
+}
+
+<% include "templates/partials/data.njk" %>

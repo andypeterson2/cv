@@ -1,0 +1,32 @@
+<# Personal information macros (\name, \position, socials, …). Reproduces the
+   legacy serializeData() output. Emitted in the preamble position, before
+   \begin{document}, because \makecvheader consumes these in the body. #>
+<% if personal.photo and personal.photo.enabled and personal.photo.file %>
+\photo[circle,noedge,left]{<<personal.photo.file | tex>>}
+<% endif %>
+\name{<<personal.firstName | tex>>}{<<personal.lastName | tex>>} % Legal
+<% if personal.position %>
+\position{<<personal.position | tex>>}
+<% endif %>
+<% if personal.address %>
+\address{<<personal.address | tex>>}
+<% endif %>
+<% if personal.dateofbirth %>
+\dateofbirth{<<personal.dateofbirth | tex>>}
+<% endif %>
+
+<% if personal.mobile %>
+\mobile{<<personal.mobile | tex>>}
+<% endif %>
+<% if personal.email %>
+\email{<<personal.email | tex>>}
+<% endif %>
+<% for soc in personal.socials %>
+\<<soc.key>><<soc.values | texargs>>
+<% endfor %>
+<% if personal.quote %>
+\quote{``<<personal.quote | tex>>''}
+<% endif %>
+<% if personal.extrainfo %>
+\extrainfo{<<personal.extrainfo | tex>>}
+<% endif %>

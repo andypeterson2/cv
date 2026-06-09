@@ -1,0 +1,86 @@
+<# Section-type macros. Each reproduces the matching legacy serialize*()
+   output. Comment separators and blank lines from the legacy output are
+   cosmetic (LaTeX ignores them) and intentionally omitted. #>
+
+<% macro cventries(s) %>
+\cvsection{<<s.title | tex>>}
+\begin{cventries}
+<% for e in s.entries %>
+  \cventry
+    {<<e.position | tex>>}
+    {<<e.organization | tex>>}
+    {<<e.location | tex>>}
+    {<<e.date | tex>>}
+<% if e.items and e.items.length > 0 %>
+    {
+      \begin{cvitems}
+<% for item in e.items %>
+        \item {<<item | tex>>}
+<% endfor %>
+      \end{cvitems}
+    }
+<% else %>
+    {}
+<% endif %>
+<% endfor %>
+\end{cventries}
+<% endmacro %>
+
+<% macro cvskills(s) %>
+\cvsection{<<s.title | tex>>}
+\begin{cvskills}
+<% for e in s.entries %>
+  \cvskill
+    {<<e.category | tex>>}
+    {<<e.skills | tex>>}
+<% endfor %>
+\end{cvskills}
+<% endmacro %>
+
+<% macro cvhonors(s) %>
+\cvsection{<<s.title | tex>>}
+\begin{cvhonors}
+<% for e in s.entries %>
+  \cvhonor
+    {<<e.award | tex>>} % Name
+    {<<e.issuer | tex>>} % Issuer
+    {<<e.location | tex>>} % Credential ID
+    {<<e.date | tex>>} % Date(s)
+<% endfor %>
+\end{cvhonors}
+<% endmacro %>
+
+<% macro cvreferences(s) %>
+\cvsection{<<s.title | tex>>}
+\begin{cvreferences}
+<% for e in s.entries %>
+  \cvreference
+    {<<e.name | tex>>}
+    {<<e.relation | tex>>}
+    {<<e.phone | tex>>}
+    {<<e.email | tex>>}
+<% endfor %>
+\end{cvreferences}
+<% endmacro %>
+
+<% macro cvparagraph(s) %>
+\cvsection{<<s.title | tex>>}
+\begin{cvparagraph}
+<<s.text | tex>>
+\end{cvparagraph}
+<% endmacro %>
+
+<# Dispatch on the section's latexType. #>
+<% macro section(s) %>
+<% if s.latexType == 'cventries' %>
+<<cventries(s)>>
+<% elif s.latexType == 'cvskills' %>
+<<cvskills(s)>>
+<% elif s.latexType == 'cvhonors' %>
+<<cvhonors(s)>>
+<% elif s.latexType == 'cvreferences' %>
+<<cvreferences(s)>>
+<% elif s.latexType == 'cvparagraph' %>
+<<cvparagraph(s)>>
+<% endif %>
+<% endmacro %>

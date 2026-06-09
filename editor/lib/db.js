@@ -123,11 +123,24 @@ class CvDatabase {
       delCatalogTag: p('DELETE FROM tag_catalog WHERE person_id = ? AND tag = ?'),
 
       // Variants
-      getVariants: p('SELECT id, person_id, name, kind, created_at FROM variants WHERE person_id = ? ORDER BY id'),
-      getVariant: p('SELECT id, person_id, name, kind, created_at FROM variants WHERE id = ?'),
+      getVariants: p('SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE person_id = ? ORDER BY id'),
+      getVariant: p('SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE id = ?'),
       insertVariant: p('INSERT INTO variants (person_id, name, kind) VALUES (?, ?, ?)'),
       updateVariantName: p('UPDATE variants SET name = ? WHERE id = ?'),
+      setVariantLayout: p('UPDATE variants SET layout_id = ? WHERE id = ?'),
+      clearVariantLayoutFor: p('UPDATE variants SET layout_id = NULL WHERE layout_id = ?'),
       deleteVariant: p('DELETE FROM variants WHERE id = ?'),
+
+      // Layouts (bundle metadata; files live on disk)
+      listLayouts: p('SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts ORDER BY (source = \'builtin\') DESC, id'),
+      getLayout: p('SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at FROM layouts WHERE id = ?'),
+      upsertLayout: p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at)
+        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at)
+        ON CONFLICT(id) DO UPDATE SET
+          name=excluded.name, version=excluded.version, engine=excluded.engine, kinds=excluded.kinds,
+          status=excluded.status, source=excluded.source, manifest=excluded.manifest,
+          checksum=excluded.checksum, report=excluded.report, verified_at=excluded.verified_at`),
+      deleteLayout: p('DELETE FROM layouts WHERE id = ?'),
 
       // Variant rules
       getVariantRules: p('SELECT tag, mode FROM variant_rules WHERE variant_id = ?'),
@@ -367,6 +380,7 @@ class CvDatabase {
 Object.assign(CvDatabase.prototype, require('./db/settings'));
 applyMixin(CvDatabase, require('./db/tags'));
 applyMixin(CvDatabase, require('./db/variants'));
+applyMixin(CvDatabase, require('./db/layouts'));
 applyMixin(CvDatabase, require('./db/import-export'));
 
 module.exports = CvDatabase;
