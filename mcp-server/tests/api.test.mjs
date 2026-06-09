@@ -45,11 +45,19 @@ test('POST serializes a JSON body and sets Content-Type', async () => {
   assert.deepEqual(JSON.parse(calls[0].opts.body), { name: 'Ada' });
 });
 
-test('a non-2xx JSON response throws with the server-provided message', async () => {
-  mockFetch(jsonResponse(409, { error: 'Person with that name already exists' }));
+test('a non-2xx response surfaces the contract error envelope {error:{code,message}}', async () => {
+  mockFetch(jsonResponse(409, { error: { code: 'conflict', message: 'Person with that name already exists' } }));
   await assert.rejects(
     () => api('POST', '/api/persons', { name: 'dup' }),
-    /HTTP 409.*already exists/,
+    /HTTP 409 POST \/api\/persons: Person with that name already exists \(conflict\)/,
+  );
+});
+
+test('a non-2xx response tolerates a legacy bare-string error body', async () => {
+  mockFetch(jsonResponse(404, { error: 'Person not found' }));
+  await assert.rejects(
+    () => api('GET', '/api/persons/9'),
+    /HTTP 404 GET \/api\/persons\/9: Person not found/,
   );
 });
 

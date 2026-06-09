@@ -35,7 +35,7 @@ function rowToSection(s) {
 }
 
 function rowToVariant(v) {
-  return { id: v.id, personId: v.person_id, name: v.name, kind: v.kind, created_at: v.created_at };
+  return { id: v.id, personId: v.person_id, name: v.name, kind: v.kind, created_at: v.created_at, layoutId: v.layout_id ?? null };
 }
 
 function mapDocToVariantSections(docRows, sectionIdBySlug) {
