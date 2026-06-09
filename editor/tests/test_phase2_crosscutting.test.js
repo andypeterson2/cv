@@ -24,13 +24,15 @@ function fileExists(relPath) {
   return fs.existsSync(path.join(PROJECT_ROOT, relPath));
 }
 
-// Read server.js + all route files as a single string for pattern matching
+// Read server.js + all route files + the render lib (the xelatex runner now
+// lives in lib/render/latex.js) as one string for pattern matching.
 function readServerCode() {
-  const routesDir = path.join(PROJECT_ROOT, 'editor', 'routes');
   let combined = readFile('editor/server.js');
-  if (fs.existsSync(routesDir)) {
-    for (const f of fs.readdirSync(routesDir)) {
-      if (f.endsWith('.js')) combined += '\n' + fs.readFileSync(path.join(routesDir, f), 'utf-8');
+  for (const sub of [['editor', 'routes'], ['editor', 'lib', 'render']]) {
+    const dir = path.join(PROJECT_ROOT, ...sub);
+    if (!fs.existsSync(dir)) continue;
+    for (const f of fs.readdirSync(dir)) {
+      if (f.endsWith('.js')) combined += '\n' + fs.readFileSync(path.join(dir, f), 'utf-8');
     }
   }
   return combined;
@@ -141,9 +143,9 @@ describe('WP #667 — Print/PDF output validation', () => {
     expect(server).toContain('sendFile');
   });
 
-  test('compile endpoint writes data.tex from state', () => {
+  test('compile endpoint renders the document from state via the layout host', () => {
     const server = readServerCode();
-    expect(server).toContain('generateAll');
+    expect(server).toContain('renderVariant');
   });
 
   test('compile endpoint resolves a variant before generating files', () => {
@@ -160,7 +162,8 @@ describe('WP #667 — Print/PDF output validation', () => {
 
   test('compile has a timeout to prevent hanging', () => {
     const server = readServerCode();
-    expect(server).toContain('timeout: 30000');
+    expect(server).toMatch(/timeout:\s*(timeoutMs|30000)/); // xelatex run is time-bounded
+    expect(server).toContain('30000'); // 30s default cap (CV_COMPILE_TIMEOUT_MS)
   });
 
   test('PDF iframe has accessible title', () => {
@@ -269,7 +272,8 @@ describe('WP #669 — Performance considerations', () => {
 
   test('compilation has timeout protection', () => {
     const server = readServerCode();
-    expect(server).toContain('timeout: 30000');
+    expect(server).toMatch(/timeout:\s*(timeoutMs|30000)/); // xelatex run is time-bounded
+    expect(server).toContain('30000'); // 30s default cap (CV_COMPILE_TIMEOUT_MS)
   });
 
   test('editor CSS and JS are lightweight (no heavy frameworks)', () => {

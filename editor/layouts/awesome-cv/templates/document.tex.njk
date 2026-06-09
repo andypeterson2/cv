@@ -1,0 +1,19 @@
+<# Main CV / resume document. Receives the full template context. Renders a
+   single self-contained .tex (preamble + personal data + body sections). #>
+<% import "templates/partials/sections.njk" as S %>
+<% include "templates/partials/preamble.njk" %>
+
+\begin{document}
+
+\makecvheader
+
+\makecvfooter
+  {}
+  {}
+  {}
+
+<% for s in sections %>
+<<S.section(s)>>
+<% endfor %>
+
+\end{document}

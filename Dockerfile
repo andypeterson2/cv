@@ -35,7 +35,7 @@ RUN apt-get update -qq && \
       "https://github.com/googlefonts/roboto/releases/download/v2.138/roboto-android.zip" && \
     unzip -o /tmp/roboto.zip -d /tmp/roboto && \
     find /tmp/roboto -name '*.ttf' -exec cp {} /usr/share/fonts/roboto/ \; && \
-    printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>/app/build</dir>\n  <dir>/app/templates</dir>\n  <dir>/app/fonts</dir>\n</fontconfig>\n' > /etc/fonts/conf.d/99-app-fonts.conf && \
+    printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>/app/build</dir>\n  <dir>/app/editor/layouts</dir>\n  <dir>/app/fonts</dir>\n</fontconfig>\n' > /etc/fonts/conf.d/99-app-fonts.conf && \
     fc-cache -fv && \
     rm -rf /tmp/source-sans.zip /tmp/source-sans /tmp/roboto.zip /tmp/roboto && \
     apt-get purge -y curl unzip && apt-get autoremove -y && \
@@ -63,7 +63,9 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=3001 CV_EMBED_OFFLINE=1
 WORKDIR /app/editor
 COPY editor/ ./
 COPY --from=deps /app/editor/node_modules ./node_modules
-COPY templates/ /app/templates/
+# LaTeX layouts ship as bundles under editor/layouts/ (the awesome-cv builtin
+# carries its own .cls + fonts in class/). Uploaded layouts live in the writable
+# CV_LAYOUTS_DIR volume at runtime — no rebuild needed to add one.
 COPY assets/ /app/assets/
 RUN mkdir -p /app/build /app/fonts
 EXPOSE 3001

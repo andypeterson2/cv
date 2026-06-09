@@ -44,10 +44,11 @@ services:
       PORT: 3001
       HOST: 0.0.0.0
       CV_DB_PATH: /data/cv.db
+      CV_LAYOUTS_DIR: /data/layouts   # uploaded layout bundles (persist across redeploys; builtins are baked into the image)
       CV_EMBED_OFFLINE: "1"
       CV_CORS_ORIGINS: ${CV_CORS_ORIGINS:-}   # set to the real origin, e.g. https://cv.example.com
     volumes:
-      - cv_data:/data        # cv.db persists across redeploys (local disk — WAL is unsafe on networked FS)
+      - cv_data:/data        # cv.db + uploaded layouts persist across redeploys (local disk — WAL is unsafe on networked FS)
       - cv_fonts:/app/fonts  # future user-uploaded fonts (font-extensibility seam)
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3001/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))\""]

@@ -1,0 +1,16 @@
+{
+  "id": "classic",
+  "name": "Classic",
+  "version": "1.0.0",
+  "description": "A clean, traditional single-column resume/CV built on the stock LaTeX article class — no third-party document class. Demonstrates that a layout can be authored from scratch against the data contract.",
+  "author": "builtin",
+  "engine": "nunjucks",
+  "contextVersion": 1,
+  "kinds": ["cv", "resume", "coverletter"],
+  "entry": {
+    "document": "templates/document.tex.njk",
+    "coverletter": "templates/coverletter.tex.njk"
+  },
+  "main": "{kind}.tex",
+  "classFiles": []
+}
