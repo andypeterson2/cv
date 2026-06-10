@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node dev-watch.cjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run tests/unit",
