@@ -2,7 +2,7 @@
   "id": "classic",
   "name": "Classic",
   "version": "1.0.0",
-  "description": "A clean, traditional single-column resume/CV built on the stock LaTeX article class — no third-party document class. Demonstrates that a layout can be authored from scratch against the data contract.",
+  "description": "A clean, traditional single-column resume/CV built on the stock LaTeX article class. Bundles FontAwesome 6 for an icon-based, centered social header.",
   "author": "builtin",
   "engine": "nunjucks",
   "contextVersion": 1,
@@ -12,5 +12,15 @@
     "coverletter": "templates/coverletter.tex.njk"
   },
   "main": "{kind}.tex",
-  "classFiles": []
+  "classFiles": [
+    "class/fontawesome6.sty",
+    "class/fontawesome6-utex-helper.sty",
+    "class/fontawesome6-generic-helper.sty",
+    "class/accsupp.sty",
+    "class/FontAwesome6Brands-Regular-400.otf",
+    "class/FontAwesome6Free-Solid-900.otf",
+    "class/FontAwesome6Free-Regular-400.otf",
+    "class/tufontawesome6brands.fd",
+    "class/tufontawesome6free.fd"
+  ]
 }
