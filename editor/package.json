@@ -14,8 +14,8 @@
     "test:dom": "vitest run tests/dom"
   },
   "dependencies": {
-    "ajv": "^8.18.0",
-    "better-sqlite3": "^12.8.0",
+    "ajv": "^8.20.0",
+    "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "express-rate-limit": "^7.5.1",
@@ -29,7 +29,7 @@
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
     "@vitest/coverage-v8": "^4.1.8",
-    "happy-dom": "^20.8.9",
+    "happy-dom": "^20.10.2",
     "vitest": "^4.1.2"
   }
 }
