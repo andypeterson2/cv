@@ -109,6 +109,7 @@ const personId = { type: 'integer', description: 'Person id (from cv_list_person
 const variantId = { type: 'integer', description: 'Variant id (from cv_list_variants / cv_get_master)' };
 const tagList = { type: 'array', items: { type: 'string' }, description: 'Tag names (free strings)' };
 const layoutId = { type: 'string', description: 'Layout id (slug, from cv_list_layouts)' };
+const idList = { type: 'array', items: { type: 'integer', minimum: 1 }, minItems: 1, description: 'Ids in the desired order' };
 
 const toolDefs = [
   {
@@ -623,6 +624,105 @@ const toolDefs = [
     description: 'Delete an uploaded layout (builtins cannot be deleted). Variants using it revert to the global default.',
     inputSchema: { type: 'object', properties: { layout_id: layoutId }, required: ['layout_id'], additionalProperties: false },
     handler: (a) => api('DELETE', `/api/layouts/${enc(a.layout_id)}`),
+  },
+  {
+    name: 'cv_get_layout',
+    description: 'Get one layout\'s full detail + last verification report: {id,name,version,kinds,status,source,manifest,report}. (cv_list_layouts returns the summary list.)',
+    inputSchema: { type: 'object', properties: { layout_id: layoutId }, required: ['layout_id'], additionalProperties: false },
+    handler: (a) => api('GET', `/api/layouts/${enc(a.layout_id)}`),
+  },
+
+  // ---- Reference + global style settings ----
+  {
+    name: 'cv_catalog',
+    description:
+      'Reference data for authoring a CV: {validSectionTypes, latexTypeMap, socialCatalog, identityExtras, accentColors, styleDefaults, latexUnits}. Use to discover valid section types, social-link keys, accent colors, and style/unit options. No args.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: () => api('GET', '/api/catalog'),
+  },
+  {
+    name: 'cv_get_settings',
+    description: 'Read GLOBAL style/spacing/fonts settings (shared by every variant) as a flat {key:value} map. Optional prefix ∈ style|spacing|fonts narrows it.',
+    inputSchema: { type: 'object', properties: { prefix: { type: 'string', enum: ['style', 'spacing', 'fonts'] } }, additionalProperties: false },
+    handler: (a) => api('GET', `/api/settings${a.prefix ? `?prefix=${enc(a.prefix)}` : ''}`),
+  },
+  {
+    name: 'cv_set_settings',
+    description:
+      'Update GLOBAL style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. See cv_catalog for valid colors/units.',
+    inputSchema: { type: 'object', properties: { settings: { type: 'object', minProperties: 1 } }, required: ['settings'], additionalProperties: false },
+    handler: (a) => api('PATCH', '/api/settings', a.settings),
+  },
+
+  // ---- Person rename / export / import ----
+  {
+    name: 'cv_rename_person',
+    description: 'Rename a person/profile (names are unique).',
+    inputSchema: { type: 'object', properties: { person_id: personId, name: { type: 'string', minLength: 1 } }, required: ['person_id', 'name'], additionalProperties: false },
+    handler: (a) => api('PUT', `/api/persons/${enc(a.person_id)}`, { name: a.name }),
+  },
+  {
+    name: 'cv_export_person',
+    description: 'Export a person as a portable JSON snapshot (personal + sections/entries/items + tags + variants). Pair with cv_import_person to back up or clone a profile.',
+    inputSchema: { type: 'object', properties: { person_id: personId }, required: ['person_id'], additionalProperties: false },
+    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/export`),
+  },
+  {
+    name: 'cv_import_person',
+    description: 'Import a snapshot (from cv_export_person) INTO an existing person, replacing its content. data is the exported object.',
+    inputSchema: { type: 'object', properties: { person_id: personId, data: { type: 'object', minProperties: 1 } }, required: ['person_id', 'data'], additionalProperties: false },
+    handler: (a) => api('POST', `/api/persons/${enc(a.person_id)}/import`, a.data),
+  },
+
+  // ---- Reordering (pass the full id list in the new order) ----
+  {
+    name: 'cv_reorder_sections',
+    description: 'Reorder a person\'s sections. ids = ALL of the person\'s section ids in the desired order (from cv_get_master).',
+    inputSchema: { type: 'object', properties: { person_id: personId, ids: idList }, required: ['person_id', 'ids'], additionalProperties: false },
+    handler: (a) => api('PATCH', `/api/persons/${enc(a.person_id)}/sections/order`, { ids: a.ids }),
+  },
+  {
+    name: 'cv_reorder_entries',
+    description: 'Reorder entries within a section. ids = the section\'s entry ids in the desired order.',
+    inputSchema: { type: 'object', properties: { section_id: { type: 'integer' }, ids: idList }, required: ['section_id', 'ids'], additionalProperties: false },
+    handler: (a) => api('PATCH', `/api/sections/${enc(a.section_id)}/entries/order`, { ids: a.ids }),
+  },
+  {
+    name: 'cv_reorder_bullets',
+    description: 'Reorder bullets within an entry. ids = the entry\'s bullet/item ids in the desired order.',
+    inputSchema: { type: 'object', properties: { entry_id: { type: 'integer' }, ids: idList }, required: ['entry_id', 'ids'], additionalProperties: false },
+    handler: (a) => api('PATCH', `/api/entries/${enc(a.entry_id)}/items/order`, { ids: a.ids }),
+  },
+
+  // ---- Variant rename + cover-letter paragraph edit/delete/reorder ----
+  {
+    name: 'cv_rename_variant',
+    description: 'Rename a variant.',
+    inputSchema: { type: 'object', properties: { variant_id: variantId, name: { type: 'string', minLength: 1 } }, required: ['variant_id', 'name'], additionalProperties: false },
+    handler: (a) => api('PUT', `/api/variants/${enc(a.variant_id)}`, { name: a.name }),
+  },
+  {
+    name: 'cv_update_letter_section',
+    description: 'Edit a cover-letter paragraph (title and/or body). letter_section_id from cv_get_variant (letterSections).',
+    inputSchema: { type: 'object', properties: { variant_id: variantId, letter_section_id: { type: 'integer' }, title: { type: 'string' }, body: { type: 'string' } }, required: ['variant_id', 'letter_section_id'], additionalProperties: false },
+    handler: (a) => {
+      const body = {};
+      if (a.title !== undefined) body.title = a.title;
+      if (a.body !== undefined) body.body = a.body;
+      return api('PUT', `/api/variants/${enc(a.variant_id)}/letter-sections/${enc(a.letter_section_id)}`, body);
+    },
+  },
+  {
+    name: 'cv_delete_letter_section',
+    description: 'Delete a cover-letter paragraph from a coverletter variant.',
+    inputSchema: { type: 'object', properties: { variant_id: variantId, letter_section_id: { type: 'integer' } }, required: ['variant_id', 'letter_section_id'], additionalProperties: false },
+    handler: (a) => api('DELETE', `/api/variants/${enc(a.variant_id)}/letter-sections/${enc(a.letter_section_id)}`),
+  },
+  {
+    name: 'cv_reorder_letter_sections',
+    description: 'Reorder a cover letter\'s paragraphs. ids = letter-section ids in the desired order.',
+    inputSchema: { type: 'object', properties: { variant_id: variantId, ids: idList }, required: ['variant_id', 'ids'], additionalProperties: false },
+    handler: (a) => api('PATCH', `/api/variants/${enc(a.variant_id)}/letter-sections/order`, { ids: a.ids }),
   },
 ];
 
