@@ -1,13 +1,33 @@
 <# Classic CV / resume — stock article class, xelatex. Single self-contained
-   .tex. Demonstrates a layout authored from scratch against the data contract
-   (no awesome-cv class). #>
+   .tex authored against the data contract. Bundles FontAwesome 6 (in class/)
+   so the header socials render as icons + links, like awesome-cv. #>
 <% import "templates/partials/sections.njk" as S %>
+<# key -> FontAwesome icon (mirrors awesome-cv.cls); \faLink is the fallback. #>
+<% set SOCIAL_ICON = {
+  "homepage": "\\faHouseChimney", "github": "\\faSquareGithub", "gitlab": "\\faGitlab",
+  "bitbucket": "\\faBitbucket", "linkedin": "\\faLinkedin", "twitter": "\\faTwitter",
+  "x": "\\faXTwitter", "reddit": "\\faReddit", "medium": "\\faMedium", "xing": "\\faSquareXing",
+  "mastodon": "\\faMastodon", "telegram": "\\faTelegram", "skype": "\\faSkype",
+  "whatsapp": "\\faSquareWhatsapp", "orcid": "\\faOrcid", "researchgate": "\\faResearchgate",
+  "googlescholar": "\\faGraduationCap", "stackoverflow": "\\faStackOverflow",
+  "kaggle": "\\faKaggle", "hackerrank": "\\faHackerrank"
+} %>
+<# key -> URL prefix (value appended). Keys absent here render icon+text, no link. #>
+<% set SOCIAL_URL = {
+  "github": "https://github.com/", "gitlab": "https://gitlab.com/", "bitbucket": "https://bitbucket.com/",
+  "linkedin": "https://www.linkedin.com/in/", "twitter": "https://twitter.com/", "x": "https://x.com/",
+  "reddit": "https://www.reddit.com/user/", "medium": "https://medium.com/@", "xing": "https://www.xing.com/profile/",
+  "telegram": "https://t.me/", "orcid": "https://orcid.org/", "researchgate": "https://www.researchgate.net/profile/",
+  "kaggle": "https://kaggle.com/", "hackerrank": "https://www.hackerrank.com/", "stackoverflow": "https://stackoverflow.com/users/"
+} %>
 \documentclass[<<style.fontSize>>,<<style.pageSize>>]{article}
-\usepackage[margin=<<spacing.horizontalMargin>>]{geometry}
+\usepackage[top=<<spacing.marginTop>>,bottom=<<spacing.marginBottom>>,left=<<spacing.horizontalMargin>>,right=<<spacing.horizontalMargin>>]{geometry}
 \usepackage{enumitem}
 \usepackage{titlesec}
 \usepackage{xcolor}
 \usepackage{graphicx}
+\usepackage{fontspec}
+\usepackage{fontawesome6}
 \usepackage[hidelinks]{hyperref}
 \definecolor{accent}{HTML}{<<style.accent.hex>>}
 \setlist[itemize]{leftmargin=1.4em,nosep,topsep=1pt}
@@ -16,26 +36,37 @@
 \setlength{\parindent}{0pt}
 \pagestyle{empty}
 
+<# contact row: print " | " between items, never before the first #>
+\newif\ifcontactfirst
+\newcommand{\contactitem}[1]{\ifcontactfirst\contactfirstfalse\else\quad\textbar\quad\fi#1}
+
 \begin{document}
 
+{\centering
 <% if personal.photo and personal.photo.enabled and personal.photo.file %>
-\noindent\begin{minipage}[t]{0.74\textwidth}
+\includegraphics[width=2.6cm]{<<personal.photo.file>>}\par\smallskip
 <% endif %>
 {\Huge\bfseries <<personal.firstName | tex>> <<personal.lastName | tex>>}\par
-<% if personal.position %>
-\smallskip{\large\color{accent}<<personal.position | tex>>}\par
+<% if personal.position or personal.address %>
+\smallskip{\large<% if personal.position %>{\color{accent}<<personal.position | tex>>}<% endif %><% if personal.position and personal.address %> in <% endif %><% if personal.address %>{\color{accent}<<personal.address | tex>>}<% endif %>}\par
 <% endif %>
 \smallskip
 {\small%
-<% if personal.email %><<personal.email | tex>>\quad{}<% endif %>
-<% if personal.mobile %><<personal.mobile | tex>>\quad{}<% endif %>
-<% if personal.address %><<personal.address | tex>>\quad{}<% endif %>
-<% for soc in personal.socials %><<soc.key | tex>>:~<<soc.values | join(' ') | tex>>\quad{}<% endfor %>
-}\par
-<% if personal.photo and personal.photo.enabled and personal.photo.file %>
-\end{minipage}\hfill\begin{minipage}[t]{0.22\textwidth}\raggedleft\vspace{0pt}\includegraphics[width=\linewidth]{<<personal.photo.file>>}\end{minipage}
+\contactfirsttrue
+<% if personal.email %>
+\contactitem{\href{mailto:<<personal.email | texurl>>}{\faEnvelope~<<personal.email | tex>>}}%
 <% endif %>
-\bigskip
+<% if personal.mobile %>
+\contactitem{\href{tel:<<personal.mobile | texurl>>}{\faPhone~<<personal.mobile | tex>>}}%
+<% endif %>
+<% for soc in personal.socials %>
+<% if soc.key != "homepage" %>
+\contactitem{<% if SOCIAL_URL[soc.key] %>\href{<<SOCIAL_URL[soc.key]>><<soc.values[0] | texurl>>}{<<SOCIAL_ICON[soc.key] or "\\faLink">>~<<soc.values | join(" ") | tex>>}<% else %><<SOCIAL_ICON[soc.key] or "\\faLink">>~<<soc.values | join(" ") | tex>><% endif %>}%
+<% endif %>
+<% endfor %>
+}\par
+}
+\vspace{-7pt}
 
 <% if personal.quote %>
 \begin{center}\itshape ``<<personal.quote | tex>>''\end{center}
