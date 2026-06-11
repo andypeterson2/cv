@@ -36,6 +36,21 @@ function getDb() {
 app.setDb = function (testDb) { db = testDb; };
 app.getDb = function () { return getDb(); };
 
+// Explicit (prefix, router) mount table. GET /api discovery reports fully-qualified
+// paths from this table instead of reverse-engineering Express's internal mount
+// regexps — those changed in Express 5 (path-to-regexp v8) and broke the old
+// hand-rolled router-stack walk. Order matters: the catch-all '/api' router is last.
+const API_ROUTERS = [
+  ['/api/settings', createSettingsRouter(getDb)],     // global style/spacing/fonts
+  ['/api/persons', createPersonsRouter(getDb)],       // persons + personal + sections/variants/tags scope
+  ['/api/sections', createSectionsRouter(getDb)],     // section by id + its entries
+  ['/api/entries', createEntriesRouter(getDb)],       // entry by id + its items + tags
+  ['/api/items', createItemsRouter(getDb)],           // item by id + tags
+  ['/api/variants', createVariantsRouter(getDb, PROJECT_ROOT)], // variant by id + rules/sections/overrides/resolve/pdf
+  ['/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)],   // layout list/get/upload/verify/delete + default
+  ['/api', createDataRouter(getDb)],                  // catalog + health
+];
+
 // HTTP status -> stable machine code for the error envelope.
 const STATUS_CODES = {
   400: 'bad_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found',
@@ -44,39 +59,37 @@ const STATUS_CODES = {
   500: 'internal_error',
 };
 
-// Build the GET /api discovery list by walking the Express 4 router stack:
-// direct routes carry `.route`; mounted routers carry `.handle.stack` with a
-// prefix encoded in `.regexp`.
+// Build the GET /api discovery list. Mounted routers are introspected via the
+// explicit API_ROUTERS (prefix, router) table rather than reverse-engineering
+// Express's internal mount regexps — those changed in Express 5 (path-to-regexp
+// v8) and broke the old hand-rolled walk. Each router's route layers expose the
+// stable `.route.path` / `.route.methods`, as do the app's own top-level routes.
 function listEndpoints(expressApp) {
   const out = [];
   const seen = new Set();
-  const prefixOf = (re) => {
-    if (!re || re.fast_slash) return '';
-    return re.source
-      .replace(/^\^/, '')
-      .replace(/\\\/\?\(\?=\\\/\|\$\)$/, '')
-      .replace(/\\\//g, '/')
-      .replace(/\$$/, '');
+  const add = (method, rawPath) => {
+    const M = method.toUpperCase();
+    if (M === 'HEAD') return;
+    let p = rawPath.replace(/\/{2,}/g, '/');
+    if (p.length > 1) p = p.replace(/\/$/, '');
+    const key = `${M} ${p}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ method: M, path: p, summary: '' });
   };
-  const walk = (stack, prefix) => {
-    for (const layer of stack) {
-      if (layer.route) {
-        const p = (prefix + layer.route.path).replace(/\/{2,}/g, '/') || '/';
-        for (const m of Object.keys(layer.route.methods || {})) {
-          if (!layer.route.methods[m]) continue;
-          const M = m.toUpperCase();
-          if (M === 'HEAD') continue;
-          const key = `${M} ${p}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          out.push({ method: M, path: p, summary: '' });
-        }
-      } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
-        walk(layer.handle.stack, prefix + prefixOf(layer.regexp));
-      }
+  const addRouteLayer = (prefix, layer) => {
+    if (!layer.route) return;
+    for (const m of Object.keys(layer.route.methods || {})) {
+      if (layer.route.methods[m]) add(m, prefix + layer.route.path);
     }
   };
-  walk(expressApp._router.stack, '');
+  // Top-level routes registered directly on the app (e.g. /health, GET /api).
+  const rootStack = (expressApp._router || expressApp.router || {}).stack || [];
+  for (const layer of rootStack) addRouteLayer('', layer);
+  // Mounted routers, with their prefixes supplied explicitly.
+  for (const [prefix, router] of API_ROUTERS) {
+    for (const layer of router.stack || []) addRouteLayer(prefix, layer);
+  }
   out.sort((a, b) => (a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path)));
   return out;
 }
@@ -130,14 +143,7 @@ app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN));
 // person / session state.
 // ---------------------------------------------------------------------------
 
-app.use('/api/settings', createSettingsRouter(getDb));     // global style/spacing/fonts
-app.use('/api/persons', createPersonsRouter(getDb));       // persons + personal + sections/variants/tags scope
-app.use('/api/sections', createSectionsRouter(getDb));     // section by id + its entries
-app.use('/api/entries', createEntriesRouter(getDb));       // entry by id + its items + tags
-app.use('/api/items', createItemsRouter(getDb));           // item by id + tags
-app.use('/api/variants', createVariantsRouter(getDb, PROJECT_ROOT)); // variant by id + rules/sections/overrides/resolve/pdf
-app.use('/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)); // layout list/get/upload/verify/delete + default
-app.use('/api', createDataRouter(getDb));                  // catalog + health
+for (const [prefix, router] of API_ROUTERS) app.use(prefix, router);
 
 // ---------------------------------------------------------------------------
 // Error handling middleware
