@@ -98,7 +98,7 @@ app.use(cors({
   },
 }));
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+// API-only: the editor frontend is owned and served by the portal — no static serving.
 
 // ---------------------------------------------------------------------------
 // Public contract routes (registered before auth): health + API discovery.
