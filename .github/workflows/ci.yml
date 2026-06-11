@@ -19,6 +19,28 @@ jobs:
       - run: npm install
       - run: npm test
 
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          (cd editor && npm install)
+          pip install pytest jsonschema
+      - name: Boot the editor and run the live-HTTP contract tests
+        run: |
+          cd editor
+          PORT=3001 HOST=127.0.0.1 CV_DB_PATH="$RUNNER_TEMP/cv-contract.db" CV_EMBED_OFFLINE=1 node server.js &
+          cd "$GITHUB_WORKSPACE"
+          curl --retry 40 --retry-delay 1 --retry-connrefused -sf http://127.0.0.1:3001/health
+          CV_EDITOR_URL=http://127.0.0.1:3001 python -m pytest tests/contract/ -v
+
   build-pdf:
     runs-on: ubuntu-latest
     steps:
