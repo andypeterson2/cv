@@ -12,8 +12,8 @@ const { VALID_SEMANTIC_TYPES } = require('./latex-type-map');
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: false });
 
-// Canonical constants shared with the MCP server (see packages/cv/shared).
-const { VARIANT_KINDS, SLUG_PATTERN, SCORER_METHODS } = require('../../shared/constants');
+// Canonical constants shared with the MCP server (the @cv/constants package).
+const { VARIANT_KINDS, SLUG_PATTERN, SCORER_METHODS } = require('@cv/constants');
 const VALID_KINDS = VARIANT_KINDS;
 const SLUG = SLUG_PATTERN;
 
