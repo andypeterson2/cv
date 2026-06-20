@@ -3,7 +3,7 @@
  * verification harness (static checks). `ajv` is already an app dependency.
  */
 const Ajv = require('ajv');
-const { SLUG_PATTERN, VARIANT_KINDS } = require('../../../shared/constants');
+const { SLUG_PATTERN, VARIANT_KINDS } = require('@cv/constants');
 
 const ajv = new Ajv({ allErrors: true });
 

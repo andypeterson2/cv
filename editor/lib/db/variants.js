@@ -5,7 +5,7 @@
  * prototype (see db.js / applyMixin); methods run with `this` === the instance.
  */
 const { rowToVariant, stripPrefix, combineUnits, sortKey, bySort } = require('./helpers');
-const { VARIANT_KINDS: KINDS } = require('../../../shared/constants');
+const { VARIANT_KINDS: KINDS } = require('@cv/constants');
 const fuzzy = require('../fuzzy');
 const { getLatexType } = require('../latex-type-map');
 
