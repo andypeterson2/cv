@@ -14,6 +14,7 @@
     "test:dom": "vitest run tests/dom"
   },
   "dependencies": {
+    "@cv/constants": "file:../shared",
     "ajv": "^8.20.0",
     "better-sqlite3": "^12.10.0",
     "cors": "^2.8.5",
