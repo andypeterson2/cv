@@ -49,8 +49,14 @@ FROM texbase AS deps
 # Native build fallback (better-sqlite3 / onnxruntime usually use prebuilts).
 RUN apt-get update -qq && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/editor
+# @cv/constants is a local file: dependency (../shared); it must be present so
+# `npm ci --install-links` vendors it as a COPY into node_modules (not a symlink),
+# keeping the deploy image self-contained (no /app/shared needed at runtime).
+# (--install-links matches how the committed lockfile was generated; the flag is
+# explicit so the build doesn't depend on the globally-gitignored editor/.npmrc.)
+COPY shared/ /app/shared/
 COPY editor/package.json editor/package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev --install-links
 COPY editor/scripts/prefetch-model.cjs ./scripts/prefetch-model.cjs
 RUN node scripts/prefetch-model.cjs   # bakes ~23MB quantized model into node_modules/.cache
 
@@ -80,6 +86,8 @@ COPY --from=deps /app/editor/node_modules ./node_modules
 # carries its own .cls + fonts in class/). Uploaded layouts live in the writable
 # CV_LAYOUTS_DIR volume at runtime — no rebuild needed to add one.
 COPY assets/ /app/assets/
+# (No shared/ copy needed: editor depends on @cv/constants as a normal package,
+# vendored into node_modules in the `deps` stage and carried over via --from=deps.)
 RUN mkdir -p /app/build /app/fonts
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

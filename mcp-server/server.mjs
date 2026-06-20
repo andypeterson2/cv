@@ -26,7 +26,7 @@ import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
-import shared from '../shared/constants.js'; // canonical enums/patterns (CJS interop)
+import shared from '@cv/constants'; // canonical enums/patterns (CJS interop)
 
 const BASE_URL = (process.env.CV_EDITOR_URL || 'http://localhost:3001').replace(/\/$/, '');
 const AUTH = process.env.CV_EDITOR_AUTH; // e.g. "Basic <base64>" when behind an auth proxy
