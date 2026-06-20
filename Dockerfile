@@ -55,8 +55,21 @@ COPY editor/scripts/prefetch-model.cjs ./scripts/prefetch-model.cjs
 RUN node scripts/prefetch-model.cjs   # bakes ~23MB quantized model into node_modules/.cache
 
 # ---------------------------------------------------------------------------
+# dev — fast local container. node_modules + model baked from `deps`; source is
+# bind-mounted at runtime (see docker-compose.yml), so NO code COPY here.
+# (docker-compose.yml selects this stage explicitly via `target: dev`.)
+# ---------------------------------------------------------------------------
+FROM deps AS dev
+ENV NODE_ENV=development HOST=0.0.0.0 PORT=3001 CV_EMBED_OFFLINE=1
+WORKDIR /app/editor
+EXPOSE 3001
+CMD ["npm", "run", "dev"]
+
+# ---------------------------------------------------------------------------
 # deploy — self-contained image. App code + deps + model COPYd in; no bind
 # mounts. This is the one artifact you ship to any host.
+# KEEP LAST: `docker build` and most PaaS (Railway, etc.) build the FINAL
+# stage by default, so the default target must be production — not `dev`.
 # ---------------------------------------------------------------------------
 FROM texbase AS deploy
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3001 CV_EMBED_OFFLINE=1
@@ -72,13 +85,3 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 CMD ["node", "server.js"]
-
-# ---------------------------------------------------------------------------
-# dev — fast local container. node_modules + model baked from `deps`; source is
-# bind-mounted at runtime (see docker-compose.yml), so NO code COPY here.
-# ---------------------------------------------------------------------------
-FROM deps AS dev
-ENV NODE_ENV=development HOST=0.0.0.0 PORT=3001 CV_EMBED_OFFLINE=1
-WORKDIR /app/editor
-EXPOSE 3001
-CMD ["npm", "run", "dev"]
