@@ -18,6 +18,9 @@ const createLayoutsRouter = require('./routes/layouts');
 const { seedBuiltinLayouts } = require('./lib/render/seed');
 
 const app = express();
+// Behind the Cloudflare gateway → Railway the socket IP is the proxy's; trust one
+// hop so req.ip is meaningful. Rate limits key on CF-Connecting-IP (see lib/client-ip).
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
