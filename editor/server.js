@@ -134,9 +134,12 @@ app.get('/api', (req, res) => {
   });
 });
 
-// Optional app-level auth on the API (defense in depth behind the reverse proxy).
-// No-op unless CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated.
-app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN));
+// Optional app-level auth on the API (defense in depth; the backend is also
+// directly reachable on its public URL, so this is the real gate). No-op unless
+// CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated. Public demo
+// persons (e.g. the Jane Doe seed, id 1) stay readable unauthenticated; any other
+// person's reads + all writes + the /pdf compile require the token.
+app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN, { publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1' }));
 
 // ---------------------------------------------------------------------------
 // Mount routers — every content route is id-addressable; there is no active
