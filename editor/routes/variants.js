@@ -5,6 +5,7 @@ const { validate } = require('../lib/schema');
 const { AppError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
 const { rateLimit } = require('express-rate-limit');
+const { clientIp } = require('../lib/client-ip');
 const { queuedCompile } = require('../lib/render/latex');
 
 function intId(value, label = 'id') {
@@ -172,6 +173,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   const compileRateLimit = rateLimit({
     windowMs: 60 * 1000,
     max: Number(process.env.CV_COMPILE_RATE_MAX) || 10,
+    keyGenerator: clientIp,
     standardHeaders: true,
     legacyHeaders: false,
     message: { success: false, log: 'Too many compile requests — please wait a moment.' },
