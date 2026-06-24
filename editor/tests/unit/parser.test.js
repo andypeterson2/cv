@@ -267,7 +267,7 @@ describe('parseData', () => {
   });
 
   test('parses contact info', () => {
-    expect(data.personal.mobile).toContain('951-551-6946');
+    expect(data.personal.mobile).toBeFalsy(); // phone intentionally removed (privacy); reachable via email
     expect(data.personal.email).toBe('acpeters@ucsd.edu');
     expect(data.personal.github).toBe('andypeterson2');
     expect(data.personal.linkedin).toBe('i-am-andy-peterson');
