@@ -5,6 +5,7 @@ const path = require('path');
 const multer = require('multer');
 const extract = require('extract-zip');
 const { rateLimit } = require('express-rate-limit');
+const { clientIp } = require('../lib/client-ip');
 const { AppError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
 const { verifyLayout, gatherSamples } = require('../lib/render/verify');
@@ -53,6 +54,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
   const uploadRateLimit = rateLimit({
     windowMs: 60 * 1000,
     max: Number(process.env.CV_UPLOAD_RATE_MAX) || 5,
+    keyGenerator: clientIp,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: { code: 'rate_limited', message: 'Too many layout uploads — please wait.' } },
