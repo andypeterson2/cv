@@ -1,7 +1,7 @@
 /**
  * Canonical constants shared by the cv editor (REST API, CommonJS) and the MCP
  * server (ESM). These were duplicated as literals in both `editor/lib/schema.js`
- * and `mcp-server/server.mjs`; keeping them here means a change (e.g. adding a
+ * and `mcp-worker/src/tools.ts`; keeping them here means a change (e.g. adding a
  * variant kind or a scorer) lands in one place instead of drifting between the
  * two validation surfaces.
  *
