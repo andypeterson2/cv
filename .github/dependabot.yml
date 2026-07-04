@@ -1,13 +1,12 @@
 version: 2
-# Lives in the cv repo so Dependabot can see the editor + mcp-server manifests
-# (when this repo is consumed as a submodule, the parent repo cannot watch them).
+# Lives in the cv repo so Dependabot can see the editor + mcp-worker manifests.
 updates:
-  # CV editor + MCP server (Node). Single entry via the multi-directory `directories`
+  # CV editor + MCP worker (Node). Single entry via the multi-directory `directories`
   # key (GA 2024-06); `directory` (singular) does not support multiple paths/globs.
   - package-ecosystem: npm
     directories:
       - /editor
-      - /mcp-server
+      - /mcp-worker
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
