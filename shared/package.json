@@ -4,5 +4,5 @@
   "private": true,
   "type": "commonjs",
   "main": "constants.js",
-  "description": "CommonJS constants shared by the cv editor (require) and MCP server (import). Pins the module type so it stays CJS regardless of any parent package.json (e.g. the superproject root sets type:module). Consumed as a local file: dependency by ../editor and ../mcp-server."
+  "description": "CommonJS constants shared by the cv editor (require) and MCP worker (import). Pins the module type so it stays CJS regardless of any parent package.json. Consumed as a local file: dependency by ../editor and ../mcp-worker."
 }
