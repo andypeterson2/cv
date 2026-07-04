@@ -1,0 +1,59 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cv-mcp",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-01-28",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	// McpAgent sessions are Durable Objects (SQLite-backed). The class lives in src/mcp.ts.
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "MCP_OBJECT",
+				"class_name": "CvMcp"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"CvMcp"
+			]
+		}
+	],
+	// Required by @cloudflare/workers-oauth-provider (tokens / clients / grants / our state).
+	// OWNER: create a namespace (`wrangler kv namespace create OAUTH_KV`) and paste its id here.
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "b116e23ad4554389ab244d178c7fa634",
+			"remote": true
+		}
+	],
+	"vars": {
+		// cv-editor (Railway) REST base — public URL, not a secret. The admin token is a secret.
+		"CV_EDITOR_URL": "https://cv-production-cb18.up.railway.app",
+		// This Worker's own public origin, for building signed /pdf download links.
+		"MCP_PUBLIC_URL": "https://mcp.andypeterson.dev"
+		// ADMIN_EMAILS is a SECRET (not a var) — keeps the owner's email out of this public repo.
+	},
+	"observability": {
+		"enabled": true
+	},
+	"routes": [{ "pattern": "mcp.andypeterson.dev", "custom_domain": true }],
+	// In-Worker rate limiter (per-colo, best-effort) — throttles a single source
+	// hammering the OAuth endpoints. namespace_id is an arbitrary account-unique id.
+	"ratelimits": [
+		{ "name": "OAUTH_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }
+	]
+	// SECRETS (set with `wrangler secret put <NAME>`; never commit):
+	//   CV_EDITOR_TOKEN       — the cv admin bearer token (gates writes/compile/real-CV reads)
+	//   GOOGLE_CLIENT_ID      — Google OAuth client id
+	//   GOOGLE_CLIENT_SECRET  — Google OAuth client secret
+	//   COOKIE_SECRET         — HMAC key that signs the OAuth state tokens (else falls back to GOOGLE_CLIENT_SECRET)
+	//   ADMIN_EMAILS          — allowlisted Google address(es), comma-separated (a SECRET so the email stays out of this public repo)
+	//
+	// ROUTE: bind mcp.andypeterson.dev to this Worker (custom domain / route) at deploy.
+}
