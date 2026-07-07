@@ -4,6 +4,9 @@
   "private": true,
   "description": "Web editor for LaTeX resume/CV/cover letter",
   "main": "server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node dev-watch.cjs",
