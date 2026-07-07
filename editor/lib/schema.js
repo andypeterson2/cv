@@ -60,6 +60,15 @@ const personalSchema = {
   minProperties: 1,
 };
 
+// Cover-letter header fields (coverletter.*): same shape as personal — flat
+// string map, the setter adds the prefix.
+const coverletterSchema = {
+  type: 'object',
+  patternProperties: { '^[a-zA-Z0-9_]+$': { type: 'string' } },
+  additionalProperties: false,
+  minProperties: 1,
+};
+
 // Import is intentionally permissive: accepts both the new export shape
 // ({personal, sections, variants, ...}) and the legacy shape ({personal,
 // sections, documents, coverletter}).
@@ -280,6 +289,7 @@ const schemas = {
   createPerson: createPersonSchema,
   updatePerson: updatePersonSchema,
   personal: personalSchema,
+  coverletter: coverletterSchema,
   import: importSchema,
   createSection: createSectionSchema,
   updateSection: updateSectionSchema,
