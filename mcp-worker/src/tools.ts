@@ -82,7 +82,7 @@ export async function fetchVariantPdf(variantId: number | string): Promise<Array
 
 // Shared schema fragments (verbatim from the stdio catalog).
 const personId = { type: "integer", description: "Person id (from cv_list_persons)" };
-const variantId = { type: "integer", description: "Variant id (from cv_list_variants / cv_get_master)" };
+const variantId = { type: "integer", description: "Variant id (from cv_list_variants / cv_get_main)" };
 const tagList = { type: "array", items: { type: "string" }, description: "Tag names (free strings)" };
 const layoutId = { type: "string", description: "Layout id (slug, from cv_list_layouts)" };
 const idList = { type: "array", items: { type: "integer", minimum: 1 }, minItems: 1, description: "Ids in the desired order" };
@@ -103,14 +103,14 @@ const toolDefs: ToolDef[] = [
   },
   {
     name: "cv_list_persons",
-    description: "List every profile: {persons:[{id,name,created_at}]}. Always safe. Use ids with cv_get_master etc.",
+    description: "List every profile: {persons:[{id,name,created_at}]}. Always safe. Use ids with cv_get_main etc.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     handler: () => api("GET", "/api/persons"),
   },
   {
-    name: "cv_get_master",
+    name: "cv_get_main",
     description:
-      "Return a person's FULL master CV with stable ids: {person, personal, coverletter, " +
+      "Return a person's FULL main CV with stable ids: {person, personal, coverletter, " +
       "sections:[{id,slug,type,title,sortOrder,entries:[{id,fields,tags,items:[{id,content,title,tags}]}]}], " +
       "variants:[{id,name,kind,rules,sections}], tags, tagAliases}. Read this once, then edit by id. This is the " +
       "canonical read — ids here are valid for every edit/tag/override tool.",
@@ -145,7 +145,7 @@ const toolDefs: ToolDef[] = [
       return api("PATCH", `/api/persons/${enc(a.person_id)}/personal`, a.fields);
     },
   },
-  // ---- Sections / entries / bullets (master content) ----
+  // ---- Sections / entries / bullets (main content) ----
   {
     name: "cv_add_section",
     description: "Add a section to a person. slug is kebab-case (unique per person). type: experience, education, projects, skills, certifications, references, summary, honors, writing, … Returns {id}.",
@@ -429,7 +429,7 @@ const toolDefs: ToolDef[] = [
   },
   {
     name: "cv_create_variant",
-    description: "Create a variant. kind selects the render: \"cv\" (no rules = the full master), \"resume\", or \"coverletter\". name is free (\"Frontend Resume\"). Returns {id}.",
+    description: "Create a variant. kind selects the render: \"cv\" (no rules = the full main), \"resume\", or \"coverletter\". name is free (\"Frontend Resume\"). Returns {id}.",
     inputSchema: {
       type: "object",
       properties: { person_id: personId, name: { type: "string", minLength: 1 }, kind: { type: "string", enum: shared.VARIANT_KINDS } },
@@ -440,7 +440,7 @@ const toolDefs: ToolDef[] = [
   },
   {
     name: "cv_delete_variant",
-    description: "Delete a variant (does not touch master content).",
+    description: "Delete a variant (does not touch main content).",
     inputSchema: { type: "object", properties: { variant_id: variantId }, required: ["variant_id"], additionalProperties: false },
     handler: (a) => api("DELETE", `/api/variants/${enc(a.variant_id)}`),
   },
@@ -448,7 +448,7 @@ const toolDefs: ToolDef[] = [
     name: "cv_set_variant_rules",
     description:
       "Set a variant's tag query (replaces existing). include: entries/bullets must carry ≥1 of these (empty = all). " +
-      "exclude: drop anything carrying these (exclude beats include). No rules = the full master. Tags are matched " +
+      "exclude: drop anything carrying these (exclude beats include). No rules = the full main. Tags are matched " +
       "EXACTLY (after case/separator normalization + alias folding) — use cv_search_tags to find the right tags, or " +
       "cv_expand_variant_rules to fuzzy-grow the include set in one step.",
     inputSchema: {
@@ -483,8 +483,8 @@ const toolDefs: ToolDef[] = [
   {
     name: "cv_set_variant_sections",
     description:
-      "Set which sections appear in a variant and their order (replaces existing). Pass section ids (from cv_get_master). " +
-      "Empty list = inherit all master sections in master order. enabled:false hides a section.",
+      "Set which sections appear in a variant and their order (replaces existing). Pass section ids (from cv_get_main). " +
+      "Empty list = inherit all main sections in main order. enabled:false hides a section.",
     inputSchema: {
       type: "object",
       properties: {
@@ -662,7 +662,7 @@ const toolDefs: ToolDef[] = [
   // ---- Reordering (pass the full id list in the new order) ----
   {
     name: "cv_reorder_sections",
-    description: "Reorder a person's sections. ids = ALL of the person's section ids in the desired order (from cv_get_master).",
+    description: "Reorder a person's sections. ids = ALL of the person's section ids in the desired order (from cv_get_main).",
     inputSchema: { type: "object", properties: { person_id: personId, ids: idList }, required: ["person_id", "ids"], additionalProperties: false },
     handler: (a) => api("PATCH", `/api/persons/${enc(a.person_id)}/sections/order`, { ids: a.ids }),
   },

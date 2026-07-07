@@ -64,14 +64,14 @@ class TestReadShapes:
         assert status == 200
         assert isinstance(body.get("persons"), list)
 
-    def test_person_master_shape(self):
+    def test_person_main_shape(self):
         persons = http_get(BASE, "/api/persons")[1].get("persons", [])
         if not persons:
-            pytest.skip("no persons available to read a master")
+            pytest.skip("no persons available to read a main")
         pid = persons[0]["id"]
         status, body = http_get(BASE, f"/api/persons/{pid}")
         assert status == 200
         for key in ("person", "personal", "sections", "variants"):
-            assert key in body, f"master is missing '{key}'"
+            assert key in body, f"main is missing '{key}'"
         assert isinstance(body["sections"], list)
         assert isinstance(body["variants"], list)
