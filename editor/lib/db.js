@@ -1,7 +1,7 @@
 /**
  * SQLite access layer for the CV Editor (normalized, stateless model).
  *
- * Single source of truth — every person owns a master CV (sections → entries →
+ * Single source of truth — every person owns a main CV (sections → entries →
  * items, with free-string tags) plus named variants. A variant is a lightweight
  * overlay: a tag query (variant_rules) + sparse per-entry/item exceptions
  * (entry_overrides / item_overrides) + a section list (variant_sections), or —
@@ -335,10 +335,10 @@ class CvDatabase {
   // lives in ./db/variants.js.
 
   // ---------------------------------------------------------------------------
-  // Aggregate read for MCP / UI — full master + variant summaries
+  // Aggregate read for MCP / UI — full main + variant summaries
   // ---------------------------------------------------------------------------
 
-  getMaster(personId) {
+  getMain(personId) {
     const person = this.getPerson(personId);
     if (!person) return null;
     return {

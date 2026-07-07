@@ -51,11 +51,11 @@ module.exports = function createPersonsRouter(getDb) {
     }
   }));
 
-  // Full master content (sections → entries → items → tags, variants, tag vocab).
+  // Full main content (sections → entries → items → tags, variants, tag vocab).
   router.get('/:pid', wrap((req, res) => {
-    const master = getDb().getMaster(intParam(req.params.pid, 'person id'));
-    if (!master) throw new NotFoundError('Person not found');
-    res.json(master);
+    const main = getDb().getMain(intParam(req.params.pid, 'person id'));
+    if (!main) throw new NotFoundError('Person not found');
+    res.json(main);
   }));
 
   router.put('/:pid', validate('updatePerson'), wrap((req, res) => {
