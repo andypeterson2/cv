@@ -190,7 +190,7 @@ class ImportExport {
       const cvDoc = (data.documents && Array.isArray(data.documents.cv)) ? data.documents.cv : [];
       const resumeDoc = (data.documents && Array.isArray(data.documents.resume)) ? data.documents.resume : [];
 
-      // master order = cv order, then leftovers
+      // main order = cv order, then leftovers
       const orderedSlugs = [];
       for (const d of cvDoc) {
         if (blobSections.some((s) => s.id === d.sectionId) && !orderedSlugs.includes(d.sectionId)) {

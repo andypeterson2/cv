@@ -9,7 +9,7 @@
  * server imports it via the Node CJS-interop default import.
  */
 
-// Variant render kinds. `cv` = the full master; `resume`/`coverletter` are shaped.
+// Variant render kinds. `cv` = the full main; `resume`/`coverletter` are shaped.
 const VARIANT_KINDS = ['cv', 'resume', 'coverletter'];
 
 // Section slug shape (kebab/underscore, lowercase) — unique per person.

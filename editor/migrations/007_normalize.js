@@ -1,11 +1,11 @@
 /**
- * 007 — Normalize to per-person master content + tag-driven variants.
+ * 007 — Normalize to per-person main content + tag-driven variants.
  *
  * Replaces the dual "JSON blob in persons.data + active-person working tables"
  * model with a single normalized source of truth:
  *
  *   persons ─┬─ person_settings        (personal.* / coverletter.* header)
- *            ├─ sections ── entries ── items        (the master CV)
+ *            ├─ sections ── entries ── items        (the main CV)
  *            │                └─ entry_tags / item_tags   (free-string tags)
  *            └─ variants ─┬─ variant_rules            (tag query)
  *                         ├─ entry_overrides / item_overrides  (sparse exceptions)
@@ -270,7 +270,7 @@ function backfillPerson(db, ins, person) {
     }
   }
 
-  // ---- master section order: cv document order, then any blob sections not in cv ----
+  // ---- main section order: cv document order, then any blob sections not in cv ----
   const blobSections = Array.isArray(data.sections) ? data.sections : [];
   const cvDoc = (data.documents && Array.isArray(data.documents.cv)) ? data.documents.cv : [];
   const orderedSlugs = [];

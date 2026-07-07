@@ -44,8 +44,8 @@ beforeEach(async () => {
   pid = Number((await request('POST', '/api/persons', { name: 'Test' })).body.id);
 });
 
-// Build a small master CV for `pid`; returns created ids.
-async function buildMaster() {
+// Build a small main CV for `pid`; returns created ids.
+async function buildMain() {
   const summary = (await request('POST', `/api/persons/${pid}/sections`, { slug: 'summary', type: 'summary', title: 'Summary' })).body.id;
   const sEntry = (await request('POST', `/api/sections/${summary}/entries`, { fields: { text: 'Full summary' } })).body.id;
   const exp = (await request('POST', `/api/persons/${pid}/sections`, { slug: 'experience', type: 'experience', title: 'Experience' })).body.id;
@@ -56,11 +56,11 @@ async function buildMaster() {
 }
 
 describe('Persons', () => {
-  test('create, list, get master, rename, delete', async () => {
+  test('create, list, get main, rename, delete', async () => {
     expect((await request('GET', '/api/persons')).body.persons.map((p) => p.name)).toContain('Test');
-    const master = await request('GET', `/api/persons/${pid}`);
-    expect(master.status).toBe(200);
-    expect(master.body.person.name).toBe('Test');
+    const main = await request('GET', `/api/persons/${pid}`);
+    expect(main.status).toBe(200);
+    expect(main.body.person.name).toBe('Test');
 
     expect((await request('PUT', `/api/persons/${pid}`, { name: 'Renamed' })).status).toBe(200);
     expect((await request('GET', `/api/persons/${pid}`)).body.person.name).toBe('Renamed');
@@ -86,7 +86,7 @@ describe('Personal info', () => {
 
 describe('Sections / entries / items', () => {
   test('CRUD and ordering', async () => {
-    const { exp, e1, e2 } = await buildMaster();
+    const { exp, e1, e2 } = await buildMain();
     const section = await request('GET', `/api/sections/${exp}`);
     expect(section.body.entries).toHaveLength(2);
 
@@ -113,7 +113,7 @@ describe('Sections / entries / items', () => {
 
 describe('Tags', () => {
   test('add to entry + item, list, remove', async () => {
-    const { e1, i1 } = await buildMaster();
+    const { e1, i1 } = await buildMain();
     expect((await request('POST', `/api/entries/${e1}/tags`, { tags: ['Frontend', 'core'] })).status).toBe(200);
     await request('POST', `/api/items/${i1}/tags`, { tags: ['frontend'] });
     expect((await request('GET', `/api/persons/${pid}/tags`)).body.tags.sort()).toEqual(['core', 'frontend']);
@@ -124,14 +124,14 @@ describe('Tags', () => {
 
 describe('Fuzzy tags', () => {
   test('normalization folds case/separator variants and de-dupes', async () => {
-    const { e1 } = await buildMaster();
+    const { e1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['Front End', 'front_end', 'Machine Learning'] });
     expect((await request('GET', `/api/entries/${e1}`)).body.tags).toEqual(['front-end', 'machine-learning']);
     expect((await request('GET', `/api/persons/${pid}/tags`)).body.tags).toEqual(['front-end', 'machine-learning']);
   });
 
   test('tags?withCounts returns usage counts', async () => {
-    const { e1, i1 } = await buildMaster();
+    const { e1, i1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     await request('POST', `/api/items/${i1}/tags`, { tags: ['frontend'] });
     const body = (await request('GET', `/api/persons/${pid}/tags?withCounts=1`)).body;
@@ -139,7 +139,7 @@ describe('Fuzzy tags', () => {
   });
 
   test('search finds a typo + reports score/via; missing q → 400', async () => {
-    const { e1 } = await buildMaster();
+    const { e1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend', 'kubernetes'] });
     const res = (await request('GET', `/api/persons/${pid}/tags/search?q=fronend`)).body;
     expect(res.results[0].tag).toBe('frontend');
@@ -149,7 +149,7 @@ describe('Fuzzy tags', () => {
   });
 
   test('alias folds existing + future tags into the canonical', async () => {
-    const { e1, e2 } = await buildMaster();
+    const { e1, e2 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['ml'] }); // before the alias exists
     expect((await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'ml', canonical: 'machine-learning' })).status).toBe(200);
 
@@ -164,7 +164,7 @@ describe('Fuzzy tags', () => {
   });
 
   test('alias search surfaces the canonical as an exact hit', async () => {
-    const { e1 } = await buildMaster();
+    const { e1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['machine-learning'] });
     await request('PUT', `/api/persons/${pid}/tag-aliases`, { alias: 'ml', canonical: 'machine-learning' });
     const res = (await request('GET', `/api/persons/${pid}/tags/search?q=ml`)).body;
@@ -178,7 +178,7 @@ describe('Fuzzy tags', () => {
   });
 
   test('rule expansion materializes near-miss tags; resolution stays exact', async () => {
-    const { e1, e2 } = await buildMaster();
+    const { e1, e2 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     await request('POST', `/api/entries/${e2}/tags`, { tags: ['front-end'] });
     const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'FE', kind: 'resume' })).body.id;
@@ -210,7 +210,7 @@ describe('Tag catalog + suggestion', () => {
   });
 
   test('suggest returns ranked existing tags and does NOT mutate the vocabulary', async () => {
-    const { e1 } = await buildMaster();
+    const { e1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     await request('PUT', `/api/persons/${pid}/tags/catalog`, { tag: 'react' });
     const before = (await request('GET', `/api/persons/${pid}/tags`)).body.tags;
@@ -226,7 +226,7 @@ describe('Tag catalog + suggestion', () => {
   });
 
   test('seed promotes usage vocab; suggest-bulk returns per-item candidates', async () => {
-    const { e1, i1 } = await buildMaster();
+    const { e1, i1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     expect((await request('POST', `/api/persons/${pid}/tags/catalog/seed`)).body.added).toBe(1);
 
@@ -244,7 +244,7 @@ describe('Tag catalog + suggestion', () => {
 
 describe('Variants', () => {
   test('create, rules, resolve filters by tag', async () => {
-    const { exp, e1 } = await buildMaster();
+    const { exp, e1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'FE', kind: 'resume' })).body.id;
     await request('PUT', `/api/variants/${v}/rules`, { include: ['frontend'] });
@@ -255,7 +255,7 @@ describe('Variants', () => {
   });
 
   test('override forces inclusion against tags', async () => {
-    const { e1, e2 } = await buildMaster();
+    const { e1, e2 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'resume' })).body.id;
     await request('PUT', `/api/variants/${v}/rules`, { include: ['frontend'] });
@@ -266,7 +266,7 @@ describe('Variants', () => {
   });
 
   test('variant section list controls presence/order', async () => {
-    const m = await buildMaster();
+    const m = await buildMain();
     const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id;
     await request('PUT', `/api/variants/${v}/sections`, { sections: [
       { sectionId: m.exp, enabled: true, sortOrder: 0 },
@@ -293,7 +293,7 @@ describe('Variants', () => {
 
 describe('Export / import round-trip', () => {
   test('exported new-shape re-imports faithfully', async () => {
-    const { e1 } = await buildMaster();
+    const { e1 } = await buildMain();
     await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
     await request('PATCH', `/api/persons/${pid}/personal`, { firstName: 'Round' });
     const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'FE', kind: 'resume' })).body.id;
@@ -304,10 +304,10 @@ describe('Export / import round-trip', () => {
     const pid2 = (await request('POST', '/api/persons', { name: 'Clone' })).body.id;
     expect((await request('POST', `/api/persons/${pid2}/import`, exported)).status).toBe(200);
 
-    const master = (await request('GET', `/api/persons/${pid2}`)).body;
-    expect(master.personal.firstName).toBe('Round');
-    expect(master.tags).toEqual(['frontend']);
-    const feVariant = master.variants.find((x) => x.name === 'FE');
+    const main = (await request('GET', `/api/persons/${pid2}`)).body;
+    expect(main.personal.firstName).toBe('Round');
+    expect(main.tags).toEqual(['frontend']);
+    const feVariant = main.variants.find((x) => x.name === 'FE');
     expect(feVariant.rules.include).toEqual(['frontend']);
   });
 });
