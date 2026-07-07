@@ -72,7 +72,7 @@ curl -s -o /dev/null -w "%{http_code}\n" https://mcp.andypeterson.dev/mcp   # 40
 
 ## Verify (post-deploy)
 - **Auth**: connecting with an allowlisted Google account succeeds; a non-allowlisted account is denied. Tokens are never exposed to the client.
-- **Tools**: the connector lists 57 tools; `cv_get_master` returns your CV; `cv_get_pdf` returns an inline PDF.
+- **Tools**: the connector lists 57 tools; `cv_get_main` returns your CV; `cv_get_pdf` returns an inline PDF.
 - **Mobile**: same connector works in the Claude mobile app.
 
 ## Hardening — default-deny allowlist + rate limiting
