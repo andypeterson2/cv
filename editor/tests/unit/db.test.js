@@ -18,8 +18,8 @@ afterEach(() => {
   db.close();
 });
 
-// Helper: build a small master CV. Returns the created ids.
-function buildMaster() {
+// Helper: build a small main CV. Returns the created ids.
+function buildMain() {
   const summary = db.createSection(pid, 'summary', 'summary', 'Summary');
   const sEntry = db.createEntry(summary, { text: 'Full summary text' });
 
@@ -46,7 +46,7 @@ describe('Persons', () => {
   });
 
   test('deleting a person cascades to sections/entries/items/variants', () => {
-    const { exp } = buildMaster();
+    const { exp } = buildMain();
     const v = db.createVariant(pid, 'CV', 'cv');
     db.deletePerson(pid);
     expect(db.getSection(exp)).toBeNull();
@@ -56,7 +56,7 @@ describe('Persons', () => {
 
 describe('Sections / entries / items', () => {
   test('sections are per-person and ordered', () => {
-    buildMaster();
+    buildMain();
     const other = db.createPerson('Other');
     db.createSection(other, 'experience', 'experience', 'Experience'); // same slug, different person OK
     const secs = db.getSections(pid);
@@ -65,7 +65,7 @@ describe('Sections / entries / items', () => {
   });
 
   test('getSection returns entries with items and tags', () => {
-    const { exp, e1 } = buildMaster();
+    const { exp, e1 } = buildMain();
     db.addEntryTags(e1, ['frontend', 'core']);
     const section = db.getSection(exp);
     expect(section.entries).toHaveLength(2);
@@ -75,7 +75,7 @@ describe('Sections / entries / items', () => {
   });
 
   test('entry/item ids are stable across reads', () => {
-    const { e1 } = buildMaster();
+    const { e1 } = buildMain();
     expect(db.getEntry(e1).id).toBe(e1);
     db.updateEntry(e1, { fields: { position: 'Senior Engineer' } });
     expect(db.getEntry(e1).id).toBe(e1);
@@ -83,7 +83,7 @@ describe('Sections / entries / items', () => {
   });
 
   test('reorderEntries updates order', () => {
-    const { exp, e1, e2 } = buildMaster();
+    const { exp, e1, e2 } = buildMain();
     db.reorderEntries(exp, [e2, e1]);
     expect(db.getSection(exp).entries.map((e) => e.id)).toEqual([e2, e1]);
   });
@@ -91,7 +91,7 @@ describe('Sections / entries / items', () => {
 
 describe('Tags', () => {
   test('add / remove / list distinct', () => {
-    const { e1, i1 } = buildMaster();
+    const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['Frontend', 'frontend', 'core']); // normalized + deduped
     db.addItemTags(i1, ['frontend']);
     expect(db.getEntry(e1).tags.sort()).toEqual(['core', 'frontend']);
@@ -123,7 +123,7 @@ describe('Tag catalog + suggestion', () => {
   });
 
   test('suggestTags unions catalog + usage and never invents a tag', async () => {
-    const { e1 } = buildMaster();
+    const { e1 } = buildMain();
     db.addEntryTags(e1, ['frontend']);            // usage vocab
     db.setCatalogTag(pid, 'react');               // catalog-only (count 0)
     const { results } = await db.suggestTags(pid, 'Built the React frontend', { minScore: 0.35 });
@@ -137,7 +137,7 @@ describe('Tag catalog + suggestion', () => {
   });
 
   test('seedCatalogFromUsage promotes the usage vocabulary into the catalog', () => {
-    const { e1, i1 } = buildMaster();
+    const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['frontend', 'core']);
     db.addItemTags(i1, ['python']);
     const { added } = db.seedCatalogFromUsage(pid);
@@ -148,7 +148,7 @@ describe('Tag catalog + suggestion', () => {
   });
 
   test('suggestBulk returns per entry/item candidates and writes nothing', async () => {
-    const { e1, i1 } = buildMaster();
+    const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['frontend']); // seed a vocab so something matches
     const before = db.listTags(pid);
     const bulk = await db.suggestBulk(pid, { minScore: 0.35 });
@@ -189,8 +189,8 @@ describe('resolveVariant', () => {
     }));
   }
 
-  test('CV variant with no rules/overrides = full master', () => {
-    buildMaster();
+  test('CV variant with no rules/overrides = full main', () => {
+    buildMain();
     const cv = db.createVariant(pid, 'CV', 'cv');
     const r = db.resolveVariant(cv);
     expect(r.variant).toBe('cv');
@@ -201,7 +201,7 @@ describe('resolveVariant', () => {
   });
 
   test('include rule keeps only matching entries (row 9)', () => {
-    const { e1 } = buildMaster();
+    const { e1 } = buildMain();
     db.addEntryTags(e1, ['frontend']);
     const v = db.createVariant(pid, 'FE', 'resume');
     db.setVariantRules(v, { include: ['frontend'] });
@@ -210,7 +210,7 @@ describe('resolveVariant', () => {
   });
 
   test('exclude-only rule drops excluded, keeps rest (row 8)', () => {
-    const { e2 } = buildMaster();
+    const { e2 } = buildMain();
     db.addEntryTags(e2, ['draft']);
     const v = db.createVariant(pid, 'NoDraft', 'resume');
     db.setVariantRules(v, { exclude: ['draft'] });
@@ -219,7 +219,7 @@ describe('resolveVariant', () => {
   });
 
   test('override included=0 beats include tag (row 4); included=1 beats exclude tag (row 3)', () => {
-    const { e1, e2 } = buildMaster();
+    const { e1, e2 } = buildMain();
     db.addEntryTags(e1, ['frontend']);
     db.addEntryTags(e2, ['frontend', 'draft']);
     const v = db.createVariant(pid, 'V', 'resume');
@@ -232,7 +232,7 @@ describe('resolveVariant', () => {
   });
 
   test('item with include tag but excluded parent entry is dropped (row 1/2)', () => {
-    const { e1, e2, i3 } = buildMaster();
+    const { e1, e2, i3 } = buildMain();
     db.addEntryTags(e1, ['keep']);
     db.addItemTags(i3, ['keep']); // i3 belongs to e2 (untagged)
     const v = db.createVariant(pid, 'V', 'resume');
@@ -244,7 +244,7 @@ describe('resolveVariant', () => {
   });
 
   test('item-level include filters items within an included entry', () => {
-    const { e1, i1 } = buildMaster();
+    const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['keep']);
     db.addItemTags(i1, ['keep']); // only i1 tagged; i2 not
     const v = db.createVariant(pid, 'V', 'resume');
@@ -254,7 +254,7 @@ describe('resolveVariant', () => {
   });
 
   test('section with all entries filtered out is dropped (row 5)', () => {
-    const { skills } = buildMaster();
+    const { skills } = buildMain();
     void skills;
     const v = db.createVariant(pid, 'V', 'resume');
     db.setVariantRules(v, { include: ['nonexistent-tag'] });
@@ -262,7 +262,7 @@ describe('resolveVariant', () => {
   });
 
   test('variant_sections controls presence, order, and enabled (rows 6/11)', () => {
-    const m = buildMaster();
+    const m = buildMain();
     const v = db.createVariant(pid, 'V', 'resume');
     db.setVariantSections(v, [
       { sectionId: m.skills, enabled: true, sortOrder: 0 },
@@ -274,7 +274,7 @@ describe('resolveVariant', () => {
   });
 
   test('text_override replaces cvparagraph text and item content (row 12 inverse)', () => {
-    const m = buildMaster();
+    const m = buildMain();
     const v = db.createVariant(pid, 'V', 'resume');
     db.setEntryOverride(v, m.sEntry, { textOverride: 'Short summary' });
     db.setItemOverride(v, m.i1, { textOverride: 'Rephrased bullet' });
@@ -284,7 +284,7 @@ describe('resolveVariant', () => {
   });
 
   test('sort_override reorders entries deterministically (row 10)', () => {
-    const m = buildMaster();
+    const m = buildMain();
     const v = db.createVariant(pid, 'V', 'cv');
     db.setEntryOverride(v, m.e1, { sortOverride: 5 }); // push e1 after e2
     const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
@@ -365,7 +365,7 @@ describe('importLegacyData + seeding', () => {
     expect(cl.coverletter.sections.map((s) => s.title)).toEqual(['Intro']);
   });
 
-  test('fresh DB seeds Jane Doe with master + variants', () => {
+  test('fresh DB seeds Jane Doe with main + variants', () => {
     const fresh = new CvDatabase(':memory:');
     const persons = fresh.getPersons();
     expect(persons.map((p) => p.name)).toContain('Jane Doe');
@@ -379,20 +379,20 @@ describe('importLegacyData + seeding', () => {
   });
 });
 
-describe('getPersonExport / getMaster', () => {
-  test('getMaster returns sections, variants, and tag vocabulary', () => {
-    const { e1 } = buildMaster();
+describe('getPersonExport / getMain', () => {
+  test('getMain returns sections, variants, and tag vocabulary', () => {
+    const { e1 } = buildMain();
     db.addEntryTags(e1, ['frontend']);
     db.createVariant(pid, 'CV', 'cv');
-    const master = db.getMaster(pid);
-    expect(master.person.id).toBe(pid);
-    expect(master.sections.map((s) => s.slug)).toEqual(['summary', 'experience', 'skills']);
-    expect(master.variants.map((v) => v.kind)).toEqual(['cv']);
-    expect(master.tags).toEqual(['frontend']);
+    const main = db.getMain(pid);
+    expect(main.person.id).toBe(pid);
+    expect(main.sections.map((s) => s.slug)).toEqual(['summary', 'experience', 'skills']);
+    expect(main.variants.map((v) => v.kind)).toEqual(['cv']);
+    expect(main.tags).toEqual(['frontend']);
   });
 
   test('getPersonExport captures personal, sections, tags, and variants', () => {
-    const { e1 } = buildMaster();
+    const { e1 } = buildMain();
     db.addEntryTags(e1, ['frontend']);
     db.setPersonal(pid, { firstName: 'Ex', lastName: 'Port' });
     const v = db.createVariant(pid, 'FE Resume', 'resume');

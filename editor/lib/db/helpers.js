@@ -72,9 +72,9 @@ function entryText(fields) {
   return Object.values(fields || {}).filter((v) => typeof v === 'string').join(' ').trim();
 }
 
-/** Lexicographic ordering key: [effective sort, master sort, id]. */
-function sortKey(override, master, id) {
-  return [override != null ? override : master, master, id];
+/** Lexicographic ordering key: [effective sort, main sort, id]. */
+function sortKey(override, main, id) {
+  return [override != null ? override : main, main, id];
 }
 
 function bySort(a, b) {

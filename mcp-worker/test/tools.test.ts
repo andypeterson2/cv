@@ -24,7 +24,7 @@ describe("cv tool catalog (moved into the Worker)", () => {
   it("includes the canonical surface (legacy modal tools are gone)", () => {
     const names = new Set(tools.map((t) => t.name));
     for (const n of [
-      "cv_health", "cv_get_master", "cv_create_person", "cv_tag", "cv_create_variant",
+      "cv_health", "cv_get_main", "cv_create_person", "cv_tag", "cv_create_variant",
       "cv_set_variant_rules", "cv_resolve_variant", "cv_get_pdf", "cv_suggest_tags", "cv_expand_variant_rules",
     ]) {
       expect(names.has(n)).toBe(true);
@@ -35,8 +35,8 @@ describe("cv tool catalog (moved into the Worker)", () => {
 
   it("rejects malformed args (via @cfworker/json-schema, zero-eval / Workers-safe)", () => {
     expect(validate("cv_health", { x: 1 }).valid).toBe(false); // additionalProperties:false
-    expect(validate("cv_get_master", { person_id: "x" }).valid).toBe(false); // non-integer id
-    expect(validate("cv_get_master", {}).valid).toBe(false); // missing required
+    expect(validate("cv_get_main", { person_id: "x" }).valid).toBe(false); // non-integer id
+    expect(validate("cv_get_main", {}).valid).toBe(false); // missing required
     expect(validate("cv_create_variant", { person_id: 1, name: "X", kind: "bad" }).valid).toBe(false); // bad enum
     expect(validate("cv_tag", { target: "section", id: 1, tags: ["x"] }).valid).toBe(false); // bad enum
     expect(validate("cv_create_person", { name: "" }).valid).toBe(false); // minLength
@@ -44,7 +44,7 @@ describe("cv tool catalog (moved into the Worker)", () => {
 
   it("accepts well-formed args", () => {
     expect(validate("cv_health", {}).valid).toBe(true);
-    expect(validate("cv_get_master", { person_id: 3 }).valid).toBe(true);
+    expect(validate("cv_get_main", { person_id: 3 }).valid).toBe(true);
     expect(validate("cv_create_variant", { person_id: 1, name: "FE Resume", kind: "resume" }).valid).toBe(true);
     expect(validate("cv_tag", { target: "entry", id: 2, tags: ["frontend"] }).valid).toBe(true);
     expect(validate("cv_set_variant_rules", { variant_id: 9, include: ["a"], exclude: ["b"] }).valid).toBe(true);
@@ -52,6 +52,6 @@ describe("cv tool catalog (moved into the Worker)", () => {
 
   it("callTool rejects unknown tools + invalid args before any network call", async () => {
     await expect(callTool("nope", {})).rejects.toThrow(/Unknown tool/);
-    await expect(callTool("cv_get_master", { person_id: "x" })).rejects.toThrow(/Invalid arguments/);
+    await expect(callTool("cv_get_main", { person_id: "x" })).rejects.toThrow(/Invalid arguments/);
   });
 });
