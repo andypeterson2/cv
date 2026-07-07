@@ -56,4 +56,10 @@ module.exports = {
   getCoverletterHeader(personId) {
     return stripPrefix(this.getPersonSettings(personId, 'coverletter'), 'coverletter.');
   },
+
+  setCoverletterHeader(personId, fields) {
+    const map = {};
+    for (const [k, v] of Object.entries(fields)) map['coverletter.' + k] = v;
+    this.setPersonSettings(personId, map);
+  },
 };
