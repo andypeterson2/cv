@@ -62,12 +62,8 @@ const personalSchema = {
 
 // Cover-letter header fields (coverletter.*): same shape as personal — flat
 // string map, the setter adds the prefix.
-const coverletterSchema = {
-  type: 'object',
-  patternProperties: { '^[a-zA-Z0-9_]+$': { type: 'string' } },
-  additionalProperties: false,
-  minProperties: 1,
-};
+// (the per-person `coverletter` schema was retired with its route — the header
+// is now per-variant, validated by `letterHeader`)
 
 // Import is intentionally permissive: accepts both the new export shape
 // ({personal, sections, variants, ...}) and the legacy shape ({personal,
@@ -301,7 +297,6 @@ const schemas = {
   createPerson: createPersonSchema,
   updatePerson: updatePersonSchema,
   personal: personalSchema,
-  coverletter: coverletterSchema,
   import: importSchema,
   createSection: createSectionSchema,
   updateSection: updateSectionSchema,

@@ -350,7 +350,6 @@ class CvDatabase {
     return {
       person,
       personal: this.getPersonal(personId),
-      coverletter: this.getCoverletterHeader(personId),
       sections: this.getSections(personId).map((s) => this.getSection(s.id)),
       variants: this.getVariants(personId).map((v) => ({
         ...v,
