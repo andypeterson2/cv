@@ -54,8 +54,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     };
     if (v.kind === 'coverletter') {
       body.letterSections = db.getLetterSections(id);
-      // per-variant header, falling back to the legacy person-level header
-      body.header = db.getLetterHeader(id) || db.getCoverletterHeader(v.personId);
+      body.header = db.getLetterHeader(id);
     }
     res.json(body);
   }));
