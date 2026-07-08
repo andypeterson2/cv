@@ -292,8 +292,8 @@ describe('resolveVariant', () => {
   });
 
   test('coverletter kind resolves header + letter sections, ignores tag machinery', () => {
-    db.setPersonSettings(pid, { 'coverletter.recipientName': 'Hiring Team', 'coverletter.opening': 'Dear Team,' });
     const v = db.createVariant(pid, 'CL', 'coverletter');
+    db.setLetterHeader(v, { recipientName: 'Hiring Team', opening: 'Dear Team,' });
     db.createLetterSection(v, 'Intro', 'I am writing...');
     db.createLetterSection(v, 'Body', 'My experience...');
     const r = db.resolveVariant(v);
@@ -313,9 +313,14 @@ describe('resolveVariant', () => {
 // ---------------------------------------------------------------------------
 
 describe('per-variant cover-letter header', () => {
-  test('getLetterHeader is null until set, then returns the row', () => {
+  test('getLetterHeader returns empty defaults until set, then the row', () => {
     const v = db.createVariant(pid, 'CL', 'coverletter');
-    expect(db.getLetterHeader(v)).toBeNull();
+    expect(db.getLetterHeader(v)).toEqual({
+      recipientName: '',
+      recipientAddress: '',
+      opening: '',
+      closing: '',
+    });
     db.setLetterHeader(v, { recipientName: 'Acme', opening: 'Dear Acme,' });
     expect(db.getLetterHeader(v)).toEqual({
       recipientName: 'Acme',
@@ -342,17 +347,33 @@ describe('per-variant cover-letter header', () => {
   });
 
   test('resolveVariant uses the per-variant header when set', () => {
-    db.setPersonSettings(pid, { 'coverletter.recipientName': 'Shared Legacy' });
     const v = db.createVariant(pid, 'CL', 'coverletter');
     db.setLetterHeader(v, { recipientName: 'Per-Variant Acme' });
     expect(db.resolveVariant(v).coverletter.recipientName).toBe('Per-Variant Acme');
   });
 
-  test('resolveVariant falls back to the legacy person header when the variant has none', () => {
-    db.setPersonSettings(pid, { 'coverletter.recipientName': 'Legacy Shared' });
+  test('resolveVariant returns an empty header for a variant that has none', () => {
     const v = db.createVariant(pid, 'CL', 'coverletter');
-    expect(db.getLetterHeader(v)).toBeNull();
-    expect(db.resolveVariant(v).coverletter.recipientName).toBe('Legacy Shared');
+    expect(db.resolveVariant(v).coverletter.recipientName).toBe('');
+  });
+
+  test('export → import round-trips the header on each variant, not the person', () => {
+    const a = db.createVariant(pid, 'To Acme', 'coverletter');
+    const b = db.createVariant(pid, 'To Globex', 'coverletter');
+    db.setLetterHeader(a, { recipientName: 'Acme', opening: 'Dear Acme,' });
+    db.setLetterHeader(b, { recipientName: 'Globex' });
+    db.createLetterSection(a, 'Intro', 'Hello Acme');
+
+    const blob = db.getPersonExport(pid);
+    expect(blob.coverletter).toBeUndefined(); // no person-level header in the export
+    expect(blob.variants.find((v) => v.name === 'To Acme').header).toMatchObject({ recipientName: 'Acme' });
+
+    const pid2 = db.createPerson('Reimport');
+    db.importPersonData(pid2, blob);
+    const vs = db.getVariants(pid2);
+    const id = (name) => vs.find((v) => v.name === name).id;
+    expect(db.getLetterHeader(id('To Acme'))).toMatchObject({ recipientName: 'Acme', opening: 'Dear Acme,' });
+    expect(db.getLetterHeader(id('To Globex')).recipientName).toBe('Globex');
   });
 });
 
@@ -408,9 +429,10 @@ describe('importLegacyData + seeding', () => {
     expect(resExp.entries.map((e) => e.fields.position)).toEqual(['Eng']); // 'Old role' excluded
     expect(resExp.entries[0].items.map((i) => i.content)).toEqual(['Kept bullet']); // dropped bullet gone
 
-    // Cover Letter
+    // Cover Letter — the legacy top-level header lands on the variant, not the person
     const cl = db.resolveVariant(variants.find((v) => v.kind === 'coverletter').id);
     expect(cl.coverletter.sections.map((s) => s.title)).toEqual(['Intro']);
+    expect(cl.coverletter.recipientName).toBe('HM');
   });
 
   test('fresh DB seeds Jane Doe with main + variants', () => {
