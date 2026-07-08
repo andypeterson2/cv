@@ -118,6 +118,17 @@ describe('variant schemas', () => {
     expect(validators.updateLetterSection({ body: 'Hi' })).toBe(true);
     expect(validators.updateLetterSection({})).toBe(false);
   });
+  it('letter header schema', () => {
+    expect(validators.letterHeader({ recipientName: 'Acme' })).toBe(true);
+    expect(validators.letterHeader({ recipientName: 'Acme', opening: 'Dear,' })).toBe(true);
+    expect(validators.letterHeader({})).toBe(false); // must set at least one field
+    expect(validators.letterHeader({ recipientName: 5 })).toBe(false); // must be strings
+    // unknown keys are stripped (ajv removeAdditional), not rejected — so the
+    // known field survives and the unknown one is dropped
+    const body = { recipientName: 'Acme', bogus: 'x' };
+    expect(validators.letterHeader(body)).toBe(true);
+    expect(body).toEqual({ recipientName: 'Acme' });
+  });
 });
 
 describe('isValidKind', () => {

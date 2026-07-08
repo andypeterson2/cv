@@ -52,7 +52,11 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       entryOverrides: Object.fromEntries(db.getEntryOverrides(id)),
       itemOverrides: Object.fromEntries(db.getItemOverrides(id)),
     };
-    if (v.kind === 'coverletter') body.letterSections = db.getLetterSections(id);
+    if (v.kind === 'coverletter') {
+      body.letterSections = db.getLetterSections(id);
+      // per-variant header, falling back to the legacy person-level header
+      body.header = db.getLetterHeader(id) || db.getCoverletterHeader(v.personId);
+    }
     res.json(body);
   }));
 
@@ -153,6 +157,15 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     const id = intId(req.params.id, 'variant id');
     requireVariant(id);
     getDb().reorderLetterSections(id, req.body.ids);
+    res.json({ success: true });
+  }));
+
+  // ---- Cover-letter header (per variant) ----
+
+  router.patch('/:id/header', validate('letterHeader'), wrap((req, res) => {
+    const id = intId(req.params.id, 'variant id');
+    requireVariant(id);
+    getDb().setLetterHeader(id, req.body);
     res.json({ success: true });
   }));
 
