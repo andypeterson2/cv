@@ -65,6 +65,9 @@ class ImportExport {
         letterSections: v.kind === 'coverletter'
           ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
           : undefined,
+        header: v.kind === 'coverletter'
+          ? (this.getLetterHeader(v.id) || this.getCoverletterHeader(personId))
+          : undefined,
       };
     });
 
@@ -139,6 +142,7 @@ class ImportExport {
           if (iid != null) this.setItemOverride(variantId, iid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
         }
         for (const s of (v.letterSections || [])) this.createLetterSection(variantId, s.title || '', s.body || '');
+        if (v.header) this.setLetterHeader(variantId, v.header);
       }
 
       // Aliases (exported content is already canonical, so a plain upsert is
