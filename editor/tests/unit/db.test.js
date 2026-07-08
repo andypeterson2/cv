@@ -309,6 +309,54 @@ describe('resolveVariant', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Per-variant cover-letter header (migration 011)
+// ---------------------------------------------------------------------------
+
+describe('per-variant cover-letter header', () => {
+  test('getLetterHeader is null until set, then returns the row', () => {
+    const v = db.createVariant(pid, 'CL', 'coverletter');
+    expect(db.getLetterHeader(v)).toBeNull();
+    db.setLetterHeader(v, { recipientName: 'Acme', opening: 'Dear Acme,' });
+    expect(db.getLetterHeader(v)).toEqual({
+      recipientName: 'Acme',
+      recipientAddress: '',
+      opening: 'Dear Acme,',
+      closing: '',
+    });
+  });
+
+  test('setLetterHeader merges partial updates', () => {
+    const v = db.createVariant(pid, 'CL', 'coverletter');
+    db.setLetterHeader(v, { recipientName: 'Acme', closing: 'Best,' });
+    db.setLetterHeader(v, { recipientName: 'Globex' }); // only the name
+    expect(db.getLetterHeader(v)).toMatchObject({ recipientName: 'Globex', closing: 'Best,' });
+  });
+
+  test('two cover letters on one person keep independent headers — the whole point', () => {
+    const a = db.createVariant(pid, 'To Acme', 'coverletter');
+    const b = db.createVariant(pid, 'To Globex', 'coverletter');
+    db.setLetterHeader(a, { recipientName: 'Acme' });
+    db.setLetterHeader(b, { recipientName: 'Globex' });
+    expect(db.getLetterHeader(a).recipientName).toBe('Acme');
+    expect(db.getLetterHeader(b).recipientName).toBe('Globex');
+  });
+
+  test('resolveVariant uses the per-variant header when set', () => {
+    db.setPersonSettings(pid, { 'coverletter.recipientName': 'Shared Legacy' });
+    const v = db.createVariant(pid, 'CL', 'coverletter');
+    db.setLetterHeader(v, { recipientName: 'Per-Variant Acme' });
+    expect(db.resolveVariant(v).coverletter.recipientName).toBe('Per-Variant Acme');
+  });
+
+  test('resolveVariant falls back to the legacy person header when the variant has none', () => {
+    db.setPersonSettings(pid, { 'coverletter.recipientName': 'Legacy Shared' });
+    const v = db.createVariant(pid, 'CL', 'coverletter');
+    expect(db.getLetterHeader(v)).toBeNull();
+    expect(db.resolveVariant(v).coverletter.recipientName).toBe('Legacy Shared');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Legacy import + seeding
 // ---------------------------------------------------------------------------
 
