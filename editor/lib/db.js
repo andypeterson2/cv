@@ -167,6 +167,12 @@ class CvDatabase {
       deleteLetterSection: p('DELETE FROM variant_letter_sections WHERE id = ?'),
       updateLetterSectionOrder: p('UPDATE variant_letter_sections SET sort_order = ? WHERE id = ?'),
       maxLetterSectionOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM variant_letter_sections WHERE variant_id = ?'),
+
+      // Variant letter header (per-variant cover-letter header — see migration 011)
+      getLetterHeader: p('SELECT recipient_name, recipient_address, opening, closing FROM variant_letter_header WHERE variant_id = ?'),
+      upsertLetterHeader: p(`INSERT INTO variant_letter_header (variant_id, recipient_name, recipient_address, opening, closing)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(variant_id) DO UPDATE SET recipient_name = excluded.recipient_name, recipient_address = excluded.recipient_address, opening = excluded.opening, closing = excluded.closing`),
     };
   }
 
