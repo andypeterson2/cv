@@ -65,16 +65,13 @@ class ImportExport {
         letterSections: v.kind === 'coverletter'
           ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
           : undefined,
-        header: v.kind === 'coverletter'
-          ? (this.getLetterHeader(v.id) || this.getCoverletterHeader(personId))
-          : undefined,
+        header: v.kind === 'coverletter' ? this.getLetterHeader(v.id) : undefined,
       };
     });
 
     return {
       name: person.name,
       personal: this.getPersonal(personId),
-      coverletter: this.getCoverletterHeader(personId),
       sections,
       variants,
       tagAliases: this.getTagAliases(personId),
@@ -100,11 +97,6 @@ class ImportExport {
   _importNewShape(personId, data) {
     const tx = this.db.transaction(() => {
       if (data.personal) this.setPersonal(personId, data.personal);
-      if (data.coverletter) {
-        const header = {};
-        for (const [k, v] of Object.entries(data.coverletter)) header['coverletter.' + k] = v;
-        if (Object.keys(header).length) this.setPersonSettings(personId, header);
-      }
 
       // Content, tracking ids by position for override mapping.
       const sectionIdBySlug = {};
@@ -142,7 +134,9 @@ class ImportExport {
           if (iid != null) this.setItemOverride(variantId, iid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
         }
         for (const s of (v.letterSections || [])) this.createLetterSection(variantId, s.title || '', s.body || '');
-        if (v.header) this.setLetterHeader(variantId, v.header);
+        // per-variant header; older exports carried it once at the top level (data.coverletter)
+        const header = v.header || (v.kind === 'coverletter' ? data.coverletter : null);
+        if (header) this.setLetterHeader(variantId, header);
       }
 
       // Aliases (exported content is already canonical, so a plain upsert is
@@ -179,16 +173,8 @@ class ImportExport {
    */
   importLegacyData(personId, data) {
     const tx = this.db.transaction(() => {
-      // personal + coverletter header
+      // personal (the cover-letter header is applied to the letter variant below)
       if (data.personal) this.setPersonal(personId, data.personal);
-      if (data.coverletter) {
-        const header = {};
-        for (const [k, v] of Object.entries(data.coverletter)) {
-          if (k === 'sections') continue;
-          header['coverletter.' + k] = v;
-        }
-        if (Object.keys(header).length) this.setPersonSettings(personId, header);
-      }
 
       const blobSections = Array.isArray(data.sections) ? data.sections : [];
       const cvDoc = (data.documents && Array.isArray(data.documents.cv)) ? data.documents.cv : [];
@@ -258,6 +244,7 @@ class ImportExport {
       if (clSections.length) {
         const clId = this.createVariant(personId, 'Cover Letter', 'coverletter');
         for (const s of clSections) this.createLetterSection(clId, s.title || '', s.body || '');
+        if (data.coverletter) this.setLetterHeader(clId, data.coverletter); // header (ignores `sections`)
       }
     });
     tx();

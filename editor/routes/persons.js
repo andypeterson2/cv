@@ -92,14 +92,8 @@ module.exports = function createPersonsRouter(getDb) {
     res.json({ success: true });
   }));
 
-  // ---- Cover-letter header (recipient / salutation / closing, per-person) ----
-
-  router.patch('/:pid/coverletter', validate('coverletter'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
-    getDb().setCoverletterHeader(id, req.body);
-    res.json({ success: true });
-  }));
+  // The cover-letter header moved to a per-variant table + PATCH
+  // /variants/:id/header (design #14); the old per-person route is gone.
 
   // ---- Export / import ----
 

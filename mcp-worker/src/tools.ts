@@ -110,10 +110,11 @@ const toolDefs: ToolDef[] = [
   {
     name: "cv_get_main",
     description:
-      "Return a person's FULL main CV with stable ids: {person, personal, coverletter, " +
+      "Return a person's FULL main CV with stable ids: {person, personal, " +
       "sections:[{id,slug,type,title,sortOrder,entries:[{id,fields,tags,items:[{id,content,title,tags}]}]}], " +
       "variants:[{id,name,kind,rules,sections}], tags, tagAliases}. Read this once, then edit by id. This is the " +
-      "canonical read — ids here are valid for every edit/tag/override tool.",
+      "canonical read — ids here are valid for every edit/tag/override tool. (Cover-letter headers are per-variant " +
+      "now — see cv_resolve_variant / the letter-section tools, not a top-level `coverletter`.)",
     inputSchema: { type: "object", properties: { person_id: personId }, required: ["person_id"], additionalProperties: false },
     handler: (a) => api("GET", `/api/persons/${enc(a.person_id)}`),
   },

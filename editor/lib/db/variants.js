@@ -179,27 +179,20 @@ class VariantStore {
 
   // ---- cover-letter header (per variant; see migration 011) ----
 
-  /** The variant's own header row (camelCase), or null if it has none. */
+  /** The variant's header (camelCase); empty-string fields when it has no row. */
   getLetterHeader(variantId) {
     const r = this._stmts.getLetterHeader.get(variantId);
-    if (!r) return null;
     return {
-      recipientName: r.recipient_name,
-      recipientAddress: r.recipient_address,
-      opening: r.opening,
-      closing: r.closing,
+      recipientName: r?.recipient_name ?? '',
+      recipientAddress: r?.recipient_address ?? '',
+      opening: r?.opening ?? '',
+      closing: r?.closing ?? '',
     };
   }
 
   /** Upsert a partial header — unspecified fields keep their current value. */
   setLetterHeader(variantId, fields) {
-    const cur = this.getLetterHeader(variantId) || {
-      recipientName: '',
-      recipientAddress: '',
-      opening: '',
-      closing: '',
-    };
-    const m = { ...cur, ...fields };
+    const m = { ...this.getLetterHeader(variantId), ...fields };
     this._stmts.upsertLetterHeader.run(
       variantId,
       m.recipientName ?? '',
@@ -243,9 +236,7 @@ class VariantStore {
       const { style, spacing, fonts } = this._renderSettings();
 
       if (v.kind === 'coverletter') {
-        // per-variant header, falling back to the legacy person-level header for
-        // variants created before the split (migration 011)
-        const coverletter = this.getLetterHeader(variantId) || this.getCoverletterHeader(personId);
+        const coverletter = this.getLetterHeader(variantId);
         coverletter.sections = this.getLetterSections(variantId).map((s) => ({ title: s.title, body: s.body }));
         return { personal, sections: [], coverletter, variant: 'coverletter', style, spacing, fonts };
       }

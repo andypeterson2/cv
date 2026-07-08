@@ -51,15 +51,6 @@ module.exports = {
     for (const [k, v] of Object.entries(fields)) map['personal.' + k] = v;
     this.setPersonSettings(personId, map);
   },
-
-  /** coverletter.* header settings → flat object (no `sections`). */
-  getCoverletterHeader(personId) {
-    return stripPrefix(this.getPersonSettings(personId, 'coverletter'), 'coverletter.');
-  },
-
-  setCoverletterHeader(personId, fields) {
-    const map = {};
-    for (const [k, v] of Object.entries(fields)) map['coverletter.' + k] = v;
-    this.setPersonSettings(personId, map);
-  },
+  // The cover-letter header is per-variant now (variant_letter_header, design #14),
+  // no longer a `coverletter.*` person setting — see db/variants.js.
 };
