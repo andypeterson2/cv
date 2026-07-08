@@ -282,6 +282,18 @@ const updateLetterSectionSchema = {
   additionalProperties: false,
 };
 
+const letterHeaderSchema = {
+  type: 'object',
+  properties: {
+    recipientName: { type: 'string' },
+    recipientAddress: { type: 'string' },
+    opening: { type: 'string' },
+    closing: { type: 'string' },
+  },
+  minProperties: 1,
+  additionalProperties: false,
+};
+
 // ---------------------------------------------------------------------------
 
 const schemas = {
@@ -310,6 +322,7 @@ const schemas = {
   variantOverride: variantOverrideSchema,
   createLetterSection: createLetterSectionSchema,
   updateLetterSection: updateLetterSectionSchema,
+  letterHeader: letterHeaderSchema,
 };
 
 const validators = {};

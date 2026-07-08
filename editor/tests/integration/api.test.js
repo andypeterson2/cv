@@ -284,6 +284,22 @@ describe('Variants', () => {
     expect(resolved.coverletter.sections.map((s) => s.title)).toEqual(['Intro']);
   });
 
+  test('coverletter variant: per-variant header via PATCH /header, GET, resolve', async () => {
+    const v = (await request('POST', `/api/persons/${pid}/variants`, { name: 'To Acme', kind: 'coverletter' })).body.id;
+    expect((await request('PATCH', `/api/variants/${v}/header`, { recipientName: 'Acme', opening: 'Dear Acme,' })).status).toBe(200);
+
+    expect((await request('GET', `/api/variants/${v}`)).body.header).toMatchObject({ recipientName: 'Acme', opening: 'Dear Acme,' });
+    expect((await request('GET', `/api/variants/${v}/resolve`)).body.coverletter.recipientName).toBe('Acme');
+
+    // a second letter on the same person keeps its own recipient — the whole point
+    const v2 = (await request('POST', `/api/persons/${pid}/variants`, { name: 'To Globex', kind: 'coverletter' })).body.id;
+    await request('PATCH', `/api/variants/${v2}/header`, { recipientName: 'Globex' });
+    expect((await request('GET', `/api/variants/${v}`)).body.header.recipientName).toBe('Acme');
+    expect((await request('GET', `/api/variants/${v2}`)).body.header.recipientName).toBe('Globex');
+
+    expect((await request('PATCH', `/api/variants/${v}/header`, {})).status).toBe(400); // empty rejected
+  });
+
   test('invalid kind → 400; unknown variant → 404', async () => {
     expect((await request('POST', `/api/persons/${pid}/variants`, { name: 'X', kind: 'bad' })).status).toBe(400);
     expect((await request('GET', '/api/variants/99999')).status).toBe(404);
