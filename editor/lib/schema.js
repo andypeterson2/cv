@@ -291,6 +291,19 @@ const letterHeaderSchema = {
 };
 
 // ---------------------------------------------------------------------------
+// Versions (ADR-006)
+// ---------------------------------------------------------------------------
+
+// Only `label` is accepted; the checkpoint's content is snapshotted server-side
+// from the person's authoritative state, so any client-sent `doc` is stripped
+// (ajv removeAdditional: 'all').
+const createVersionSchema = {
+  type: 'object',
+  properties: { label: { type: 'string', maxLength: 200 } },
+  additionalProperties: false,
+};
+
+// ---------------------------------------------------------------------------
 
 const schemas = {
   settings: settingsSchema,
@@ -318,6 +331,7 @@ const schemas = {
   createLetterSection: createLetterSectionSchema,
   updateLetterSection: updateLetterSectionSchema,
   letterHeader: letterHeaderSchema,
+  createVersion: createVersionSchema,
 };
 
 const validators = {};

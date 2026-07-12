@@ -111,6 +111,32 @@ module.exports = function createPersonsRouter(getDb) {
     res.json({ success: true });
   }));
 
+  // ---- Version history (ADR-006 increment 1) ----
+  // Reads of a public person's list stay open; snapshot + restore are writes, so
+  // tokenAuth gates them to the owner (see server.js). A checkpoint snapshots the
+  // person's authoritative state server-side; restore re-imports it over the person.
+
+  router.get('/:pid/versions', wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    requirePerson(id);
+    res.json({ versions: getDb().listVersions(id) });
+  }));
+
+  router.post('/:pid/versions', validate('createVersion'), wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    requirePerson(id);
+    const vid = getDb().createVersion(id, (req.body && req.body.label) || '');
+    res.status(201).json({ id: Number(vid) });
+  }));
+
+  router.post('/:pid/versions/:vid/restore', wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    const vid = intParam(req.params.vid, 'version id');
+    requirePerson(id);
+    if (!getDb().restoreVersion(id, vid)) throw new NotFoundError('Version not found');
+    res.json({ success: true });
+  }));
+
   // ---- Tag vocabulary ----
 
   router.get('/:pid/tags', wrap((req, res) => {
