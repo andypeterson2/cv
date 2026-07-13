@@ -122,6 +122,16 @@ module.exports = function createPersonsRouter(getDb) {
     res.json({ versions: getDb().listVersions(id) });
   }));
 
+  // One checkpoint in full, including its doc snapshot (for the diff view).
+  router.get('/:pid/versions/:vid', wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    const vid = intParam(req.params.vid, 'version id');
+    requirePerson(id);
+    const version = getDb().getVersion(id, vid);
+    if (!version) throw new NotFoundError('Version not found');
+    res.json(version);
+  }));
+
   router.post('/:pid/versions', validate('createVersion'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
     requirePerson(id);
