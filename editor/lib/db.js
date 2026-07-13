@@ -63,6 +63,7 @@ class CvDatabase {
       insertVersion: p('INSERT INTO versions (person_id, label, hash, doc, created_at) VALUES (?, ?, ?, ?, ?)'),
       versionsByPerson: p('SELECT id, label, created_at FROM versions WHERE person_id = ? ORDER BY id DESC'),
       versionDoc: p('SELECT doc FROM versions WHERE id = ? AND person_id = ?'),
+      versionFull: p('SELECT id, label, created_at, doc FROM versions WHERE id = ? AND person_id = ?'),
       clearSections: p('DELETE FROM sections WHERE person_id = ?'),
       clearVariants: p('DELETE FROM variants WHERE person_id = ?'),
       clearPersonSettings: p('DELETE FROM person_settings WHERE person_id = ?'),

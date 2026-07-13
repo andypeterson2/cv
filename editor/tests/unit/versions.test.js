@@ -90,6 +90,19 @@ describe('Versions (ADR-006)', () => {
     expect(db.getVersionDoc(other, db.listVersions(pid)[0].id)).toBeNull();
   });
 
+  test('getVersion returns metadata + parsed doc; null for unknown or wrong person', () => {
+    buildMain();
+    const v1 = Number(db.createVersion(pid, 'cp'));
+    const full = db.getVersion(pid, v1);
+    expect(full.id).toBe(v1);
+    expect(full.label).toBe('cp');
+    expect(typeof full.createdAt).toBe('number');
+    expect(Array.isArray(full.doc.sections)).toBe(true);
+    expect(db.getVersion(pid, 99999)).toBeNull();
+    const other = db.createPerson('Other');
+    expect(db.getVersion(other, v1)).toBeNull(); // scoped per person
+  });
+
   test('deleting a person cascades its versions away', () => {
     buildMain();
     db.createVersion(pid, 'cp');
