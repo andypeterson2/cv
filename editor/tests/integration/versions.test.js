@@ -115,4 +115,15 @@ describe('Version endpoints', () => {
     const res = await request('POST', `/api/persons/${pid}/versions/99999/restore`);
     expect(res.status).toBe(404);
   });
+
+  test('GET one version returns its full doc (for the diff); 404 for unknown', async () => {
+    await addSection('experience');
+    const vid = (await request('POST', `/api/persons/${pid}/versions`, { label: 'cp' })).body.id;
+    const res = await request('GET', `/api/persons/${pid}/versions/${vid}`);
+    expect(res.status).toBe(200);
+    expect(res.body.label).toBe('cp');
+    expect(typeof res.body.createdAt).toBe('number');
+    expect(Array.isArray(res.body.doc.sections)).toBe(true);
+    expect((await request('GET', `/api/persons/${pid}/versions/99999`)).status).toBe(404);
+  });
 });

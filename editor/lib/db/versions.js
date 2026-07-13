@@ -34,6 +34,14 @@ class Versions {
     return row ? JSON.parse(row.doc) : null;
   }
 
+  /** One checkpoint in full — metadata + parsed doc, scoped to the person — or null. */
+  getVersion(personId, versionId) {
+    const row = this._stmts.versionFull.get(versionId, personId);
+    return row
+      ? { id: row.id, label: row.label, createdAt: row.created_at, doc: JSON.parse(row.doc) }
+      : null;
+  }
+
   /**
    * Restore a checkpoint: clear the person's content, then re-import the blob — one
    * transaction (importPersonData's own transaction nests as a savepoint). The
