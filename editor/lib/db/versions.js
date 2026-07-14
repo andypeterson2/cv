@@ -11,21 +11,42 @@
 const { createHash } = require('crypto');
 
 class Versions {
-  /** Snapshot the person's current content as a checkpoint. Returns the new id, or null. */
-  createVersion(personId, label = '') {
+  /**
+   * Snapshot the person's current content as a checkpoint on `branch`, descending
+   * from `parent`. Returns the new id, or null. (ADR-006 inc 3 adds branch/parent.)
+   */
+  createVersion(personId, label = '', branch = 'main', parent = null) {
     const doc = this.getPersonExport(personId);
     if (!doc) return null;
     const json = JSON.stringify(doc);
     const hash = createHash('sha256').update(json).digest('hex');
-    return this._stmts.insertVersion.run(personId, label || '', hash, json, Date.now())
-      .lastInsertRowid;
+    return this._stmts.insertVersion.run(
+      personId,
+      label || '',
+      hash,
+      json,
+      Date.now(),
+      branch || 'main',
+      parent ?? null,
+    ).lastInsertRowid;
   }
 
   /** Checkpoints for a person, newest first — metadata only (the doc blob is omitted). */
   listVersions(personId) {
-    return this._stmts.versionsByPerson
-      .all(personId)
-      .map((r) => ({ id: r.id, label: r.label, createdAt: r.created_at }));
+    return this._stmts.versionsByPerson.all(personId).map((r) => ({
+      id: r.id,
+      label: r.label,
+      createdAt: r.created_at,
+      branch: r.branch,
+      tag: r.tag ?? undefined,
+      parent: r.parent_id ?? undefined,
+    }));
+  }
+
+  /** Set (or clear, with a falsy value) a checkpoint's frozen provenance tag. */
+  setTag(personId, versionId, tag) {
+    const value = tag && String(tag).trim() ? String(tag).trim() : null;
+    return this._stmts.setVersionTag.run(value, versionId, personId).changes > 0;
   }
 
   /** The stored document blob for one checkpoint (scoped to the person), or null. */
@@ -38,7 +59,15 @@ class Versions {
   getVersion(personId, versionId) {
     const row = this._stmts.versionFull.get(versionId, personId);
     return row
-      ? { id: row.id, label: row.label, createdAt: row.created_at, doc: JSON.parse(row.doc) }
+      ? {
+          id: row.id,
+          label: row.label,
+          createdAt: row.created_at,
+          branch: row.branch,
+          tag: row.tag ?? undefined,
+          parent: row.parent_id ?? undefined,
+          doc: JSON.parse(row.doc),
+        }
       : null;
   }
 

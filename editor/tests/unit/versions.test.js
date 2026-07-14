@@ -103,6 +103,33 @@ describe('Versions (ADR-006)', () => {
     expect(db.getVersion(other, v1)).toBeNull(); // scoped per person
   });
 
+  test('branches: createVersion records branch + parent; listVersions returns them', () => {
+    buildMain();
+    const v1 = Number(db.createVersion(pid, 'main-1', 'main', null));
+    const v2 = Number(db.createVersion(pid, 'industry-1', 'industry', v1));
+    const byId = Object.fromEntries(db.listVersions(pid).map((v) => [v.id, v]));
+    expect(byId[v1].branch).toBe('main');
+    expect(byId[v2].branch).toBe('industry');
+    expect(byId[v2].parent).toBe(v1);
+  });
+
+  test('a version defaults to the main branch', () => {
+    buildMain();
+    const v = Number(db.createVersion(pid, 'cp'));
+    expect(db.listVersions(pid).find((x) => x.id === v).branch).toBe('main');
+  });
+
+  test('tags: setTag sets/clears a provenance name; surfaces in list + getVersion', () => {
+    buildMain();
+    const v1 = Number(db.createVersion(pid, 'cp'));
+    expect(db.setTag(pid, v1, 'sent-to-google')).toBe(true);
+    expect(db.listVersions(pid)[0].tag).toBe('sent-to-google');
+    expect(db.getVersion(pid, v1).tag).toBe('sent-to-google');
+    db.setTag(pid, v1, ''); // clear
+    expect(db.getVersion(pid, v1).tag).toBeUndefined();
+    expect(db.setTag(pid, 99999, 'x')).toBe(false); // unknown id
+  });
+
   test('deleting a person cascades its versions away', () => {
     buildMain();
     db.createVersion(pid, 'cp');

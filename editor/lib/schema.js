@@ -299,7 +299,17 @@ const letterHeaderSchema = {
 // (ajv removeAdditional: 'all').
 const createVersionSchema = {
   type: 'object',
-  properties: { label: { type: 'string', maxLength: 200 } },
+  properties: {
+    label: { type: 'string', maxLength: 200 },
+    branch: { type: 'string', maxLength: 100 },
+    parent: { type: 'integer', minimum: 1 },
+  },
+  additionalProperties: false,
+};
+
+const tagVersionSchema = {
+  type: 'object',
+  properties: { tag: { type: 'string', maxLength: 100 } },
   additionalProperties: false,
 };
 
@@ -332,6 +342,7 @@ const schemas = {
   updateLetterSection: updateLetterSectionSchema,
   letterHeader: letterHeaderSchema,
   createVersion: createVersionSchema,
+  tagVersion: tagVersionSchema,
 };
 
 const validators = {};

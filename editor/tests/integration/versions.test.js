@@ -116,6 +116,35 @@ describe('Version endpoints', () => {
     expect(res.status).toBe(404);
   });
 
+  test('branches + tags round-trip over HTTP', async () => {
+    await addSection('experience');
+    const v1 = (await request('POST', `/api/persons/${pid}/versions`, { label: 'main-1' })).body.id;
+    const v2 = (
+      await request('POST', `/api/persons/${pid}/versions`, {
+        label: 'ind-1',
+        branch: 'industry',
+        parent: v1,
+      })
+    ).body.id;
+    const byId = Object.fromEntries(
+      (await request('GET', `/api/persons/${pid}/versions`)).body.versions.map((v) => [v.id, v]),
+    );
+    expect(byId[v1].branch).toBe('main');
+    expect(byId[v2].branch).toBe('industry');
+    expect(byId[v2].parent).toBe(v1);
+
+    const tag = await request('POST', `/api/persons/${pid}/versions/${v1}/tag`, {
+      tag: 'sent-to-google',
+    });
+    expect(tag.status).toBe(200);
+    expect((await request('GET', `/api/persons/${pid}/versions/${v1}`)).body.tag).toBe(
+      'sent-to-google',
+    );
+    expect(
+      (await request('POST', `/api/persons/${pid}/versions/99999/tag`, { tag: 'x' })).status,
+    ).toBe(404);
+  });
+
   test('GET one version returns its full doc (for the diff); 404 for unknown', async () => {
     await addSection('experience');
     const vid = (await request('POST', `/api/persons/${pid}/versions`, { label: 'cp' })).body.id;
