@@ -59,6 +59,18 @@ class CvDatabase {
       deletePerson: p('DELETE FROM persons WHERE id = ?'),
       countPersons: p('SELECT COUNT(*) AS cnt FROM persons'),
 
+      // Versions (ADR-006) + the per-person content reset restore uses
+      insertVersion: p('INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+      versionsByPerson: p('SELECT id, label, created_at, branch, tag, parent_id FROM versions WHERE person_id = ? ORDER BY id DESC'),
+      versionDoc: p('SELECT doc FROM versions WHERE id = ? AND person_id = ?'),
+      versionFull: p('SELECT id, label, created_at, branch, tag, parent_id, doc FROM versions WHERE id = ? AND person_id = ?'),
+      setVersionTag: p('UPDATE versions SET tag = ? WHERE id = ? AND person_id = ?'),
+      clearSections: p('DELETE FROM sections WHERE person_id = ?'),
+      clearVariants: p('DELETE FROM variants WHERE person_id = ?'),
+      clearPersonSettings: p('DELETE FROM person_settings WHERE person_id = ?'),
+      clearTagAliases: p('DELETE FROM tag_aliases WHERE person_id = ?'),
+      clearTagCatalog: p('DELETE FROM tag_catalog WHERE person_id = ?'),
+
       // Sections
       getSectionsByPerson: p('SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE person_id = ? ORDER BY sort_order, id'),
       getSection: p('SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE id = ?'),
@@ -387,5 +399,6 @@ applyMixin(CvDatabase, require('./db/tags'));
 applyMixin(CvDatabase, require('./db/variants'));
 applyMixin(CvDatabase, require('./db/layouts'));
 applyMixin(CvDatabase, require('./db/import-export'));
+applyMixin(CvDatabase, require('./db/versions'));
 
 module.exports = CvDatabase;
