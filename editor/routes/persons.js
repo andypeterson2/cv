@@ -135,7 +135,8 @@ module.exports = function createPersonsRouter(getDb) {
   router.post('/:pid/versions', validate('createVersion'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
     requirePerson(id);
-    const vid = getDb().createVersion(id, (req.body && req.body.label) || '');
+    const b = req.body || {};
+    const vid = getDb().createVersion(id, b.label || '', b.branch || 'main', b.parent ?? null);
     res.status(201).json({ id: Number(vid) });
   }));
 
@@ -144,6 +145,17 @@ module.exports = function createPersonsRouter(getDb) {
     const vid = intParam(req.params.vid, 'version id');
     requirePerson(id);
     if (!getDb().restoreVersion(id, vid)) throw new NotFoundError('Version not found');
+    res.json({ success: true });
+  }));
+
+  // Tag a checkpoint with a frozen provenance name (ADR-006 inc 3).
+  router.post('/:pid/versions/:vid/tag', validate('tagVersion'), wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    const vid = intParam(req.params.vid, 'version id');
+    requirePerson(id);
+    if (!getDb().setTag(id, vid, (req.body && req.body.tag) || '')) {
+      throw new NotFoundError('Version not found');
+    }
     res.json({ success: true });
   }));
 
