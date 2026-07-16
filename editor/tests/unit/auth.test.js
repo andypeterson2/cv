@@ -72,4 +72,38 @@ describe('tokenAuth', () => {
     // …and open with the token
     expect(invoke(mw, 'GET', '/api/persons/19/personal', 'Bearer secret').nexted).toBe(true);
   });
+
+  // A db that resolves ownership: person 5 (non-public) owns these; variant 91 is
+  // owned by public person 1.
+  const db = {
+    ownerPersonId(kind, id) {
+      const owners = { variant: { 10: 5, 91: 1 }, section: { 37: 5 }, entry: { 244: 5 }, item: { 454: 5 } };
+      return (owners[kind] && owners[kind][id]) || null;
+    },
+  };
+  const gated = tokenAuth('secret', { publicPersonIds: '1', getDb: () => db });
+
+  test('id-addressed resources gate by their owning person, not just /persons/<id>', () => {
+    // The leak this fixes: /variants/:id/resolve returned a non-public person's whole CV, ungated.
+    expect(invoke(gated, 'GET', '/api/variants/10/resolve').status).toBe(401); // owner person 5 (non-public)
+    expect(invoke(gated, 'GET', '/api/variants/10/resolve', 'Bearer secret').nexted).toBe(true);
+    expect(invoke(gated, 'GET', '/api/sections/37').status).toBe(401);
+    expect(invoke(gated, 'GET', '/api/entries/244').status).toBe(401);
+    expect(invoke(gated, 'GET', '/api/items/454').status).toBe(401);
+  });
+
+  test("a public person's variant stays open — the demo still works", () => {
+    expect(invoke(gated, 'GET', '/api/variants/91/resolve').nexted).toBe(true); // owner person 1 (public)
+  });
+
+  test('default-deny: an unknown resource id or unrecognized read requires the token', () => {
+    expect(invoke(gated, 'GET', '/api/variants/99999/resolve').status).toBe(401); // owner unknown → null → deny
+    expect(invoke(gated, 'GET', '/api/surprise/1').status).toBe(401); // unmapped route → deny
+  });
+
+  test('non-person globals stay open without a token', () => {
+    for (const p of ['/api/persons', '/api/settings', '/api/settings/style', '/api/layouts', '/api/catalog', '/api/health']) {
+      expect(invoke(gated, 'GET', p).nexted).toBe(true);
+    }
+  });
 });

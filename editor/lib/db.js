@@ -69,6 +69,12 @@ class CvDatabase {
       // LinkedIn/Indeed/Handshake sync (015): one synced fingerprint per experience entry.
       linkedinSyncByPerson: p('SELECT entry_id, fingerprint, synced_at FROM linkedin_sync WHERE person_id = ?'),
       upsertLinkedinSync: p('INSERT INTO linkedin_sync (person_id, entry_id, fingerprint, synced_at) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, entry_id) DO UPDATE SET fingerprint = excluded.fingerprint, synced_at = excluded.synced_at'),
+
+      // Owner-person resolution for auth gating — id-addressed resources → their person.
+      ownerOfVariant: p('SELECT person_id AS pid FROM variants WHERE id = ?'),
+      ownerOfSection: p('SELECT person_id AS pid FROM sections WHERE id = ?'),
+      ownerOfEntry: p('SELECT s.person_id AS pid FROM entries e JOIN sections s ON s.id = e.section_id WHERE e.id = ?'),
+      ownerOfItem: p('SELECT s.person_id AS pid FROM items i JOIN entries e ON e.id = i.entry_id JOIN sections s ON s.id = e.section_id WHERE i.id = ?'),
       clearSections: p('DELETE FROM sections WHERE person_id = ?'),
       clearVariants: p('DELETE FROM variants WHERE person_id = ?'),
       clearPersonSettings: p('DELETE FROM person_settings WHERE person_id = ?'),
@@ -376,6 +382,23 @@ class CvDatabase {
       tagAliases: this.getTagAliases(personId),
       tagCatalog: this.getTagCatalog(personId),
     };
+  }
+
+  /**
+   * The person that owns an id-addressed resource, or null if it doesn't exist.
+   * `kind` ∈ variant | section | entry | item. Used by the auth gate to decide
+   * whether a read exposes a non-public person's data (see lib/auth.js).
+   */
+  ownerPersonId(kind, id) {
+    const stmt = {
+      variant: this._stmts.ownerOfVariant,
+      section: this._stmts.ownerOfSection,
+      entry: this._stmts.ownerOfEntry,
+      item: this._stmts.ownerOfItem,
+    }[kind];
+    if (!stmt) return null;
+    const row = stmt.get(id);
+    return row ? row.pid : null;
   }
 
   // Export / import / seeding lives in ./db/import-export.js.
