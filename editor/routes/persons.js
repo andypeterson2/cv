@@ -2,6 +2,7 @@ const express = require('express');
 const { validate } = require('../lib/schema');
 const { AppError, ConflictError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
+const linkedin = require('../lib/linkedin');
 
 /** Parse a numeric :pid / :id route param or throw 400. */
 function intParam(value, label = 'id') {
@@ -304,6 +305,57 @@ module.exports = function createPersonsRouter(getDb) {
       if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('A variant with that name already exists');
       throw e;
     }
+  }));
+
+  // ---- LinkedIn / Indeed / Handshake export + drift tracking ----
+  // Turn a resolved variant into paste-ready work-history blocks (lib/linkedin) and
+  // track a per-entry fingerprint so status names exactly which positions drifted
+  // since the last paste. Person-scoped ON PURPOSE: a non-public person's blocks
+  // stay behind tokenAuth's /persons/<id> read-gate — a /variants/:id GET would not.
+  // `variant` selects the lens (default: the person's cv-kind variant, else first).
+
+  const pickVariant = (pid, raw) => {
+    const variants = getDb().getVariants(pid);
+    if (raw != null && raw !== '') {
+      const v = variants.find((x) => x.id === intParam(raw, 'variant id'));
+      if (!v) throw new NotFoundError('Variant not found for this person');
+      return v.id;
+    }
+    const v = variants.find((x) => x.kind === 'cv') || variants[0];
+    if (!v) throw new NotFoundError('No variant to export');
+    return v.id;
+  };
+
+  const FORMATS = new Set(['linkedin', 'plaintext', 'markdown']);
+
+  router.get('/:pid/linkedin', wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    requirePerson(id);
+    const variantId = pickVariant(id, req.query.variant);
+    const format = FORMATS.has(req.query.format) ? req.query.format : 'linkedin';
+    res.json({ variantId, ...linkedin.exportLinkedin(getDb().resolveVariant(variantId), format) });
+  }));
+
+  router.get('/:pid/linkedin/status', wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    requirePerson(id);
+    const variantId = pickVariant(id, req.query.variant);
+    const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
+    res.json({ variantId, positions: getDb().linkedinStatus(id, positions) });
+  }));
+
+  router.post('/:pid/linkedin/mark-synced', wrap((req, res) => {
+    const id = intParam(req.params.pid, 'person id');
+    requirePerson(id);
+    const b = req.body || {};
+    const variantId = pickVariant(id, b.variant);
+    const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
+    const only = Array.isArray(b.entryIds) && b.entryIds.length ? new Set(b.entryIds) : null;
+    const entries = positions
+      .filter((p) => !only || only.has(p.entryId))
+      .map((p) => ({ entryId: p.entryId, fingerprint: p.fingerprint }));
+    const marked = getDb().markLinkedinSynced(id, entries, new Date().toISOString());
+    res.json({ variantId, marked });
   }));
 
   return router;
