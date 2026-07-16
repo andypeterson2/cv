@@ -21,24 +21,27 @@ import { signingSecret, signPayload } from "./sign";
 
 const enc = encodeURIComponent;
 
-type CvEnv = { CV_EDITOR_URL?: string; CV_EDITOR_TOKEN?: string; CV_EDITOR_AUTH?: string; MCP_PUBLIC_URL?: string; COOKIE_SECRET?: string; GOOGLE_CLIENT_SECRET?: string };
+type CvEnv = { CV_EDITOR_URL?: string; CV_EDITOR_TOKEN?: string; CV_EDITOR_AUTH?: string; CV_ORIGIN_SECRET?: string; MCP_PUBLIC_URL?: string; COOKIE_SECRET?: string; GOOGLE_CLIENT_SECRET?: string };
 
 /** Resolve the cv-editor base URL + Authorization header from the Worker env.
  *  Requires CV_EDITOR_URL (set in wrangler.jsonc to the Railway cv) — no localhost
  *  default, so a misconfiguration fails loudly instead of silently hitting localhost. */
-function cvConfig(): { base: string; auth?: string } {
+function cvConfig(): { base: string; auth?: string; originSecret?: string } {
   const e = env as unknown as CvEnv;
   if (!e.CV_EDITOR_URL) throw new Error("CV_EDITOR_URL is not configured on this Worker.");
   const base = e.CV_EDITOR_URL.replace(/\/$/, "");
   const auth = e.CV_EDITOR_AUTH || (e.CV_EDITOR_TOKEN ? `Bearer ${e.CV_EDITOR_TOKEN}` : undefined);
-  return { base, auth };
+  // This Worker is one of cv's two front doors; the origin rejects callers that
+  // don't present this (see cv editor/lib/origin-guard.js). Undefined → header
+  // omitted, which is fine while the origin guard is disabled or soft.
+  return { base, auth, originSecret: e.CV_ORIGIN_SECRET };
 }
 
 type ApiOpts = { expectBinary?: boolean };
 
 /** HTTP helper — same request construction + contract-error mapping as the stdio server. */
 export async function api(method: string, path: string, body?: unknown, { expectBinary = false }: ApiOpts = {}): Promise<any> {
-  const { base, auth } = cvConfig();
+  const { base, auth, originSecret } = cvConfig();
   let res: Response;
   try {
     res = await fetch(base + path, {
@@ -46,6 +49,7 @@ export async function api(method: string, path: string, body?: unknown, { expect
       headers: {
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(auth ? { Authorization: auth } : {}),
+        ...(originSecret ? { "X-Origin-Secret": originSecret } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
