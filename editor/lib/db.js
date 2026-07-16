@@ -65,6 +65,10 @@ class CvDatabase {
       versionDoc: p('SELECT doc FROM versions WHERE id = ? AND person_id = ?'),
       versionFull: p('SELECT id, label, created_at, branch, tag, parent_id, doc FROM versions WHERE id = ? AND person_id = ?'),
       setVersionTag: p('UPDATE versions SET tag = ? WHERE id = ? AND person_id = ?'),
+
+      // LinkedIn/Indeed/Handshake sync (015): one synced fingerprint per experience entry.
+      linkedinSyncByPerson: p('SELECT entry_id, fingerprint, synced_at FROM linkedin_sync WHERE person_id = ?'),
+      upsertLinkedinSync: p('INSERT INTO linkedin_sync (person_id, entry_id, fingerprint, synced_at) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, entry_id) DO UPDATE SET fingerprint = excluded.fingerprint, synced_at = excluded.synced_at'),
       clearSections: p('DELETE FROM sections WHERE person_id = ?'),
       clearVariants: p('DELETE FROM variants WHERE person_id = ?'),
       clearPersonSettings: p('DELETE FROM person_settings WHERE person_id = ?'),
@@ -400,5 +404,6 @@ applyMixin(CvDatabase, require('./db/variants'));
 applyMixin(CvDatabase, require('./db/layouts'));
 applyMixin(CvDatabase, require('./db/import-export'));
 applyMixin(CvDatabase, require('./db/versions'));
+applyMixin(CvDatabase, require('./db/linkedin'));
 
 module.exports = CvDatabase;

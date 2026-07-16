@@ -710,6 +710,47 @@ const toolDefs: ToolDef[] = [
     inputSchema: { type: "object", properties: { variant_id: variantId, ids: idList }, required: ["variant_id", "ids"], additionalProperties: false },
     handler: (a) => api("PATCH", `/api/variants/${enc(a.variant_id)}/letter-sections/order`, { ids: a.ids }),
   },
+
+  // ---- LinkedIn / Indeed / Handshake export + drift tracking ----
+  {
+    name: "cv_export_linkedin",
+    description:
+      "Export a variant's work history as paste-ready blocks for LinkedIn / Indeed / Handshake (none exposes an " +
+      "individual profile-write API, so the CV is the source of truth and you paste). Returns {variantId, format, limits, " +
+      "positions:[{entryId,title,company,location,start,end,description,overLimit,fingerprint}]}. person_id is required; " +
+      "variant_id picks the lens (default: the person's cv variant). format ∈ linkedin (• bullets) | plaintext | markdown (- bullets).",
+    inputSchema: { type: "object", properties: { person_id: personId, variant_id: variantId, format: { type: "string", enum: ["linkedin", "plaintext", "markdown"], description: "Bullet style (default: linkedin)" } }, required: ["person_id"], additionalProperties: false },
+    handler: (a) => {
+      const qs = new URLSearchParams();
+      if (a.variant_id != null) qs.set("variant", String(a.variant_id));
+      if (a.format) qs.set("format", a.format);
+      const q = qs.toString();
+      return api("GET", `/api/persons/${enc(a.person_id)}/linkedin${q ? `?${q}` : ""}`);
+    },
+  },
+  {
+    name: "cv_linkedin_status",
+    description:
+      "Per-entry LinkedIn sync status for a variant: synced | drifted | new, comparing each position's current fingerprint " +
+      "against what cv_linkedin_mark_synced last stamped — names exactly which positions are now stale on LinkedIn. Returns " +
+      "{variantId, positions:[{entryId,title,company,state,syncedAt}]}. person_id required; variant_id defaults to the cv variant.",
+    inputSchema: { type: "object", properties: { person_id: personId, variant_id: variantId }, required: ["person_id"], additionalProperties: false },
+    handler: (a) => {
+      const q = a.variant_id != null ? `?variant=${enc(a.variant_id)}` : "";
+      return api("GET", `/api/persons/${enc(a.person_id)}/linkedin/status${q}`);
+    },
+  },
+  {
+    name: "cv_linkedin_mark_synced",
+    description:
+      "After pasting into LinkedIn, stamp the current fingerprints as synced — future cv_linkedin_status reads them as " +
+      "synced until the CV changes. entry_ids limits which entries to stamp (default: all current positions). Returns {variantId, marked}.",
+    inputSchema: { type: "object", properties: { person_id: personId, variant_id: variantId, entry_ids: { type: "array", items: { type: "integer" }, description: "Entry ids to mark synced (default: all current positions)" } }, required: ["person_id"], additionalProperties: false },
+    handler: (a) => api("POST", `/api/persons/${enc(a.person_id)}/linkedin/mark-synced`, {
+      ...(a.variant_id != null ? { variant: a.variant_id } : {}),
+      ...(a.entry_ids ? { entryIds: a.entry_ids } : {}),
+    }),
+  },
 ];
 
 // The advertised tool list (no handlers) + name→def map.
