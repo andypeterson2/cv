@@ -142,7 +142,7 @@ app.get('/api', (req, res) => {
 // CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated. Public demo
 // persons (e.g. the Jane Doe seed, id 1) stay readable unauthenticated; any other
 // person's reads + all writes + the /pdf compile require the token.
-app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN, { publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1' }));
+app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN, { publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1', getDb }));
 
 // ---------------------------------------------------------------------------
 // Mount routers — every content route is id-addressable; there is no active
