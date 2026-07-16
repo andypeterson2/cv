@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const CvDatabase = require('./lib/db');
 const { tokenAuth } = require('./lib/auth');
+const { originGuard } = require('./lib/origin-guard');
 const { buildHealth } = require('./lib/health');
 const pkg = require('./package.json');
 
@@ -113,6 +114,16 @@ app.use(cors({
     return cb(null, ok);
   },
 }));
+// Front door: this origin is publicly reachable, so require the shared secret that
+// our gateway + MCP workers inject (health + preflight exempt — see lib/origin-guard).
+// Sits before the body parser so a rejected request never costs a 2 MB parse, and is
+// SOFT (logs only) until CV_ORIGIN_SECRET_ENFORCE=true, so the front doors can start
+// injecting before the gate closes.
+app.use(
+  originGuard(process.env.CV_ORIGIN_SECRET, {
+    enforce: process.env.CV_ORIGIN_SECRET_ENFORCE === 'true',
+  }),
+);
 app.use(express.json({ limit: '2mb' }));
 // API-only: the editor frontend is owned and served by the portal — no static serving.
 
