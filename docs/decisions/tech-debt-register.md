@@ -20,10 +20,10 @@ low-effort fix scores higher). It's a triage aid, not a law.
 
 | # | Item | Type | I | R | Eff | Score | Status |
 |---|------|------|---|---|-----|-------|--------|
-| 1 | `CV_EDITOR_TOKEN` is the **sole** gate on a publicly-reachable origin — confirm rotated + purge `/tmp/cvtok` | Security-ops | 2 | 3 | 1 | 25 | **open** (owner) |
+| 1 | `CV_EDITOR_TOKEN` rotation (no longer the *sole* gate — see item 3) + purge `/tmp/cvtok` | Security-ops | 2 | 3 | 1 | 25 | **done** (2026-07-17) |
 | 2 | LinkedIn HTTP routes had no integration test | Test | 3 | 3 | 2 | 24 | **done** (2026-07-15) |
 | 3 | Harden origin reachability — restrict the Railway origin to our front doors | Infra/Sec | 3 | 4 | 3 | 21 | **done** (2026-07-17) |
-| 4 | `test`/`test` cruft entry in person 5's **real** CV (skills id 269) — renders on export/PDF | Data | 2 | 2 | 1 | 20 | **open** (owner) |
+| 4 | `test`/`test` cruft entry in person 5's **real** CV (skills id 269) — rendered on export/PDF | Data | 2 | 2 | 1 | 20 | **done** (2026-07-17) |
 | 5 | No ADR/decision log in this repo — MCP-worker, auth model, LinkedIn design live only in memory | Docs | 2 | 2 | 2 | 16 | **in progress** (this register seeds it) |
 | 6 | Dead `mcp-server/` husk (source retired; only `node_modules/` left) | Cleanup | 2 | 1 | 1 | 15 | **done** (2026-07-15) |
 | 7 | No down-migrations / rollback path (migrations run forward-only at boot) | Infra | 1 | 2 | 3 | 9 | open (backlog) |
@@ -32,11 +32,13 @@ low-effort fix scores higher). It's a triage aid, not a law.
 
 ## Detail
 
-**1 — Token rotation.** The 2026-07-15 auth fix (see Recently resolved) made the
-token gate *correct*, but it's the only thing in front of a directly-reachable
-origin. Memory has long flagged "ROTATE it" (it lived in `/tmp/cvtok`). If it was
-ever exposed, that's a single point of total exposure. Rotate on Railway + the
-worker secret (`wrangler secret put CV_EDITOR_TOKEN`) and delete `/tmp/cvtok`.
+**1 — Token rotation (done).** Rotated by the owner 2026-07-17. It lives in THREE
+places and must match byte-for-byte: the Railway env var, and `wrangler secret put
+CV_EDITOR_TOKEN` on BOTH the MCP worker and the gateway worker. All three were
+verified in sync live — person 5 is non-public, so any read of it requires the token,
+and both a `cv_linkedin_status(5)` MCP call and the signed-in editor returned real
+data; a missed copy would 401. Item 3 also removed this from being the *sole* gate.
+Remaining manual step: delete `/tmp/cvtok` if still present.
 
 **3 — Origin hardening (done).** Both front doors — the api.andypeterson.dev gateway
 worker and the MCP worker — now inject `X-Origin-Secret`, and `lib/origin-guard.js`
@@ -47,9 +49,9 @@ Cloudflare Workers, which can't reach Railway's private network — a Cloudflare
 ideal. This reduces item 1's blast radius: a leaked token alone no longer grants
 direct-origin access.
 
-**4 — Real-CV cruft.** person 5 ("Andrew Peterson (Clean)") has a skills entry
-`{category:"test", skills:"test"}` (id 269). It's real data on a real CV — it would
-render as a "test: test" skill row in an exported PDF. Delete it in the editor.
+**4 — Real-CV cruft (done).** person 5 ("Andrew Peterson (Clean)") had a skills entry
+`{category:"test", skills:"test"}` (id 269) — real data on a real CV that would render
+as a "test: test" row in an exported PDF. Deleted 2026-07-17 via `cv_delete_entry`.
 
 **5 — Decision log.** The MCP-worker architecture (stateless-signed OAuth, signed
 PDF links), the fail-closed auth model, and the LinkedIn "downstream consumer of
@@ -65,7 +67,7 @@ read volume ever grows.
 
 ## Phased plan
 
-- **Phase 1 — quick wins:** items 2, 6 **done**; 1 & 4 are owner actions (token, data).
+- **Phase 1 — quick wins:** items 1, 2, 4, 6 **all done**.
 - **Phase 2 — real hardening:** item 3 (origin) **done**; item 5 (ADR log) still open —
   this register exists, the `adr/` entries don't yet.
 - **Phase 3 — backlog / do-if-touched:** items 7–9.
