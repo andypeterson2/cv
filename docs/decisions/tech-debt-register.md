@@ -22,7 +22,7 @@ low-effort fix scores higher). It's a triage aid, not a law.
 |---|------|------|---|---|-----|-------|--------|
 | 1 | `CV_EDITOR_TOKEN` is the **sole** gate on a publicly-reachable origin — confirm rotated + purge `/tmp/cvtok` | Security-ops | 2 | 3 | 1 | 25 | **open** (owner) |
 | 2 | LinkedIn HTTP routes had no integration test | Test | 3 | 3 | 2 | 24 | **done** (2026-07-15) |
-| 3 | Harden origin reachability — restrict the Railway origin to the gateway (shared-secret header / private networking) | Infra/Sec | 3 | 4 | 3 | 21 | **open** |
+| 3 | Harden origin reachability — restrict the Railway origin to our front doors | Infra/Sec | 3 | 4 | 3 | 21 | **done** (2026-07-17) |
 | 4 | `test`/`test` cruft entry in person 5's **real** CV (skills id 269) — renders on export/PDF | Data | 2 | 2 | 1 | 20 | **open** (owner) |
 | 5 | No ADR/decision log in this repo — MCP-worker, auth model, LinkedIn design live only in memory | Docs | 2 | 2 | 2 | 16 | **in progress** (this register seeds it) |
 | 6 | Dead `mcp-server/` husk (source retired; only `node_modules/` left) | Cleanup | 2 | 1 | 1 | 15 | **done** (2026-07-15) |
@@ -38,10 +38,14 @@ origin. Memory has long flagged "ROTATE it" (it lived in `/tmp/cvtok`). If it wa
 ever exposed, that's a single point of total exposure. Rotate on Railway + the
 worker secret (`wrangler secret put CV_EDITOR_TOKEN`) and delete `/tmp/cvtok`.
 
-**3 — Origin hardening.** Upgrades the model from "public origin, well-gated" to
-"not publicly reachable." The gateway would inject a shared secret the backend
-requires, or the backend moves to Railway private networking so only the gateway
-can reach it. This is the durable fix behind item 1.
+**3 — Origin hardening (done).** Both front doors — the api.andypeterson.dev gateway
+worker and the MCP worker — now inject `X-Origin-Secret`, and `lib/origin-guard.js`
+rejects anything that can't present it (health + OPTIONS exempt; see Recently
+resolved). Railway private networking was rejected as an option: both front doors are
+Cloudflare Workers, which can't reach Railway's private network — a Cloudflare Tunnel
+(the BFF/gateway target design) would be needed for that, which stays the eventual
+ideal. This reduces item 1's blast radius: a leaked token alone no longer grants
+direct-origin access.
 
 **4 — Real-CV cruft.** person 5 ("Andrew Peterson (Clean)") has a skills entry
 `{category:"test", skills:"test"}` (id 269). It's real data on a real CV — it would
@@ -62,10 +66,24 @@ read volume ever grows.
 ## Phased plan
 
 - **Phase 1 — quick wins:** items 2, 6 **done**; 1 & 4 are owner actions (token, data).
-- **Phase 2 — real hardening:** item 3 (origin) + finish item 5 (ADR log).
+- **Phase 2 — real hardening:** item 3 (origin) **done**; item 5 (ADR log) still open —
+  this register exists, the `adr/` entries don't yet.
 - **Phase 3 — backlog / do-if-touched:** items 7–9.
 
 ## Recently resolved
+
+- **2026-07-17 — the origin is no longer open to the internet** (`ec4b216`, enforced
+  via `CV_ORIGIN_SECRET_ENFORCE=true`). The Railway origin is publicly reachable, so
+  tokenAuth was the only thing in front of it. Now both front doors inject
+  `X-Origin-Secret` (gateway: cv-only, delete-then-set so a client can't forge it; MCP:
+  in `api()`, which also covers signed /pdf links) and `lib/origin-guard.js` rejects
+  everything else — `/health` + `/api/health` exempt (the container HEALTHCHECK hits
+  them from 127.0.0.1) and OPTIONS exempt (preflight). Rolled out in two stages (soft
+  → enforce) so the doors were injecting before the gate closed. Verified live:
+  direct origin → 403 on persons/variants/sections/catalog, health → 200, MCP tools →
+  work, signed-in editor → renders. Note for future rollouts: two builds failed inside
+  an upstream GitHub outage (Railway incident 8BVRVAAM) — a build dying at "unpacking
+  archive" with no Dockerfile steps is platform-side, not your code.
 
 - **2026-07-15 — PII leak on ungated reads** (`a050f36`). `tokenAuth` gated
   non-public reads only on `/persons/<id>` paths, so `GET /api/variants/:id/resolve`
