@@ -108,7 +108,16 @@ export const GoogleAuthHandler = {
     if (url.pathname === "/authorize") {
       // GET → show consent, embedding the parsed auth request in a signed token.
       if (request.method === "GET") {
-        const oauthReq = await provider.parseAuthRequest(request);
+        // parseAuthRequest THROWS on a malformed/incomplete request (no client_id, bad
+        // response_type — or just a scanner poking /authorize). Unhandled, that's an
+        // uncaught Worker exception: the caller gets an opaque Cloudflare 1101 and the
+        // noise buries real errors. A bad request is a 400.
+        let oauthReq;
+        try {
+          oauthReq = await provider.parseAuthRequest(request);
+        } catch {
+          return new Response("Invalid authorization request.", { status: 400 });
+        }
         // Pin the redirect target (DCR is public — the client's redirect_uri is untrusted).
         if (!isAllowedRedirect(oauthReq.redirectUri)) {
           return new Response("Unregistered redirect_uri.", { status: 400 });
@@ -126,7 +135,14 @@ export const GoogleAuthHandler = {
 
       // POST → verify the signed token (CSRF; no lookup), then redirect to Google.
       if (request.method === "POST") {
-        const form = await request.formData();
+        // Same reasoning as the GET: formData() throws on a non-form body, and an
+        // unauthenticated endpoint must not answer garbage with an uncaught throw.
+        let form: FormData;
+        try {
+          form = await request.formData();
+        } catch {
+          return new Response("Invalid authorization request.", { status: 400 });
+        }
         const oauthReq = await verifyPayload(String(form.get("t") || ""), secret, TTL_MS);
         if (!oauthReq) {
           return new Response("Consent expired or invalid — please restart the connection.", { status: 400 });

@@ -329,11 +329,20 @@ describe('Export / import round-trip', () => {
 });
 
 describe('Catalog + health', () => {
-  test('catalog returns section types; health reports persons', async () => {
+  test('catalog returns section types; health states liveness and nothing else', async () => {
     expect((await request('GET', '/api/catalog')).body.validSectionTypes).toContain('experience');
     const health = await request('GET', '/api/health');
+    // The contract's required keys (website docs/api-contract/CONTRACT.md).
     expect(health.body.status).toBe('ok');
-    expect(health.body.persons).toBeGreaterThanOrEqual(1);
+    expect(health.body.service).toBe('cv');
+    expect(typeof health.body.version).toBe('string');
+    expect(typeof health.body.uptime_s).toBe('number');
+    // …and nothing data-shaped. /health is the ONE endpoint the origin guard leaves
+    // publicly reachable (the container HEALTHCHECK needs it), so anything here is
+    // world-readable forever. It used to return `persons`, disclosing how many CVs
+    // exist. Pinned exactly so a well-meaning addition can't leak facts back.
+    expect(health.body.persons).toBeUndefined();
+    expect(Object.keys(health.body).sort()).toEqual(['service', 'status', 'uptime_s', 'version']);
   });
 });
 
