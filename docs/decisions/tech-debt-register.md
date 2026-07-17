@@ -24,7 +24,7 @@ low-effort fix scores higher). It's a triage aid, not a law.
 | 2 | LinkedIn HTTP routes had no integration test | Test | 3 | 3 | 2 | 24 | **done** (2026-07-15) |
 | 3 | Harden origin reachability — restrict the Railway origin to our front doors | Infra/Sec | 3 | 4 | 3 | 21 | **done** (2026-07-17) |
 | 4 | `test`/`test` cruft entry in person 5's **real** CV (skills id 269) — rendered on export/PDF | Data | 2 | 2 | 1 | 20 | **done** (2026-07-17) |
-| 5 | No ADR/decision log in this repo — MCP-worker, auth model, LinkedIn design live only in memory | Docs | 2 | 2 | 2 | 16 | **in progress** (this register seeds it) |
+| 5 | No ADR/decision log in this repo — MCP-worker, auth model, LinkedIn design lived only in memory | Docs | 2 | 2 | 2 | 16 | **done** (2026-07-17) |
 | 6 | Dead `mcp-server/` husk (source retired; only `node_modules/` left) | Cleanup | 2 | 1 | 1 | 15 | **done** (2026-07-15) |
 | 7 | No down-migrations / rollback path (migrations run forward-only at boot) | Infra | 1 | 2 | 3 | 9 | open (backlog) |
 | 8 | `linkedin_sync.entry_id` has no FK → orphan rows accrue after entry delete/restore | Data | 1 | 1 | 2 | 8 | open (backlog) |
@@ -53,10 +53,11 @@ direct-origin access.
 `{category:"test", skills:"test"}` (id 269) — real data on a real CV that would render
 as a "test: test" row in an exported PDF. Deleted 2026-07-17 via `cv_delete_entry`.
 
-**5 — Decision log.** The MCP-worker architecture (stateless-signed OAuth, signed
-PDF links), the fail-closed auth model, and the LinkedIn "downstream consumer of
-`resolveVariant` + fingerprint drift" design are all ADR-worthy and currently only
-in the assistant's memory. This register is step one; a short `adr/` log is step two.
+**5 — Decision log (done).** The three load-bearing calls are now recorded in
+[`adr/`](./adr/): ADR-008 (one remote MCP server + the stateless-signed OAuth gotcha),
+ADR-009 (fail-closed auth + the origin front door), ADR-010 (LinkedIn as a downstream
+consumer + the verified field mapping). They continue the **system-wide** ADR sequence
+that starts in the website repo (001–007) — see the README for the numbering rule.
 
 **7–9 — Backlog.** Not urgent; do if you're already in that code. (7) a bad
 migration can't be auto-rolled back — acceptable for a single-owner DB with
@@ -68,8 +69,7 @@ read volume ever grows.
 ## Phased plan
 
 - **Phase 1 — quick wins:** items 1, 2, 4, 6 **all done**.
-- **Phase 2 — real hardening:** item 3 (origin) **done**; item 5 (ADR log) still open —
-  this register exists, the `adr/` entries don't yet.
+- **Phase 2 — real hardening:** items 3 (origin) + 5 (ADR log) **both done**.
 - **Phase 3 — backlog / do-if-touched:** items 7–9.
 
 ## Recently resolved
