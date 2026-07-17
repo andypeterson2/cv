@@ -1,6 +1,6 @@
 # Tech-Debt Register — cv backend + MCP worker
 
-_Last updated: 2026-07-15._
+_Last updated: 2026-07-17._
 
 Scope: this repo (`editor/` Express + SQLite backend, `mcp-worker/` Cloudflare
 Worker). The **website** repo keeps its own register at
