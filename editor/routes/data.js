@@ -20,7 +20,7 @@ module.exports = function createDataRouter(getDb) {
 
   router.get('/health', (req, res) => {
     try {
-      res.json(buildHealth(getDb));
+      res.json(buildHealth());
     } catch (e) {
       res.status(500).json({ error: { code: 'internal_error', message: e.message } });
     }

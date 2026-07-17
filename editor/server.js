@@ -133,7 +133,7 @@ app.use(express.json({ limit: '2mb' }));
 
 app.get('/health', (req, res) => {
   try {
-    res.json(buildHealth(getDb));
+    res.json(buildHealth());
   } catch (e) {
     res.status(500).json({ error: { code: 'internal_error', message: e.message } });
   }
