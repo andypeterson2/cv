@@ -213,7 +213,7 @@ class TagStore {
    * Suggest tags for EVERY entry/item of a person in one pass — the natural
    * step right after a legacy import that arrived untagged. Suggest-ONLY: writes
    * nothing; returns candidates + the target's current tags so a confirmer
-   * (Claude/UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
+   * (an MCP client or the UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
    * once and reused across items.
    */
   async suggestBulk(personId, { limit = 5, minScore = 0.4, scorer } = {}) {
