@@ -74,7 +74,7 @@ read volume ever grows.
 
 ## Recently resolved
 
-- **2026-07-17 — the origin is no longer open to the internet** (`ec4b216`, enforced
+- **2026-07-17 — the origin is no longer open to the internet** (enforced
   via `CV_ORIGIN_SECRET_ENFORCE=true`). The Railway origin is publicly reachable, so
   tokenAuth was the only thing in front of it. Now both front doors inject
   `X-Origin-Secret` (gateway: cv-only, delete-then-set so a client can't forge it; MCP:
@@ -87,7 +87,7 @@ read volume ever grows.
   an upstream GitHub outage (Railway incident 8BVRVAAM) — a build dying at "unpacking
   archive" with no Dockerfile steps is platform-side, not your code.
 
-- **2026-07-15 — PII leak on ungated reads** (`a050f36`). `tokenAuth` gated
+- **2026-07-15 — PII leak on ungated reads.** `tokenAuth` gated
   non-public reads only on `/persons/<id>` paths, so `GET /api/variants/:id/resolve`
   (and `/sections`, `/entries`, `/items`) returned a non-public person's full CV with
   no token, on a directly-reachable origin. Fixed fail-closed: the owning person is
