@@ -294,6 +294,40 @@ class VariantStore {
       return { personal, sections, coverletter: null, variant: v.kind, style, spacing, fonts };
     })();
   }
+
+  /**
+   * The full "main" document, compile-ready — the same shape as resolveVariant but
+   * with no variant lens: every section (default order), every entry, every item,
+   * no include/exclude rules and no per-entry/item overrides. Backs the base-compile
+   * route so an owner can preview the whole CV, not just a named variant.
+   */
+  resolveMain(personId) {
+    return this.db.transaction(() => {
+      const person = this.getPerson(personId);
+      if (!person) throw new Error('Person not found');
+      const personal = this.getPersonal(personId);
+      const { style, spacing, fonts } = this._renderSettings();
+
+      const sections = [];
+      for (const s of this.getSections(personId)) {
+        const section = this.getSection(s.id);
+        if (!section) continue;
+
+        const entries = [];
+        for (const e of section.entries) {
+          const items = e.items.map((it) => ({ ...it, _sort: sortKey(null, it.sortOrder, it.id) }));
+          items.sort(bySort);
+          entries.push({ ...e, items, _sort: sortKey(null, e.sortOrder, e.id) });
+        }
+        entries.sort(bySort);
+        if (entries.length === 0) continue; // drop empty section (as resolveVariant does)
+
+        sections.push({ id: section.slug, type: section.type, title: section.title, entries });
+      }
+
+      return { personal, sections, coverletter: null, variant: 'cv', style, spacing, fonts };
+    })();
+  }
 }
 
 module.exports = VariantStore;

@@ -308,6 +308,39 @@ describe('resolveVariant', () => {
   });
 });
 
+describe('resolveMain', () => {
+  test('returns the full document — all sections/entries/items, no lens', () => {
+    buildMain();
+    const r = db.resolveMain(pid);
+    expect(r.variant).toBe('cv');
+    expect(r.coverletter).toBeNull();
+    expect(r.sections.map((s) => s.id)).toEqual(['summary', 'experience', 'skills']);
+    const exp = r.sections.find((s) => s.id === 'experience');
+    expect(exp.entries).toHaveLength(2);
+    expect(exp.entries[0].items.map((i) => i.content)).toEqual(['Built frontend', 'Built backend']);
+  });
+
+  test('ignores variant rules entirely — nothing is filtered', () => {
+    const { e1 } = buildMain();
+    db.addEntryTags(e1, ['frontend']);
+    // A restrictive variant must not affect the main document.
+    const v = db.createVariant(pid, 'FE', 'resume');
+    db.setVariantRules(v, { include: ['nonexistent-tag'] });
+    const exp = db.resolveMain(pid).sections.find((s) => s.id === 'experience');
+    expect(exp.entries.map((e) => e.fields.position)).toEqual(['Engineer', 'Intern']);
+  });
+
+  test('drops a section with no entries (as resolveVariant does)', () => {
+    buildMain();
+    db.createSection(pid, 'empty', 'skills', 'Empty'); // no entries
+    expect(db.resolveMain(pid).sections.map((s) => s.id)).not.toContain('empty');
+  });
+
+  test('throws for unknown person id', () => {
+    expect(() => db.resolveMain(99999)).toThrow('Person not found');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Per-variant cover-letter header (migration 011)
 // ---------------------------------------------------------------------------

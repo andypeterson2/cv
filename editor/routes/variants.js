@@ -191,23 +191,16 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     message: { success: false, log: 'Too many compile requests — please wait a moment.' },
   });
 
-  function compileVariant(id, res, { inline }) {
-    let compileData, variant;
-    try {
-      variant = getDb().getVariant(id);
-      if (!variant) return res.status(404).json({ success: false, log: 'Variant not found' });
-      compileData = getDb().resolveVariant(id);
-    } catch (e) {
-      return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
-    }
-
-    const personDir = path.join(projectRoot, 'build', 'variants', String(id));
+  // Shared compile tail — generate the .tex from resolved data, queue the (costly,
+  // concurrency-capped) xelatex run, then stream the PDF back inline or JSON the log.
+  // `opts` carries what differs between a variant and the main document: the per-request
+  // build root, the temp-dir prefix (kind), the layout selector, and the download name.
+  function runCompile(compileData, { buildRoot, kind, selectLayoutFor, filename }, res, { inline }) {
     let buildDir, mainTexFile;
     try {
-      fs.mkdirSync(personDir, { recursive: true });
-      buildDir = fs.mkdtempSync(path.join(personDir, variant.kind + '-'));
-      // Resolve the layout: variant.layout_id ?? global default ?? builtin.
-      const { dir: layoutDir } = selectLayout(getDb(), variant);
+      fs.mkdirSync(buildRoot, { recursive: true });
+      buildDir = fs.mkdtempSync(path.join(buildRoot, kind + '-'));
+      const { dir: layoutDir } = selectLayoutFor();
       mainTexFile = renderVariant(compileData, buildDir, { layoutDir, assetsDir: ASSETS_DIR });
     } catch (e) {
       if (buildDir) cleanupDir(buildDir);
@@ -222,7 +215,6 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
           return res.status(500).json({ success: false, log: result.log });
         }
         if (inline) {
-          const filename = `${slugifyName(variant.name)}-${variant.kind}.pdf`;
           res.setHeader('Content-Type', 'application/pdf');
           res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
           res.sendFile(result.pdfPath, () => cleanupDir(buildDir));
@@ -237,6 +229,48 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       });
   }
 
+  function compileVariant(id, res, { inline }) {
+    let compileData, variant;
+    try {
+      variant = getDb().getVariant(id);
+      if (!variant) return res.status(404).json({ success: false, log: 'Variant not found' });
+      compileData = getDb().resolveVariant(id);
+    } catch (e) {
+      return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
+    }
+    return runCompile(compileData, {
+      buildRoot: path.join(projectRoot, 'build', 'variants', String(id)),
+      kind: variant.kind,
+      // Layout: the variant's own layout_id ?? global default ?? builtin.
+      selectLayoutFor: () => selectLayout(getDb(), variant),
+      filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
+    }, res, { inline });
+  }
+
+  // The full "main" document — the whole CV with no variant lens (getDb().resolveMain).
+  // Person-keyed; the path ends in /pdf so the /api auth gate treats it as a compile GET
+  // (gated regardless of person — a CPU/DoS lever), same as the variant compile.
+  function compileMain(pid, res, { inline }) {
+    let compileData, person;
+    try {
+      person = getDb().getPerson(pid);
+      if (!person) return res.status(404).json({ success: false, log: 'Person not found' });
+      compileData = getDb().resolveMain(pid);
+    } catch (e) {
+      return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
+    }
+    return runCompile(compileData, {
+      buildRoot: path.join(projectRoot, 'build', 'persons', String(pid)),
+      kind: 'cv',
+      // The full document has no per-variant layout → global default ?? builtin.
+      selectLayoutFor: () => selectLayout(getDb(), { layoutId: null, kind: 'cv' }),
+      filename: `${slugifyName(person.name)}.pdf`,
+    }, res, { inline });
+  }
+
+  // /main/:pid/pdf (3 segments) can't collide with /:id/pdf (2 segments); registered
+  // first for clarity.
+  router.get('/main/:pid/pdf', compileRateLimit, (req, res) => compileMain(intId(req.params.pid, 'person id'), res, { inline: true }));
   router.get('/:id/pdf', compileRateLimit, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }));
   router.post('/:id/compile', compileRateLimit, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }));
 
