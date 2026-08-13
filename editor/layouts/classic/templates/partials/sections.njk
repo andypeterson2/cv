@@ -47,7 +47,9 @@
 
 <% macro cvparagraph(s) %>
 \section{<<s.title | tex>>}
-<<s.text | tex>>\par
+<% for t in s.texts %>
+<<t | tex>>\par
+<% endfor %>
 <% endmacro %>
 
 <% macro section(s) %>

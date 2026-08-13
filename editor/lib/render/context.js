@@ -10,7 +10,7 @@
  *   - photo:        photoEnabled/photoFile → { enabled, file } | null
  *   - socials:      SOCIAL_CATALOG-driven flattening into an ordered array
  *   - education:    program + major → position (the SECTION_TYPE_MAP combine)
- *   - paragraph:    first entry's `text`
+ *   - paragraph:    all entries' text as `texts` (+ `text` = first, legacy)
  *   - style/spacing/fonts: merged with defaults; accent colour resolved to a
  *     {kind,value} decision (preset / custom hex / legacy hex / none)
  *
@@ -66,8 +66,13 @@ function buildSection(section) {
   const out = { id: section.id, type: section.type, latexType, title: section.title };
 
   if (latexType === 'cvparagraph') {
-    const first = section.entries && section.entries[0];
-    out.text = first ? (first.fields.text || '') : '';
+    // A paragraph section may hold several entries — each is its own paragraph.
+    // `texts` is the full ordered list; `text` stays as the first entry for
+    // backward compatibility with layouts authored against contextVersion 1.
+    out.texts = (section.entries || [])
+      .map((e) => e.fields.text || '')
+      .filter((t) => t !== '');
+    out.text = out.texts[0] || '';
     return out;
   }
 
