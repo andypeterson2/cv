@@ -508,8 +508,10 @@ const toolDefs: ToolDef[] = [
     name: "cv_set_variant_override",
     description:
       "Set a per-variant exception for one entry or bullet, overriding the tag rules. included: true forces in, " +
-      "false forces out, null clears. text_override rephrases (paragraph text / bullet content). Passing all of " +
-      "included/text_override/sort_override as null removes the override.",
+      "false forces out, null clears. text_override rephrases (paragraph text / bullet content). fields_override " +
+      "(entry targets only) is a per-variant field patch, e.g. {position: 'Staff Engineer'} for a variant-specific " +
+      "role subheading, or {date: ''} to blank a field; {} clears it. Passing all of included/text_override/" +
+      "sort_override/fields_override as null removes the override.",
     inputSchema: {
       type: "object",
       properties: {
@@ -519,6 +521,7 @@ const toolDefs: ToolDef[] = [
         included: { type: ["boolean", "null"] },
         text_override: { type: ["string", "null"] },
         sort_override: { type: ["integer", "null"] },
+        fields_override: { type: ["object", "null"], additionalProperties: { type: "string" } },
       },
       required: ["variant_id", "target_type", "target_id"],
       additionalProperties: false,
@@ -529,6 +532,7 @@ const toolDefs: ToolDef[] = [
       included: a.included ?? null,
       textOverride: a.text_override ?? null,
       sortOverride: a.sort_override ?? null,
+      fieldsOverride: a.fields_override ?? null,
     }),
   },
   {

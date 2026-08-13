@@ -44,7 +44,7 @@ class ImportExport {
       const entryOverrides = [];
       for (const [eid, o] of eov) {
         const pos = entryPos.get(eid);
-        if (pos) entryOverrides.push({ ...pos, included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+        if (pos) entryOverrides.push({ ...pos, included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride, fieldsOverride: o.fieldsOverride });
       }
       const itemOverrides = [];
       for (const [iid, o] of iov) {
@@ -127,7 +127,7 @@ class ImportExport {
         }
         for (const o of (v.entryOverrides || [])) {
           const eid = entryIdByPos[`${o.slug}#${o.ei}`];
-          if (eid != null) this.setEntryOverride(variantId, eid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+          if (eid != null) this.setEntryOverride(variantId, eid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride, fieldsOverride: o.fieldsOverride });
         }
         for (const o of (v.itemOverrides || [])) {
           const iid = itemIdByPos[`${o.slug}#${o.ei}#${o.ii}`];
