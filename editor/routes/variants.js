@@ -120,10 +120,12 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   router.put('/:id/overrides', validate('variantOverride'), wrap((req, res) => {
     const id = intId(req.params.id, 'variant id');
     requireVariant(id);
-    const { targetType, targetId, included, textOverride, sortOverride } = req.body;
-    const patch = { included, textOverride, sortOverride };
-    if (targetType === 'entry') getDb().setEntryOverride(id, targetId, patch);
-    else getDb().setItemOverride(id, targetId, patch);
+    const { targetType, targetId, included, textOverride, sortOverride, fieldsOverride } = req.body;
+    if (targetType === 'entry') {
+      getDb().setEntryOverride(id, targetId, { included, textOverride, sortOverride, fieldsOverride });
+    } else {
+      getDb().setItemOverride(id, targetId, { included, textOverride, sortOverride });
+    }
     res.json({ success: true });
   }));
 

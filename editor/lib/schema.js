@@ -259,6 +259,15 @@ const variantOverrideSchema = {
     included: { type: ['boolean', 'null'] },
     textOverride: { type: ['string', 'null'] },
     sortOverride: { type: ['integer', 'null'] },
+    // Sparse per-variant field patch (entry targets only) — {field: value},
+    // merged over the entry's fields at resolve. An empty object clears it.
+    // patternProperties (not additionalProperties) so Ajv's removeAdditional:'all'
+    // keeps the field keys instead of stripping them to {}.
+    fieldsOverride: {
+      type: ['object', 'null'],
+      patternProperties: { '^[a-zA-Z0-9_]+$': { type: 'string' } },
+      additionalProperties: false,
+    },
   },
   required: ['targetType', 'targetId'],
   additionalProperties: false,

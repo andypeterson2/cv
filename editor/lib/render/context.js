@@ -88,6 +88,12 @@ function buildSection(section) {
     // Only cventries render bullets; expose items as a plain string array.
     if (latexType === 'cventries') {
       entry.items = (e.items || []).map((i) => i.content);
+    } else if (latexType === 'cvskills' && e.items && e.items.length) {
+      // Skills are item rows (migration 016) — join the resolved items into the
+      // template's `skills` arg, so per-skill tag/omit/reorder (applied upstream
+      // in resolveVariant) flows through. Falls back to the legacy fields.skills
+      // string for any un-split entry.
+      entry.skills = e.items.map((i) => i.content).join(', ');
     }
     return entry;
   });

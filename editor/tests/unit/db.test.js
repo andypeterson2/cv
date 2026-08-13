@@ -291,6 +291,24 @@ describe('resolveVariant', () => {
     expect(exp.entries.map((e) => e.fields.position)).toEqual(['Intern', 'Engineer']);
   });
 
+  test('fields_override patches an entry field per-variant (e.g. a role subheading)', () => {
+    const { e1 } = buildMain();
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setEntryOverride(v, e1, { fieldsOverride: { position: 'Staff Engineer' } });
+    const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
+    expect(exp.entries[0].fields.position).toBe('Staff Engineer'); // overridden
+    expect(exp.entries[0].fields.organization).toBe('Acme'); // other fields untouched
+  });
+
+  test('fields_override round-trips through getEntryOverrides; empty {} clears the row', () => {
+    const { e1 } = buildMain();
+    const v = db.createVariant(pid, 'V', 'resume');
+    db.setEntryOverride(v, e1, { fieldsOverride: { position: 'Lead', date: '' } });
+    expect(db.getEntryOverrides(v).get(e1).fieldsOverride).toEqual({ position: 'Lead', date: '' });
+    db.setEntryOverride(v, e1, { fieldsOverride: {} }); // sparse: empty clears
+    expect(db.getEntryOverrides(v).has(e1)).toBe(false);
+  });
+
   test('coverletter kind resolves header + letter sections, ignores tag machinery', () => {
     const v = db.createVariant(pid, 'CL', 'coverletter');
     db.setLetterHeader(v, { recipientName: 'Hiring Team', opening: 'Dear Team,' });
