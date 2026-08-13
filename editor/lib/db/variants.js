@@ -119,7 +119,12 @@ class VariantStore {
   getEntryOverrides(variantId) {
     const m = new Map();
     for (const r of this._stmts.getEntryOverrides.all(variantId)) {
-      m.set(r.entry_id, { included: r.included, textOverride: r.text_override, sortOverride: r.sort_override });
+      m.set(r.entry_id, {
+        included: r.included,
+        textOverride: r.text_override,
+        sortOverride: r.sort_override,
+        fieldsOverride: r.fields_override ? JSON.parse(r.fields_override) : null,
+      });
     }
     return m;
   }
@@ -133,12 +138,14 @@ class VariantStore {
   }
 
   /** Upsert (or, if all fields null/undefined, delete) an entry override. */
-  setEntryOverride(variantId, entryId, { included = null, textOverride = null, sortOverride = null } = {}) {
-    if (included == null && textOverride == null && sortOverride == null) {
+  setEntryOverride(variantId, entryId, { included = null, textOverride = null, sortOverride = null, fieldsOverride = null } = {}) {
+    // Empty {} clears the patch; a non-empty object is a sparse field map.
+    const fo = fieldsOverride && Object.keys(fieldsOverride).length ? JSON.stringify(fieldsOverride) : null;
+    if (included == null && textOverride == null && sortOverride == null && fo == null) {
       this._stmts.deleteEntryOverride.run(variantId, entryId);
       return;
     }
-    this._stmts.upsertEntryOverride.run(variantId, entryId, included == null ? null : (included ? 1 : 0), textOverride, sortOverride);
+    this._stmts.upsertEntryOverride.run(variantId, entryId, included == null ? null : (included ? 1 : 0), textOverride, sortOverride, fo);
   }
 
   setItemOverride(variantId, itemId, { included = null, textOverride = null, sortOverride = null } = {}) {
@@ -270,8 +277,12 @@ class VariantStore {
           if (!this._included(e.tags, rules, eov)) continue;
 
           let fields = e.fields;
-          if (eov && eov.textOverride != null && isParagraph) {
-            fields = { ...fields, text: eov.textOverride };
+          if (eov) {
+            // Legacy paragraph-only text override (fields.text), then the generic
+            // per-variant field patch — fields_override subsumes it and can vary
+            // any field (role subheading, date, …). The patch wins on overlap.
+            if (eov.textOverride != null && isParagraph) fields = { ...fields, text: eov.textOverride };
+            if (eov.fieldsOverride) fields = { ...fields, ...eov.fieldsOverride };
           }
 
           const items = [];

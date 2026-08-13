@@ -175,8 +175,8 @@ class CvDatabase {
       insertVariantSection: p('INSERT OR IGNORE INTO variant_sections (variant_id, section_id, enabled, sort_order) VALUES (?, ?, ?, ?)'),
 
       // Overrides
-      getEntryOverrides: p('SELECT entry_id, included, text_override, sort_override FROM entry_overrides WHERE variant_id = ?'),
-      upsertEntryOverride: p('INSERT INTO entry_overrides (variant_id, entry_id, included, text_override, sort_override) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, entry_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override'),
+      getEntryOverrides: p('SELECT entry_id, included, text_override, sort_override, fields_override FROM entry_overrides WHERE variant_id = ?'),
+      upsertEntryOverride: p('INSERT INTO entry_overrides (variant_id, entry_id, included, text_override, sort_override, fields_override) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(variant_id, entry_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override, fields_override = excluded.fields_override'),
       deleteEntryOverride: p('DELETE FROM entry_overrides WHERE variant_id = ? AND entry_id = ?'),
       getItemOverrides: p('SELECT item_id, included, text_override, sort_override FROM item_overrides WHERE variant_id = ?'),
       upsertItemOverride: p('INSERT INTO item_overrides (variant_id, item_id, included, text_override, sort_override) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, item_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override'),
@@ -377,6 +377,10 @@ class CvDatabase {
         ...v,
         rules: this.getVariantRules(v.id),
         sections: this.getVariantSections(v.id),
+        // Manual overrides so the editor's client lens can display them live
+        // (keyed by entry/item id, same shape as GET /variants/:id).
+        entryOverrides: Object.fromEntries(this.getEntryOverrides(v.id)),
+        itemOverrides: Object.fromEntries(this.getItemOverrides(v.id)),
       })),
       tags: this.listTags(personId),
       tagAliases: this.getTagAliases(personId),
