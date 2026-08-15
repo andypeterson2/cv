@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const CvDatabase = require('./lib/db');
 const { tokenAuth } = require('./lib/auth');
+const { attachUser } = require('./lib/current-user');
 const { originGuard } = require('./lib/origin-guard');
 const { buildHealth } = require('./lib/health');
 const pkg = require('./package.json');
@@ -16,6 +17,7 @@ const createItemsRouter = require('./routes/items');
 const createVariantsRouter = require('./routes/variants');
 const createDataRouter = require('./routes/data');
 const createLayoutsRouter = require('./routes/layouts');
+const createAuthRouter = require('./routes/auth');
 const { seedBuiltinLayouts } = require('./lib/render/seed');
 
 const app = express();
@@ -127,6 +129,11 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 // API-only: the editor frontend is owned and served by the portal — no static serving.
 
+// Front-door user provisioning (multi-tenancy phase 2) — mounted BEFORE tokenAuth
+// because it carries no user token; it IS what establishes the user. Gated by the
+// shared front-door secret (X-Origin-Secret) inside the router.
+app.use('/api/auth', createAuthRouter(getDb));
+
 // ---------------------------------------------------------------------------
 // Public contract routes (registered before auth): health + API discovery.
 // ---------------------------------------------------------------------------
@@ -153,7 +160,12 @@ app.get('/api', (req, res) => {
 // CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated. Public demo
 // persons (e.g. the Jane Doe seed, id 1) stay readable unauthenticated; any other
 // person's reads + all writes + the /pdf compile require the token.
-app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN, { publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1', getDb }));
+app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN, { publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1', getDb, originSecret: process.env.CV_ORIGIN_SECRET }));
+
+// Resolve the request → a user id (multi-tenancy phase 1). Runs after the token
+// gate, so only already-allowed requests reach it; every route reads `req.userId`
+// and the person layer scopes by it. Phase 2 swaps the resolution for a real session.
+app.use('/api', attachUser(getDb));
 
 // ---------------------------------------------------------------------------
 // Mount routers — every content route is id-addressable; there is no active

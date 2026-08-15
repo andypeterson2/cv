@@ -161,7 +161,9 @@ class ImportExport {
   /** Seed Jane Doe once, on a truly empty database. */
   seedJaneDoe() {
     if (this._stmts.countPersons.get().cnt > 0) return;
-    const id = this.createPerson('Jane Doe');
+    // The demo belongs to the '@system' account (migration 018) so it stays the
+    // public, un-owned CV every logged-out visitor sees — not part of any real user.
+    const id = this.createPerson('Jane Doe', this.systemUserId());
     this.importLegacyData(id, JANE_DOE_DATA);
   }
 
