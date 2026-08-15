@@ -54,10 +54,23 @@ class CvDatabase {
       // Persons
       getPersons: p('SELECT id, name, created_at FROM persons ORDER BY id'),
       getPerson: p('SELECT id, name, created_at FROM persons WHERE id = ?'),
-      insertPerson: p('INSERT INTO persons (name) VALUES (?)'),
+      insertPerson: p('INSERT INTO persons (name, user_id) VALUES (?, ?)'),
       updatePersonName: p('UPDATE persons SET name = ? WHERE id = ?'),
       deletePerson: p('DELETE FROM persons WHERE id = ?'),
       countPersons: p('SELECT COUNT(*) AS cnt FROM persons'),
+      // --- multi-tenancy (migration 018): ownership + per-user scoping ---
+      personUserId: p('SELECT user_id FROM persons WHERE id = ?'),
+      getPersonsForUser: p('SELECT id, name, created_at FROM persons WHERE user_id = ? ORDER BY id'),
+      getPersonForUser: p('SELECT id, name, created_at FROM persons WHERE id = ? AND user_id = ?'),
+      renamePersonForUser: p('UPDATE persons SET name = ? WHERE id = ? AND user_id = ?'),
+      deletePersonForUser: p('DELETE FROM persons WHERE id = ? AND user_id = ?'),
+      insertUser: p('INSERT INTO users (google_sub, email, name, role) VALUES (?, ?, ?, ?)'),
+      getUserById: p('SELECT id, google_sub, email, name, role, created_at FROM users WHERE id = ?'),
+      getUserBySub: p('SELECT id, google_sub, email, name, role, created_at FROM users WHERE google_sub = ?'),
+      getUserByEmail: p('SELECT id, google_sub, email, name, role, created_at FROM users WHERE email = ?'),
+      updateUserProfile: p('UPDATE users SET email = ?, name = ? WHERE id = ?'),
+      userIdByRole: p('SELECT id FROM users WHERE role = ? ORDER BY id LIMIT 1'),
+      adoptUser: p('UPDATE users SET google_sub = ?, email = ?, name = ? WHERE id = ?'),
 
       // Versions (ADR-006) + the per-person content reset restore uses
       insertVersion: p('INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)'),
@@ -204,25 +217,102 @@ class CvDatabase {
   // Persons
   // ---------------------------------------------------------------------------
 
+  // ---- users + ownership (migration 018) ----
+
+  getUser(id) {
+    return this._stmts.getUserById.get(id) || null;
+  }
+  getUserByGoogleSub(sub) {
+    return this._stmts.getUserBySub.get(sub) || null;
+  }
+  getUserByEmail(email) {
+    return this._stmts.getUserByEmail.get(email) || null;
+  }
+  /**
+   * Create-or-update the user for a Google identity, returning its id.
+   *
+   * Owner adoption: the FIRST real sign-in whose email matches OWNER_EMAIL takes
+   * over the '@owner' placeholder account (created by migration 018) instead of
+   * making a fresh one — so your pre-existing résumés become owned by your real
+   * Google account. It fires once: after adoption the owner row carries the real
+   * `sub`, so later sign-ins match at the top as a normal profile update.
+   */
+  upsertUser({ googleSub, email = null, name = null, role = 'user' }) {
+    const existing = this.getUserByGoogleSub(googleSub);
+    if (existing) {
+      this._stmts.updateUserProfile.run(email, name, existing.id);
+      return existing.id;
+    }
+    const ownerEmail = process.env.OWNER_EMAIL;
+    if (email && ownerEmail && email.toLowerCase() === ownerEmail.toLowerCase()) {
+      const ownerId = this.ownerUserId();
+      const owner = ownerId != null ? this.getUser(ownerId) : null;
+      if (owner && owner.google_sub === '@owner') {
+        // Relink the placeholder to this Google account (keeps role='owner', so the
+        // role-based lookups below and the ownerUserId cache stay valid).
+        this._stmts.adoptUser.run(googleSub, email, name, owner.id);
+        return owner.id;
+      }
+    }
+    return Number(this._stmts.insertUser.run(googleSub, email, name, role).lastInsertRowid);
+  }
+  // The owner/system accounts are resolved by ROLE, not by their '@owner'/'@system'
+  // placeholder sub — owner adoption rewrites the owner's sub to a real Google id, but
+  // the role never changes, so these (and their caches) survive it.
+  /** The account that owns the public demo — resolved once, then cached. */
+  systemUserId() {
+    return (this._systemUserId ??= this._stmts.userIdByRole.get('system')?.id ?? null);
+  }
+  /** The owner account (everything pre-multi-tenancy, then you) — cached. */
+  ownerUserId() {
+    return (this._ownerUserId ??= this._stmts.userIdByRole.get('owner')?.id ?? null);
+  }
+  /** The owner of a person, or null. Cheap ownership probe for gating. */
+  personUserId(id) {
+    return this._stmts.personUserId.get(id)?.user_id ?? null;
+  }
+
   getPersons() {
+    // Unscoped — SYSTEM use only (build verification, admin). Request handlers must
+    // go through getPersonsForUser so a leak can't slip in unnoticed.
     return this._stmts.getPersons.all();
+  }
+  getPersonsForUser(userId) {
+    return this._stmts.getPersonsForUser.all(userId);
   }
 
   getPerson(id) {
     return this._stmts.getPerson.get(id) || null;
   }
+  getPersonForUser(id, userId) {
+    return this._stmts.getPersonForUser.get(id, userId) || null;
+  }
 
-  createPerson(name) {
-    return this._stmts.insertPerson.run(name).lastInsertRowid;
+  createPerson(name, userId = this.ownerUserId()) {
+    return this._stmts.insertPerson.run(name, userId).lastInsertRowid;
   }
 
   renamePerson(id, name) {
     this._stmts.updatePersonName.run(name, id);
   }
+  /** Rename only if `userId` owns the person. Returns true if a row changed. */
+  renamePersonForUser(id, name, userId) {
+    return this._stmts.renamePersonForUser.run(name, id, userId).changes > 0;
+  }
 
   deletePerson(id) {
     // Cascades to person_settings, sections→entries→items→tags, variants→rules/overrides/sections/letters.
     this._stmts.deletePerson.run(id);
+  }
+  /** Delete only if `userId` owns the person. Returns true if a row was removed. */
+  deletePersonForUser(id, userId) {
+    return this._stmts.deletePersonForUser.run(id, userId).changes > 0;
+  }
+
+  /** Full main content for a person, but only if `userId` owns it (else null). */
+  getMainForUser(personId, userId) {
+    if (this.personUserId(personId) !== userId) return null;
+    return this.getMain(personId);
   }
 
   // ---------------------------------------------------------------------------

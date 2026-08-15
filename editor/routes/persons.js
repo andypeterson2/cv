@@ -31,8 +31,10 @@ function resolveScorer(name) {
 module.exports = function createPersonsRouter(getDb) {
   const router = express.Router();
 
-  const requirePerson = (id) => {
-    const person = getDb().getPerson(id);
+  // Fetch a person the caller OWNS, or 404. This ownership check is the per-user
+  // isolation gate on every /:pid route — `userId` comes from attachUser (req.userId).
+  const requirePerson = (id, userId) => {
+    const person = getDb().getPersonForUser(id, userId);
     if (!person) throw new NotFoundError('Person not found');
     return person;
   };
@@ -40,12 +42,12 @@ module.exports = function createPersonsRouter(getDb) {
   // ---- Person CRUD ----
 
   router.get('/', wrap((req, res) => {
-    res.json({ persons: getDb().getPersons() });
+    res.json({ persons: getDb().getPersonsForUser(req.userId) });
   }));
 
   router.post('/', validate('createPerson'), wrap((req, res) => {
     try {
-      res.status(201).json({ id: Number(getDb().createPerson(req.body.name)) });
+      res.status(201).json({ id: Number(getDb().createPerson(req.body.name, req.userId)) });
     } catch (e) {
       if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('Person with that name already exists');
       throw e;
@@ -54,14 +56,14 @@ module.exports = function createPersonsRouter(getDb) {
 
   // Full main content (sections → entries → items → tags, variants, tag vocab).
   router.get('/:pid', wrap((req, res) => {
-    const main = getDb().getMain(intParam(req.params.pid, 'person id'));
+    const main = getDb().getMainForUser(intParam(req.params.pid, 'person id'), req.userId);
     if (!main) throw new NotFoundError('Person not found');
     res.json(main);
   }));
 
   router.put('/:pid', validate('updatePerson'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     try {
       getDb().renamePerson(id, req.body.name);
       res.json({ success: true });
@@ -73,7 +75,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.delete('/:pid', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     getDb().deletePerson(id);
     res.json({ success: true });
   }));
@@ -82,13 +84,13 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/personal', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json(getDb().getPersonal(id));
   }));
 
   router.patch('/:pid/personal', validate('personal'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     getDb().setPersonal(id, req.body);
     res.json({ success: true });
   }));
@@ -100,6 +102,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/export', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
+    requirePerson(id, req.userId);
     const data = getDb().getPersonExport(id);
     if (!data) throw new NotFoundError('Person not found');
     res.json(data);
@@ -107,7 +110,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.post('/:pid/import', validate('import'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     getDb().importPersonData(id, req.body);
     res.json({ success: true });
   }));
@@ -119,7 +122,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/versions', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json({ versions: getDb().listVersions(id) });
   }));
 
@@ -127,7 +130,7 @@ module.exports = function createPersonsRouter(getDb) {
   router.get('/:pid/versions/:vid', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
     const vid = intParam(req.params.vid, 'version id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const version = getDb().getVersion(id, vid);
     if (!version) throw new NotFoundError('Version not found');
     res.json(version);
@@ -135,7 +138,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.post('/:pid/versions', validate('createVersion'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const b = req.body || {};
     const vid = getDb().createVersion(id, b.label || '', b.branch || 'main', b.parent ?? null);
     res.status(201).json({ id: Number(vid) });
@@ -144,7 +147,7 @@ module.exports = function createPersonsRouter(getDb) {
   router.post('/:pid/versions/:vid/restore', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
     const vid = intParam(req.params.vid, 'version id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     if (!getDb().restoreVersion(id, vid)) throw new NotFoundError('Version not found');
     res.json({ success: true });
   }));
@@ -153,7 +156,7 @@ module.exports = function createPersonsRouter(getDb) {
   router.post('/:pid/versions/:vid/tag', validate('tagVersion'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
     const vid = intParam(req.params.vid, 'version id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     if (!getDb().setTag(id, vid, (req.body && req.body.tag) || '')) {
       throw new NotFoundError('Version not found');
     }
@@ -164,7 +167,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/tags', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     if (req.query.withCounts) {
       res.json({ tags: getDb().listTagsWithCounts(id) });
     } else {
@@ -175,7 +178,7 @@ module.exports = function createPersonsRouter(getDb) {
   // Fuzzy tag search — approximate, for discovery/authoring (NOT resolution).
   router.get('/:pid/tags/search', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const q = req.query.q;
     if (typeof q !== 'string' || !q.trim()) throw new AppError('Query param "q" is required', 400);
     const limit = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 10;
@@ -190,20 +193,20 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/tag-aliases', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json({ aliases: getDb().getTagAliases(id) });
   }));
 
   router.put('/:pid/tag-aliases', validate('setTagAlias'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const result = getDb().setTagAlias(id, req.body.alias, req.body.canonical);
     res.json({ success: true, ...result });
   }));
 
   router.delete('/:pid/tag-aliases/:alias', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     getDb().deleteTagAlias(id, req.params.alias);
     res.json({ success: true });
   }));
@@ -212,13 +215,13 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/tags/catalog', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json({ catalog: getDb().getTagCatalog(id) });
   }));
 
   router.put('/:pid/tags/catalog', validate('setCatalogTag'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const result = getDb().setCatalogTag(id, req.body.tag, {
       description: req.body.description ?? null,
       category: req.body.category ?? null,
@@ -228,14 +231,14 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.delete('/:pid/tags/catalog/:tag', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     getDb().deleteCatalogTag(id, req.params.tag);
     res.json({ success: true });
   }));
 
   router.post('/:pid/tags/catalog/seed', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json({ success: true, ...getDb().seedCatalogFromUsage(id) });
   }));
 
@@ -243,7 +246,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.post('/:pid/tags/suggest', validate('suggestTags'), wrap(async (req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const { text, limit, minScore, scorer } = req.body;
     res.json(await getDb().suggestTags(id, text, { limit, minScore, scorer: resolveScorer(scorer) }));
   }));
@@ -252,7 +255,7 @@ module.exports = function createPersonsRouter(getDb) {
   // Suggest-only; all fields optional so an empty body is fine.
   router.post('/:pid/tags/suggest-bulk', wrap(async (req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const b = req.body || {};
     const opts = { scorer: resolveScorer(b.scorer) };
     if (b.limit !== undefined) opts.limit = b.limit;
@@ -264,13 +267,13 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/sections', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json(getDb().getSections(id));
   }));
 
   router.post('/:pid/sections', validate('createSection'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     try {
       const sectionId = getDb().createSection(id, req.body.slug, req.body.type, req.body.title);
       res.status(201).json({ id: Number(sectionId) });
@@ -282,7 +285,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.patch('/:pid/sections/order', validate('reorder'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     getDb().reorderSections(id, req.body.ids);
     res.json({ success: true });
   }));
@@ -291,13 +294,13 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/variants', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     res.json(getDb().getVariants(id));
   }));
 
   router.post('/:pid/variants', validate('createVariant'), wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     try {
       const variantId = getDb().createVariant(id, req.body.name, req.body.kind);
       res.status(201).json({ id: Number(variantId) });
@@ -330,7 +333,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/linkedin', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const variantId = pickVariant(id, req.query.variant);
     const format = FORMATS.has(req.query.format) ? req.query.format : 'linkedin';
     res.json({ variantId, ...linkedin.exportLinkedin(getDb().resolveVariant(variantId), format) });
@@ -338,7 +341,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.get('/:pid/linkedin/status', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const variantId = pickVariant(id, req.query.variant);
     const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
     res.json({ variantId, positions: getDb().linkedinStatus(id, positions) });
@@ -346,7 +349,7 @@ module.exports = function createPersonsRouter(getDb) {
 
   router.post('/:pid/linkedin/mark-synced', wrap((req, res) => {
     const id = intParam(req.params.pid, 'person id');
-    requirePerson(id);
+    requirePerson(id, req.userId);
     const b = req.body || {};
     const variantId = pickVariant(id, b.variant);
     const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
