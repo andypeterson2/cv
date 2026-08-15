@@ -18,7 +18,7 @@
  * NOTE: mounted at `app.use('/api', …)`, so `req.path` here is /api-stripped
  * (e.g. `/variants/10/resolve`); we tolerate a leading `/api` anyway for tests.
  */
-function tokenAuth(token, { publicPersonIds = '', getDb = null } = {}) {
+function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = null } = {}) {
   const publicIds = new Set(
     String(publicPersonIds)
       .split(',')
@@ -50,8 +50,19 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null } = {}) {
     return null; // unknown → deny
   };
 
+  const headerOf = (req, name) =>
+    (req.get ? req.get(name) : req.headers && req.headers[name.toLowerCase()]) || '';
+
   return function (req, res, next) {
     if (!token) return next(); // disabled → open (local dev / tests)
+
+    // A front-door-authenticated USER (multi-tenancy phase 2): the gateway verified
+    // their Google session and injected X-User-Id behind the shared front-door secret.
+    // Let it through — the per-user person scoping downstream is what isolates them;
+    // a direct caller can't forge X-Origin-Secret, so it can't set a trusted X-User-Id.
+    if (headerOf(req, 'X-User-Id')) {
+      if (!originSecret || headerOf(req, 'X-Origin-Secret') === originSecret) return next();
+    }
 
     const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
     const isCompileGet = req.method === 'GET' && /\/pdf$/.test(req.path);
