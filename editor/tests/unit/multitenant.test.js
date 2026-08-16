@@ -150,4 +150,30 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
     expect(uid).not.toBe(ownerId);
     expect(db.getUser(ownerId).google_sub).toBe('@owner'); // untouched
   });
+
+  test('late adoption: an owner who signed in BEFORE OWNER_EMAIL was set is folded in on re-login', () => {
+    const ownerId = db.ownerUserId();
+    const pre = db.createPerson('My real CV'); // owner's pre-existing résumé
+
+    // 1. Owner signs in while OWNER_EMAIL is unset → a stray ordinary account, no adoption.
+    delete process.env.OWNER_EMAIL;
+    const strayId = db.upsertUser({ googleSub: 'google-real-123', email: 'me@example.com', name: 'Me' });
+    expect(strayId).not.toBe(ownerId);
+    const theirs = db.createPerson('Draft made on the stray account', strayId);
+    expect(db.getUser(ownerId).google_sub).toBe('@owner'); // placeholder still unclaimed
+
+    // 2. OWNER_EMAIL gets configured; the same Google account signs in again.
+    process.env.OWNER_EMAIL = 'me@example.com';
+    const uid = db.upsertUser({ googleSub: 'google-real-123', email: 'ME@example.com', name: 'Me' });
+
+    // Folded into @owner: same id, relinked, stray removed, ALL résumés under the owner.
+    expect(uid).toBe(ownerId);
+    expect(db.getUser(ownerId).google_sub).toBe('google-real-123');
+    expect(db.getUserByGoogleSub('google-real-123').id).toBe(ownerId); // later logins hit the owner
+    expect(db.getUser(strayId)).toBeNull(); // stray account gone
+    const mine = db.getPersonsForUser(ownerId).map((p) => p.id);
+    expect(mine).toContain(pre); // the pre-existing owner résumé
+    expect(mine).toContain(theirs); // and anything made under the stray account
+    expect(db.ownerUserId()).toBe(ownerId); // role-based lookup still resolves
+  });
 });

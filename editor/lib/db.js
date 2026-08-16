@@ -71,6 +71,8 @@ class CvDatabase {
       updateUserProfile: p('UPDATE users SET email = ?, name = ? WHERE id = ?'),
       userIdByRole: p('SELECT id FROM users WHERE role = ? ORDER BY id LIMIT 1'),
       adoptUser: p('UPDATE users SET google_sub = ?, email = ?, name = ? WHERE id = ?'),
+      reassignPersons: p('UPDATE persons SET user_id = ? WHERE user_id = ?'),
+      deleteUser: p('DELETE FROM users WHERE id = ?'),
 
       // Versions (ADR-006) + the per-person content reset restore uses
       insertVersion: p('INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)'),
@@ -238,13 +240,22 @@ class CvDatabase {
    * `sub`, so later sign-ins match at the top as a normal profile update.
    */
   upsertUser({ googleSub, email = null, name = null, role = 'user' }) {
+    const ownerEmail = process.env.OWNER_EMAIL;
+    const isOwnerEmail = !!(email && ownerEmail && email.toLowerCase() === ownerEmail.toLowerCase());
     const existing = this.getUserByGoogleSub(googleSub);
     if (existing) {
+      // Late adoption: the owner may have signed in BEFORE OWNER_EMAIL was configured,
+      // which made an ordinary user instead of taking over '@owner'. If this is the
+      // owner's email and '@owner' is still an unclaimed placeholder, fold that stray
+      // account into it now — same net effect as first-sign-in adoption, one-shot.
+      if (isOwnerEmail && existing.role !== 'owner') {
+        const adopted = this._adoptStrayIntoOwner(existing, { googleSub, email, name });
+        if (adopted != null) return adopted;
+      }
       this._stmts.updateUserProfile.run(email, name, existing.id);
       return existing.id;
     }
-    const ownerEmail = process.env.OWNER_EMAIL;
-    if (email && ownerEmail && email.toLowerCase() === ownerEmail.toLowerCase()) {
+    if (isOwnerEmail) {
       const ownerId = this.ownerUserId();
       const owner = ownerId != null ? this.getUser(ownerId) : null;
       if (owner && owner.google_sub === '@owner') {
@@ -255,6 +266,25 @@ class CvDatabase {
       }
     }
     return Number(this._stmts.insertUser.run(googleSub, email, name, role).lastInsertRowid);
+  }
+
+  /**
+   * Fold a stray account (created before OWNER_EMAIL was set) into the '@owner'
+   * placeholder: move any résumés it made over to the owner, delete it (which frees the
+   * UNIQUE google_sub), then relink '@owner' to the real Google identity. Atomic.
+   * Returns the owner id, or null when there's no unclaimed placeholder to adopt into
+   * (caller then falls back to a normal profile update).
+   */
+  _adoptStrayIntoOwner(stray, { googleSub, email, name }) {
+    const ownerId = this.ownerUserId();
+    const owner = ownerId != null ? this.getUser(ownerId) : null;
+    if (!owner || owner.google_sub !== '@owner' || owner.id === stray.id) return null;
+    this.db.transaction(() => {
+      this._stmts.reassignPersons.run(owner.id, stray.id); // keep anything they created
+      this._stmts.deleteUser.run(stray.id); // frees the UNIQUE google_sub for the relink
+      this._stmts.adoptUser.run(googleSub, email, name, owner.id);
+    })();
+    return owner.id;
   }
   // The owner/system accounts are resolved by ROLE, not by their '@owner'/'@system'
   // placeholder sub — owner adoption rewrites the owner's sub to a real Google id, but
