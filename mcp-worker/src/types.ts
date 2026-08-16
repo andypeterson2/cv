@@ -25,6 +25,9 @@ export interface Env {
   CV_EDITOR_TOKEN?: string;
   // Optional pre-formed Authorization header value (overrides CV_EDITOR_TOKEN).
   CV_EDITOR_AUTH?: string;
+  // Shared front-door secret cv's origin-guard checks (secret). Also the proof that
+  // lets this Worker inject a verified per-caller X-User-Id (see cv lib/current-user.js).
+  CV_ORIGIN_SECRET?: string;
 
   // Comma-separated allowlist of Google emails granted access (admin-only v1).
   ADMIN_EMAILS: string;
@@ -42,4 +45,8 @@ export interface Env {
 export type CvProps = {
   email: string;
   name?: string;
+  // The cv user id this Google identity resolves to (POST /api/auth/upsert-user). Every
+  // cv call is scoped to it via X-User-Id — no shared owner token. (Admin-only for now,
+  // so in practice this is the owner mapped to @owner; the plumbing is fully per-user.)
+  cvUserId: number;
 };
