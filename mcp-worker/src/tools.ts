@@ -18,6 +18,7 @@ import shared from "@cv/constants"; // canonical enums/patterns (single source o
 import { Validator } from "@cfworker/json-schema";
 import { env } from "cloudflare:workers";
 import { signingSecret, signPayload } from "./sign";
+import { cvCtx } from "./cv-ctx";
 
 const enc = encodeURIComponent;
 
@@ -26,29 +27,33 @@ type CvEnv = { CV_EDITOR_URL?: string; CV_EDITOR_TOKEN?: string; CV_EDITOR_AUTH?
 /** Resolve the cv-editor base URL + Authorization header from the Worker env.
  *  Requires CV_EDITOR_URL (set in wrangler.jsonc to the Railway cv) — no localhost
  *  default, so a misconfiguration fails loudly instead of silently hitting localhost. */
-function cvConfig(): { base: string; auth?: string; originSecret?: string } {
+function cvConfig(): { base: string; originSecret?: string } {
   const e = env as unknown as CvEnv;
   if (!e.CV_EDITOR_URL) throw new Error("CV_EDITOR_URL is not configured on this Worker.");
   const base = e.CV_EDITOR_URL.replace(/\/$/, "");
-  const auth = e.CV_EDITOR_AUTH || (e.CV_EDITOR_TOKEN ? `Bearer ${e.CV_EDITOR_TOKEN}` : undefined);
-  // This Worker is one of cv's two front doors; the origin rejects callers that
-  // don't present this (see cv editor/lib/origin-guard.js). Undefined → header
-  // omitted, which is fine while the origin guard is disabled or soft.
-  return { base, auth, originSecret: e.CV_ORIGIN_SECRET };
+  // This Worker is one of cv's two front doors; the origin rejects callers that don't
+  // present this secret (cv editor/lib/origin-guard.js). It ALSO authorizes the
+  // per-caller X-User-Id we inject below — cv trusts X-User-Id only behind this secret.
+  return { base, originSecret: e.CV_ORIGIN_SECRET };
 }
 
 type ApiOpts = { expectBinary?: boolean };
 
 /** HTTP helper — same request construction + contract-error mapping as the stdio server. */
 export async function api(method: string, path: string, body?: unknown, { expectBinary = false }: ApiOpts = {}): Promise<any> {
-  const { base, auth, originSecret } = cvConfig();
+  const { base, originSecret } = cvConfig();
+  // WHO this call runs as, set at the dispatch boundary (mcp.ts CallTool / servePdf).
+  // Required: cv is scoped per-user by X-User-Id now, so a missing context is a bug —
+  // fail loudly rather than silently falling through to the owner/demo account.
+  const cvUserId = cvCtx.getStore()?.cvUserId;
+  if (cvUserId == null) throw new Error("No authenticated cv user in context for this MCP call.");
   let res: Response;
   try {
     res = await fetch(base + path, {
       method,
       headers: {
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-        ...(auth ? { Authorization: auth } : {}),
+        "X-User-Id": String(cvUserId),
         ...(originSecret ? { "X-Origin-Secret": originSecret } : {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -561,7 +566,10 @@ const toolDefs: ToolDef[] = [
       if (!secret) throw new Error("Server misconfigured: no signing secret (COOKIE_SECRET/GOOGLE_CLIENT_SECRET) for PDF links.");
       const base = (e.MCP_PUBLIC_URL || "").replace(/\/$/, "");
       if (!base) throw new Error("Server misconfigured: MCP_PUBLIC_URL is not set.");
-      const token = await signPayload({ v: a.variant_id }, secret);
+      // Bind the link to the caller: the /pdf route fetches cv as this user (the token is
+      // HMAC-signed, so `u` can't be forged). Scopes the PDF to whoever asked for it.
+      const cvUserId = cvCtx.getStore()?.cvUserId;
+      const token = await signPayload({ v: a.variant_id, u: cvUserId }, secret);
       return { __content: [{ type: "text", text: `PDF for variant ${a.variant_id} is ready — download (link valid ~5 min, compiles on open): ${base}/pdf/${token}` }] };
     },
   },

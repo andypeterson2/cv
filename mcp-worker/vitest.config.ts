@@ -14,6 +14,7 @@ export default defineConfig({
         bindings: {
           CV_EDITOR_URL: "http://cv.test",
           CV_EDITOR_TOKEN: "test-token",
+          CV_ORIGIN_SECRET: "test-origin-secret",
           ADMIN_EMAILS: "admin@test.dev",
         },
       },

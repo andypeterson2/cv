@@ -32,7 +32,7 @@ const GOOGLE_FETCH_TIMEOUT_MS = 8000;
 const ALLOWED_REDIRECT_HOSTS = new Set(["claude.ai", "claude.com", "localhost", "127.0.0.1"]);
 
 interface GoogleTokens { access_token?: string }
-interface GoogleProfile { email?: string; email_verified?: boolean | string; name?: string }
+interface GoogleProfile { sub?: string; email?: string; email_verified?: boolean | string; name?: string }
 
 function isAllowedRedirect(uri: unknown): boolean {
   try {
@@ -44,6 +44,32 @@ function isAllowedRedirect(uri: unknown): boolean {
 
 function adminEmails(env: Env): string[] {
   return String(env.ADMIN_EMAILS || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+/**
+ * Resolve (create-or-adopt) the cv user for a Google identity, returning its id — the
+ * same POST /api/auth/upsert-user the gateway uses, keyed on the stable Google `sub`.
+ * Every subsequent cv call is scoped to this id via X-User-Id, so the MCP no longer
+ * leans on the shared owner token. Returns null if cv is unreachable/misconfigured.
+ */
+async function upsertCvUser(
+  env: Env,
+  who: { googleSub: string; email: string; name?: string },
+): Promise<number | null> {
+  if (!env.CV_EDITOR_URL || !env.CV_ORIGIN_SECRET) return null;
+  try {
+    const res = await fetch(`${env.CV_EDITOR_URL.replace(/\/$/, "")}/api/auth/upsert-user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Origin-Secret": env.CV_ORIGIN_SECRET },
+      body: JSON.stringify(who),
+      signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { userId?: number };
+    return typeof data.userId === "number" ? data.userId : null;
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeText(text: string): string {
@@ -211,12 +237,21 @@ export const GoogleAuthHandler = {
         return denyPage(email || "(unknown)");
       }
 
+      const sub = String(profile.sub || "");
+      if (!sub) return new Response("Google did not return a stable subject id", { status: 502 });
+
+      // Resolve this identity to its OWN cv account (create-or-adopt). cv then scopes
+      // every call to it via X-User-Id — no shared owner token. Still admin-gated above,
+      // so today this is the owner mapping to @owner; the plumbing is per-user.
+      const cvUserId = await upsertCvUser(env, { googleSub: sub, email, name: profile.name });
+      if (cvUserId == null) return new Response("Could not provision your cv account — try again shortly.", { status: 502 });
+
       // Complete the grant — identity flows into CvMcp via this.props.
       const { redirectTo } = await provider.completeAuthorization({
         request: oauthReq,
-        userId: email,
+        userId: sub, // stable key (email can change / be reassigned)
         scope: oauthReq.scope || [],
-        props: { email, name: profile.name },
+        props: { email, name: profile.name, cvUserId },
         metadata: undefined,
       });
       return Response.redirect(redirectTo, 302);

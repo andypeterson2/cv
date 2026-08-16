@@ -3,6 +3,7 @@ import { CvMcp } from "./mcp";
 import { GoogleAuthHandler } from "./oauth-google";
 import { fetchVariantPdf } from "./tools";
 import { signingSecret, verifyPayload } from "./sign";
+import { cvCtx } from "./cv-ctx";
 import type { Env } from "./types";
 
 // The Durable Object class must be exported from the Worker entry.
@@ -58,11 +59,12 @@ const PDF_LINK_TTL_MS = 5 * 60 * 1000;
 async function servePdf(request: Request, env: Env): Promise<Response> {
   const token = new URL(request.url).pathname.slice("/pdf/".length);
   const payload = await verifyPayload(token, signingSecret(env), PDF_LINK_TTL_MS);
-  if (!payload || typeof payload.v !== "number") {
+  if (!payload || typeof payload.v !== "number" || typeof payload.u !== "number") {
     return new Response("Invalid or expired download link.", { status: 403, headers: { "x-content-type-options": "nosniff" } });
   }
   try {
-    const bytes = await fetchVariantPdf(payload.v);
+    // Fetch scoped to the user the link was minted for (cv checks the variant is theirs).
+    const bytes = await cvCtx.run({ cvUserId: payload.u }, () => fetchVariantPdf(payload.v as number));
     return new Response(bytes, {
       headers: {
         "Content-Type": "application/pdf",
