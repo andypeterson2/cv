@@ -23,16 +23,21 @@
  * gate actually closes (otherwise enforcing first = instant outage). Flip
  * CV_ORIGIN_SECRET_ENFORCE=true to close it; flip it back to roll back.
  */
+const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
+
 function originGuard(secret, { enforce = false, log = console.warn } = {}) {
+  // A SET (comma-separated) so the secret rotates without an outage window — see
+  // lib/origin-secret.js. A single value behaves as a plain equality check.
+  const secrets = parseOriginSecrets(secret);
   return function (req, res, next) {
-    if (!secret) return next(); // disabled → open (local dev / tests)
+    if (secrets.length === 0) return next(); // disabled → open (local dev / tests)
     if (req.method === 'OPTIONS') return next(); // CORS preflight
     if (/^\/(api\/)?health\/?$/.test(req.path)) return next(); // container/platform healthcheck
 
     const provided = req.get
       ? req.get('x-origin-secret')
       : req.headers && req.headers['x-origin-secret'];
-    if (provided === secret) return next();
+    if (matchesOriginSecret(provided, secrets)) return next();
 
     if (!enforce) {
       log(
