@@ -61,6 +61,8 @@ CV_DOMAIN=cv.example.com CV_USER=me CV_PASS_HASH='<bcrypt-hash>' \
 
 **Alternative (no open ports, per-person access):** put it behind a **Cloudflare Tunnel + Access** (or a **Tailscale** tailnet) instead of Caddy — the edge provides TLS and identity-based auth (grant people by email), the app stays unchanged, and the MCP server authenticates with a service token. Prefer this over a shared password when several distinct people need access.
 
+**Live (this instance):** production runs on **Railway** — `editor/` built from the root `Dockerfile`, auto-deployed on push to `main`. The Railway origin isn't used directly: the `api.andypeterson.dev` gateway Worker and the MCP Worker are its only front doors, injecting the `X-Origin-Secret` the origin guard requires (see `lib/origin-guard.js`). `railway.json` `build.watchPatterns` scopes the deploy to the editor's build inputs (`editor/`, `shared/`, `assets/`, `Dockerfile`), so `mcp-worker/` pushes — which ship via `wrangler`, not Railway — don't rebuild the editor.
+
 ## Architecture
 
 ```
