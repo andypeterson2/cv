@@ -18,6 +18,8 @@
  * NOTE: mounted at `app.use('/api', …)`, so `req.path` here is /api-stripped
  * (e.g. `/variants/10/resolve`); we tolerate a leading `/api` anyway for tests.
  */
+const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
+
 function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = null } = {}) {
   const publicIds = new Set(
     String(publicPersonIds)
@@ -25,6 +27,8 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
       .map((s) => s.trim())
       .filter(Boolean),
   );
+  // Accepted front-door secrets (a SET, for zero-downtime rotation — see origin-secret.js).
+  const originSecrets = parseOriginSecrets(originSecret);
 
   // The owning person of an id-addressed resource, or null (unknown / no db).
   const owner = (kind, id) => {
@@ -61,7 +65,7 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
     // Let it through — the per-user person scoping downstream is what isolates them;
     // a direct caller can't forge X-Origin-Secret, so it can't set a trusted X-User-Id.
     if (headerOf(req, 'X-User-Id')) {
-      if (!originSecret || headerOf(req, 'X-Origin-Secret') === originSecret) return next();
+      if (originSecrets.length === 0 || matchesOriginSecret(headerOf(req, 'X-Origin-Secret'), originSecrets)) return next();
     }
 
     const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);

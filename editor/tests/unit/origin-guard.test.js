@@ -78,4 +78,11 @@ describe('originGuard', () => {
     const { mw } = guard('s3cret', true);
     expect(invoke(mw, 'OPTIONS', '/api/persons/5').nexted).toBe(true);
   });
+
+  test('enforcing: a comma-separated SET accepts ANY listed secret (zero-downtime rotation)', () => {
+    const { mw } = guard('old , new', true); // set cv to "old,new" mid-rotation
+    expect(invoke(mw, 'GET', '/api/variants/10/resolve', 'old').nexted).toBe(true); // a sender still on old works
+    expect(invoke(mw, 'GET', '/api/variants/10/resolve', 'new').nexted).toBe(true); // a sender flipped to new works
+    expect(invoke(mw, 'GET', '/api/variants/10/resolve', 'gone').status).toBe(403); // a dropped/unknown value → 403
+  });
 });

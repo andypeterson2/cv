@@ -63,6 +63,15 @@ CV_DOMAIN=cv.example.com CV_USER=me CV_PASS_HASH='<bcrypt-hash>' \
 
 **Live (this instance):** production runs on **Railway** — `editor/` built from the root `Dockerfile`, auto-deployed on push to `main`. The Railway origin isn't used directly: the `api.andypeterson.dev` gateway Worker and the MCP Worker are its only front doors, injecting the `X-Origin-Secret` the origin guard requires (see `lib/origin-guard.js`). `railway.json` `build.watchPatterns` scopes the deploy to the editor's build inputs (`editor/`, `shared/`, `assets/`, `Dockerfile`), so `mcp-worker/` pushes — which ship via `wrangler`, not Railway — don't rebuild the editor.
 
+**Rotating `CV_ORIGIN_SECRET` (zero-downtime):** cv accepts a **comma-separated set** of origin secrets (`lib/origin-secret.js`), so you can rotate the shared front-door secret without a 403 window:
+
+1. `openssl rand -hex 24` → the new value.
+2. Set cv (Railway) `CV_ORIGIN_SECRET = "<old>,<new>"` and redeploy — cv now accepts **both**.
+3. Flip each sender (they each present one value) to `<new>`: in `andypeterson-gateway/worker` and `cv/mcp-worker`, `wrangler secret put CV_ORIGIN_SECRET`.
+4. Set cv (Railway) `CV_ORIGIN_SECRET = "<new>"` and redeploy — drops `<old>`.
+
+A sender left out of sync surfaces as `GET api.andypeterson.dev/cv/api/persons` returning 403 instead of 200 (the `andypeterson-monitor` watchdog can probe that path to catch it).
+
 ## Architecture
 
 ```

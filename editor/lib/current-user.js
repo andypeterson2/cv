@@ -14,6 +14,8 @@
  * Phase 2 replaces the body below with "read the gateway-verified X-User-Id",
  * falling back to '@system' for logged-out visitors. Nothing else changes.
  */
+const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
+
 function readHeader(req, name) {
   return (req.get ? req.get(name) : req.headers && req.headers[name.toLowerCase()]) || '';
 }
@@ -22,6 +24,8 @@ function attachUser(
   getDb,
   { token = process.env.CV_EDITOR_TOKEN, originSecret = process.env.CV_ORIGIN_SECRET } = {},
 ) {
+  // Accepted front-door secrets (a SET, for zero-downtime rotation — see origin-secret.js).
+  const originSecrets = parseOriginSecrets(originSecret);
   return function (req, _res, next) {
     const db = getDb();
 
@@ -31,7 +35,8 @@ function attachUser(
     // can't spoof a user. Unset secret (local dev / tests) ⇒ the header is trusted.
     const headerUser = readHeader(req, 'X-User-Id');
     if (headerUser) {
-      const fromFrontDoor = !originSecret || readHeader(req, 'X-Origin-Secret') === originSecret;
+      const fromFrontDoor =
+        originSecrets.length === 0 || matchesOriginSecret(readHeader(req, 'X-Origin-Secret'), originSecrets);
       const uid = parseInt(headerUser, 10);
       if (fromFrontDoor && Number.isFinite(uid)) {
         req.userId = uid;
