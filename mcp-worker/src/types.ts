@@ -1,9 +1,9 @@
 import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
 
 /**
- * Worker bindings + secrets. cv data lives on Railway; this Worker is a thin,
- * admin-only MCP front door to it (OAuth gates WHO gets in; every authenticated
- * caller then uses the single CV_EDITOR_TOKEN — admin-only v1).
+ * Worker bindings + secrets. cv data lives on Railway; this Worker is a thin MCP
+ * front door to it (OAuth gates WHO gets in; each authenticated caller is resolved
+ * to its own cv user and drives cv scoped by a verified `X-User-Id`, per-user phase 1).
  */
 /** The native Workers rate-limit binding — `env.OAUTH_RATE_LIMITER.limit({ key })`. */
 export interface RateLimiter {
@@ -20,11 +20,8 @@ export interface Env {
   // Native Workers rate limiter (per-colo, best-effort) fronting the OAuth endpoints.
   OAUTH_RATE_LIMITER: RateLimiter;
 
-  // cv-editor (Railway) REST base + the admin bearer token (secret).
+  // cv-editor (Railway) REST base.
   CV_EDITOR_URL: string;
-  CV_EDITOR_TOKEN?: string;
-  // Optional pre-formed Authorization header value (overrides CV_EDITOR_TOKEN).
-  CV_EDITOR_AUTH?: string;
   // Shared front-door secret cv's origin-guard checks (secret). Also the proof that
   // lets this Worker inject a verified per-caller X-User-Id (see cv lib/current-user.js).
   CV_ORIGIN_SECRET?: string;
