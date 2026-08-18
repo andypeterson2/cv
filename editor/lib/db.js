@@ -73,6 +73,11 @@ class CvDatabase {
       adoptUser: p('UPDATE users SET google_sub = ?, email = ?, name = ? WHERE id = ?'),
       reassignPersons: p('UPDATE persons SET user_id = ? WHERE user_id = ?'),
       deleteUser: p('DELETE FROM users WHERE id = ?'),
+      // Per-user compile quota (migration 019): count of compiles per user per UTC day.
+      getCompileCount: p('SELECT count FROM compile_usage WHERE user_id = ? AND day = ?'),
+      bumpCompileCount: p(
+        'INSERT INTO compile_usage (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1',
+      ),
 
       // Versions (ADR-006) + the per-person content reset restore uses
       insertVersion: p('INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)'),
@@ -266,6 +271,20 @@ class CvDatabase {
       }
     }
     return Number(this._stmts.insertUser.run(googleSub, email, name, role).lastInsertRowid);
+  }
+
+  /**
+   * Meter one compile against a user's daily quota (UTC day). Atomic
+   * check-then-increment: returns {ok:false} WITHOUT counting once the cap is hit,
+   * so a blocked request costs nothing. `day` is injectable for tests.
+   */
+  bumpCompileQuota(userId, limit, day = new Date().toISOString().slice(0, 10)) {
+    return this.db.transaction(() => {
+      const used = this._stmts.getCompileCount.get(userId, day)?.count ?? 0;
+      if (used >= limit) return { ok: false, used, limit };
+      this._stmts.bumpCompileCount.run(userId, day);
+      return { ok: true, used: used + 1, limit };
+    })();
   }
 
   /**

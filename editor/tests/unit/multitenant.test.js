@@ -177,3 +177,26 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
     expect(db.ownerUserId()).toBe(ownerId); // role-based lookup still resolves
   });
 });
+
+describe('per-user compile quota (migration 019)', () => {
+  test('counts compiles and blocks at the cap without over-counting', () => {
+    const uid = db.upsertUser({ googleSub: 'sub-c', email: 'c@x.com', name: 'C' });
+    const day = '2026-08-18';
+    expect(db.bumpCompileQuota(uid, 3, day)).toEqual({ ok: true, used: 1, limit: 3 });
+    expect(db.bumpCompileQuota(uid, 3, day)).toEqual({ ok: true, used: 2, limit: 3 });
+    expect(db.bumpCompileQuota(uid, 3, day)).toEqual({ ok: true, used: 3, limit: 3 });
+    // Over the cap: blocked, and the block neither runs a compile nor inflates the count.
+    expect(db.bumpCompileQuota(uid, 3, day)).toEqual({ ok: false, used: 3, limit: 3 });
+    expect(db.bumpCompileQuota(uid, 3, day)).toEqual({ ok: false, used: 3, limit: 3 });
+  });
+
+  test('the quota is per-user and per-UTC-day', () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com', name: 'A' });
+    const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com', name: 'B' });
+    db.bumpCompileQuota(a, 2, '2026-08-18');
+    db.bumpCompileQuota(a, 2, '2026-08-18');
+    expect(db.bumpCompileQuota(a, 2, '2026-08-18').ok).toBe(false); // A exhausted for the day
+    expect(db.bumpCompileQuota(b, 2, '2026-08-18').ok).toBe(true); // B is independent
+    expect(db.bumpCompileQuota(a, 2, '2026-08-19').ok).toBe(true); // A resets the next day
+  });
+});
