@@ -11,7 +11,7 @@
  *     it returns a clear "unsupported on the remote server" error (the ONLY tool
  *     whose behaviour intentionally diverges).
  *
- * Config (CV_EDITOR_URL + CV_EDITOR_TOKEN) comes from the Worker env, read at call
+ * Config (CV_EDITOR_URL + CV_ORIGIN_SECRET) comes from the Worker env, read at call
  * time via the `cloudflare:workers` global env.
  */
 import shared from "@cv/constants"; // canonical enums/patterns (single source of truth)
@@ -22,7 +22,7 @@ import { cvCtx } from "./cv-ctx";
 
 const enc = encodeURIComponent;
 
-type CvEnv = { CV_EDITOR_URL?: string; CV_EDITOR_TOKEN?: string; CV_EDITOR_AUTH?: string; CV_ORIGIN_SECRET?: string; MCP_PUBLIC_URL?: string; COOKIE_SECRET?: string; GOOGLE_CLIENT_SECRET?: string };
+type CvEnv = { CV_EDITOR_URL?: string; CV_ORIGIN_SECRET?: string; MCP_PUBLIC_URL?: string; COOKIE_SECRET?: string; GOOGLE_CLIENT_SECRET?: string };
 
 /** Resolve the cv-editor base URL + Authorization header from the Worker env.
  *  Requires CV_EDITOR_URL (set in wrangler.jsonc to the Railway cv) — no localhost
