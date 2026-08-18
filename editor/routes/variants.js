@@ -193,6 +193,26 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     message: { success: false, log: 'Too many compile requests — please wait a moment.' },
   });
 
+  // Durable per-USER daily cap, layered on the per-IP burst limit above + the shared
+  // concurrency cap. Any signed-in account can compile its own CV, so bound TOTAL
+  // compiles/user/day — the real cost lever a rotating-IP abuser slips past. The owner
+  // runs its own instance and is unmetered; everyone else (incl. @system for the public
+  // demo) shares CV_COMPILE_DAILY_LIMIT (default 100). Metered BEFORE the expensive work,
+  // and a blocked request isn't counted — so hitting the cap costs nothing.
+  function compileQuota(req, res, next) {
+    const db = getDb();
+    if (req.userId != null && req.userId === db.ownerUserId()) return next(); // owner: unmetered
+    const limit = Number(process.env.CV_COMPILE_DAILY_LIMIT) || 100;
+    const r = db.bumpCompileQuota(req.userId, limit);
+    if (!r.ok) {
+      res.setHeader('Retry-After', '3600');
+      return res
+        .status(429)
+        .json({ success: false, log: `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.` });
+    }
+    next();
+  }
+
   // Shared compile tail — generate the .tex from resolved data, queue the (costly,
   // concurrency-capped) xelatex run, then stream the PDF back inline or JSON the log.
   // `opts` carries what differs between a variant and the main document: the per-request
@@ -272,9 +292,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
 
   // /main/:pid/pdf (3 segments) can't collide with /:id/pdf (2 segments); registered
   // first for clarity.
-  router.get('/main/:pid/pdf', compileRateLimit, (req, res) => compileMain(intId(req.params.pid, 'person id'), res, { inline: true }));
-  router.get('/:id/pdf', compileRateLimit, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }));
-  router.post('/:id/compile', compileRateLimit, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }));
+  router.get('/main/:pid/pdf', compileRateLimit, compileQuota, (req, res) => compileMain(intId(req.params.pid, 'person id'), res, { inline: true }));
+  router.get('/:id/pdf', compileRateLimit, compileQuota, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }));
+  router.post('/:id/compile', compileRateLimit, compileQuota, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }));
 
   return router;
 };
