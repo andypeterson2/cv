@@ -200,3 +200,53 @@ describe('per-user compile quota (migration 019)', () => {
     expect(db.bumpCompileQuota(a, 2, '2026-08-19').ok).toBe(true); // A resets the next day
   });
 });
+
+describe('per-user résumé-name uniqueness (migration 020)', () => {
+  test('two accounts can share a résumé name; one account still cannot duplicate its own', () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com', name: 'A' });
+    const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com', name: 'B' });
+    const pa = db.createPerson('Resume', a);
+    const pb = db.createPerson('Resume', b); // same name, different account → allowed now (was a global-UNIQUE conflict)
+    expect(pa).not.toBe(pb);
+    expect(db.getPersonForUser(pa, a).name).toBe('Resume');
+    expect(db.getPersonForUser(pb, b).name).toBe('Resume');
+    expect(() => db.createPerson('Resume', a)).toThrow(/UNIQUE/); // same account → still rejected (app maps this to a 409)
+  });
+
+  test('the rebuild preserves persons + ids and keeps child FKs bound', () => {
+    const Database = require('better-sqlite3');
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../../migrations');
+    const raw = new Database(':memory:');
+    raw.pragma('foreign_keys = ON');
+    // Apply every migration BEFORE 020, so persons still has the OLD global UNIQUE(name).
+    raw.exec(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`);
+    for (const f of fs.readdirSync(dir).filter((x) => (x.endsWith('.sql') || x.endsWith('.js')) && !x.includes('rollback')).sort()) {
+      if (parseInt(f, 10) >= 20) break;
+      if (f.endsWith('.sql')) raw.exec(fs.readFileSync(path.join(dir, f), 'utf-8'));
+      else require(path.join(dir, f))(raw);
+      raw.prepare('INSERT INTO _migrations (name) VALUES (?)').run(f);
+    }
+    // Seed two accounts, two persons, and a child section under the first person.
+    raw.prepare("INSERT INTO users (google_sub, email, name, role) VALUES ('u1','1',NULL,'user'),('u2','2',NULL,'user')").run();
+    const u1 = raw.prepare("SELECT id FROM users WHERE google_sub='u1'").get().id;
+    const u2 = raw.prepare("SELECT id FROM users WHERE google_sub='u2'").get().id;
+    raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u1);
+    raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Beta', u2);
+    const pAlpha = raw.prepare("SELECT id FROM persons WHERE name='Alpha'").get().id;
+    raw.prepare('INSERT INTO sections (person_id, slug, type) VALUES (?, ?, ?)').run(pAlpha, 'summary', 'summary');
+
+    require('../../migrations/020_persons_per_user_unique')(raw);
+
+    // Rows, ids, and columns survive; the child still points at its person; no dangling FKs.
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM persons').get().n).toBe(2);
+    expect(raw.prepare('SELECT name, user_id FROM persons WHERE id = ?').get(pAlpha)).toEqual({ name: 'Alpha', user_id: u1 });
+    expect(raw.prepare('SELECT person_id FROM sections').get().person_id).toBe(pAlpha);
+    expect(raw.pragma('foreign_key_check').length).toBe(0);
+    // And the new constraint is live: cross-account dup ok, same-account dup rejected.
+    expect(() => raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u2)).not.toThrow();
+    expect(() => raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u1)).toThrow(/UNIQUE/);
+    raw.close();
+  });
+});
