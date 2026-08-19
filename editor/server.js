@@ -197,6 +197,22 @@ app.use((err, req, res, _next) => {
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
+  // Eager DB init: build the database and run migrations at boot, BEFORE we listen.
+  // getDb() is otherwise lazy (first data request), and /health is DB-free — so a
+  // migration that crashes would leave the deploy health-check green while every data
+  // request 500s on a half-applied schema. Running it here turns that into a clean
+  // failed deploy: a non-zero exit before the port ever opens. Tests import `app`
+  // (require.main !== module) and inject their own DB via setDb, so this runs only
+  // for the real server process.
+  try {
+    getDb();
+    console.log('Database initialized (migrations applied).');
+  } catch (err) {
+    console.error('FATAL: database initialization failed at boot; refusing to start.');
+    console.error(err);
+    process.exit(1);
+  }
+
   app.listen(PORT, process.env.HOST || '127.0.0.1', () => {
     console.log(`CV Editor running at http://localhost:${PORT}`);
     console.log(`Project root: ${PROJECT_ROOT}`);
