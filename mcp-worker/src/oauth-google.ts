@@ -60,7 +60,14 @@ async function upsertCvUser(
   try {
     const res = await fetch(`${env.CV_EDITOR_URL.replace(/\/$/, "")}/api/auth/upsert-user`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Origin-Secret": env.CV_ORIGIN_SECRET },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Origin-Secret": env.CV_ORIGIN_SECRET,
+        // CF Access service-token in front of cv's tunnel host (Stage 6) — omitted until set.
+        ...(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET
+          ? { "CF-Access-Client-Id": env.CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": env.CF_ACCESS_CLIENT_SECRET }
+          : {}),
+      },
       body: JSON.stringify(who),
       signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
     });
