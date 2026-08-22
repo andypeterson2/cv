@@ -25,6 +25,10 @@ export interface Env {
   // Shared front-door secret cv's origin-guard checks (secret). Also the proof that
   // lets this Worker inject a verified per-caller X-User-Id (see cv lib/current-user.js).
   CV_ORIGIN_SECRET?: string;
+  // CF Access service-token (Stage 6, tech-debt #12): presented to cv's tunnel host
+  // when both are set, so its Access policy admits only this front door.
+  CF_ACCESS_CLIENT_ID?: string;
+  CF_ACCESS_CLIENT_SECRET?: string;
 
   // Comma-separated allowlist of Google emails granted access (admin-only v1).
   ADMIN_EMAILS: string;
