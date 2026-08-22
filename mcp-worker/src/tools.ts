@@ -22,26 +22,31 @@ import { cvCtx } from "./cv-ctx";
 
 const enc = encodeURIComponent;
 
-type CvEnv = { CV_EDITOR_URL?: string; CV_ORIGIN_SECRET?: string; MCP_PUBLIC_URL?: string; COOKIE_SECRET?: string; GOOGLE_CLIENT_SECRET?: string };
+type CvEnv = { CV_EDITOR_URL?: string; CV_ORIGIN_SECRET?: string; CF_ACCESS_CLIENT_ID?: string; CF_ACCESS_CLIENT_SECRET?: string; MCP_PUBLIC_URL?: string; COOKIE_SECRET?: string; GOOGLE_CLIENT_SECRET?: string };
 
 /** Resolve the cv-editor base URL + Authorization header from the Worker env.
  *  Requires CV_EDITOR_URL (set in wrangler.jsonc to the Railway cv) — no localhost
  *  default, so a misconfiguration fails loudly instead of silently hitting localhost. */
-function cvConfig(): { base: string; originSecret?: string } {
+function cvConfig(): { base: string; originSecret?: string; accessHeaders: Record<string, string> } {
   const e = env as unknown as CvEnv;
   if (!e.CV_EDITOR_URL) throw new Error("CV_EDITOR_URL is not configured on this Worker.");
   const base = e.CV_EDITOR_URL.replace(/\/$/, "");
   // This Worker is one of cv's two front doors; the origin rejects callers that don't
   // present this secret (cv editor/lib/origin-guard.js). It ALSO authorizes the
   // per-caller X-User-Id we inject below — cv trusts X-User-Id only behind this secret.
-  return { base, originSecret: e.CV_ORIGIN_SECRET };
+  // CF Access service-token in front of cv's tunnel host (Stage 6) — omitted until set.
+  const accessHeaders: Record<string, string> =
+    e.CF_ACCESS_CLIENT_ID && e.CF_ACCESS_CLIENT_SECRET
+      ? { "CF-Access-Client-Id": e.CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": e.CF_ACCESS_CLIENT_SECRET }
+      : {};
+  return { base, originSecret: e.CV_ORIGIN_SECRET, accessHeaders };
 }
 
 type ApiOpts = { expectBinary?: boolean };
 
 /** HTTP helper — same request construction + contract-error mapping as the stdio server. */
 export async function api(method: string, path: string, body?: unknown, { expectBinary = false }: ApiOpts = {}): Promise<any> {
-  const { base, originSecret } = cvConfig();
+  const { base, originSecret, accessHeaders } = cvConfig();
   // WHO this call runs as, set at the dispatch boundary (mcp.ts CallTool / servePdf).
   // Required: cv is scoped per-user by X-User-Id now, so a missing context is a bug —
   // fail loudly rather than silently falling through to the owner/demo account.
@@ -55,6 +60,7 @@ export async function api(method: string, path: string, body?: unknown, { expect
         ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         "X-User-Id": String(cvUserId),
         ...(originSecret ? { "X-Origin-Secret": originSecret } : {}),
+        ...accessHeaders,
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
