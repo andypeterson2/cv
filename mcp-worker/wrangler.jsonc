@@ -33,8 +33,9 @@
 		}
 	],
 	"vars": {
-		// cv-editor (Railway) REST base — public URL, not a secret. The admin token is a secret.
-		"CV_EDITOR_URL": "https://cv-production-cb18.up.railway.app",
+		// cv-editor REST base — the Cloudflare Tunnel hostname (tech-debt #12); the Railway
+		// origin is private, reached only via the tunnel. Public URL, not a secret.
+		"CV_EDITOR_URL": "https://cv-origin.andypeterson.dev",
 		// This Worker's own public origin, for building signed /pdf download links.
 		"MCP_PUBLIC_URL": "https://mcp.andypeterson.dev"
 		// ADMIN_EMAILS is a SECRET (not a var) — keeps the owner's email out of this public repo.
