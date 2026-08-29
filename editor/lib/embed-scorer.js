@@ -1,21 +1,22 @@
 /**
  * OPTIONAL local embedding scorer for tag suggestion — an alternate ranker that
  * plugs into db.suggestTags' `scorer` seam (see lib/suggest.js). Pure-Node, NO
- * Python: uses @xenova/transformers (transformers.js) running all-MiniLM-L6-v2
+ * Python: uses @huggingface/transformers (transformers.js v3, the maintained
+ * successor of @xenova/transformers) running all-MiniLM-L6-v2
  * (~80 MB ONNX). Catches conceptual matches the lexical scorer misses (e.g.
  * "orchestrated containers" → `kubernetes`).
  *
  * Design guarantees:
  *  - LAZY: the model loads on first scorer() call, never at require time, so the
  *    default lexical path never pays for it.
- *  - GRACEFUL ABSENCE: if @xenova/transformers isn't installed, requiring this
+ *  - GRACEFUL ABSENCE: if @huggingface/transformers isn't installed, requiring this
  *    module throws (the require.resolve below), and routes/persons.js
  *    resolveScorer turns that into a clean 501 — the lexical path is unaffected.
  *  - SUGGEST-NOT-APPLY: returns candidates only; never writes a tag, never
  *    touches variant resolution.
  */
 
-require.resolve('@xenova/transformers'); // throws if the optional dep is absent → 501 upstream
+require.resolve('@huggingface/transformers'); // throws if the optional dep is absent → 501 upstream
 const { cosineRank } = require('./cosine');
 
 const MODEL = 'Xenova/all-MiniLM-L6-v2';
@@ -25,7 +26,7 @@ const _cache = new Map(); // text → number[] embedding (per-process; vocab is 
 function getPipe() {
   if (!_pipePromise) {
     _pipePromise = (async () => {
-      const { pipeline, env } = require('@xenova/transformers');
+      const { pipeline, env } = require('@huggingface/transformers');
       // Offline guarantee for baked-model deploys: never reach out to the HF CDN
       // at runtime. Set CV_EMBED_OFFLINE=1 where the model is pre-baked (the
       // Docker dev/deploy stages). Left unset on host dev so a fresh checkout can
