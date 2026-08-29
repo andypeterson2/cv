@@ -1,9 +1,9 @@
-import { McpAgent } from "agents/mcp";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import { tools, callTool } from "./tools";
-import { cvCtx } from "./cv-ctx";
-import type { Env, CvProps } from "./types";
+import { McpAgent } from 'agents/mcp';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import { tools, callTool } from './tools';
+import { cvCtx } from './cv-ctx';
+import type { Env, CvProps } from './types';
 
 /**
  * The cv MCP server as a Durable-Object-backed McpAgent. The 57 tools mount on the
@@ -17,7 +17,7 @@ import type { Env, CvProps } from "./types";
  * into an AsyncLocalStorage at dispatch so all 57 handlers stay untouched.
  */
 export class CvMcp extends McpAgent<Env, unknown, CvProps> {
-  server = new Server({ name: "cv-editor", version: "0.2.0" }, { capabilities: { tools: {} } });
+  server = new Server({ name: 'cv-editor', version: '0.2.0' }, { capabilities: { tools: {} } });
 
   async init(): Promise<void> {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: tools as any }));
@@ -27,16 +27,16 @@ export class CvMcp extends McpAgent<Env, unknown, CvProps> {
       try {
         // Scope every cv call to the authenticated caller (see cv-ctx). api() reads this.
         const cvUserId = this.props?.cvUserId;
-        if (cvUserId == null) throw new Error("Not authenticated: no cv user id on this session.");
+        if (cvUserId == null) throw new Error('Not authenticated: no cv user id on this session.');
         const result = await cvCtx.run({ cvUserId }, () => callTool(name, args));
         // cv_get_pdf (and any future binary tool) returns a ready-made MCP content
         // array under `__content`; everything else is JSON-stringified as text.
-        if (result && typeof result === "object" && Array.isArray((result as any).__content)) {
+        if (result && typeof result === 'object' && Array.isArray((result as any).__content)) {
           return { content: (result as any).__content };
         }
-        return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
       } catch (e: any) {
-        return { content: [{ type: "text" as const, text: `Error: ${e.message}` }], isError: true };
+        return { content: [{ type: 'text' as const, text: `Error: ${e.message}` }], isError: true };
       }
     });
   }

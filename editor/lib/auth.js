@@ -57,6 +57,7 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
   const headerOf = (req, name) =>
     (req.get ? req.get(name) : req.headers && req.headers[name.toLowerCase()]) || '';
 
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 18; split when next touched
   return function (req, res, next) {
     if (!token) return next(); // disabled → open (local dev / tests)
 
@@ -65,7 +66,11 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
     // Let it through — the per-user person scoping downstream is what isolates them;
     // a direct caller can't forge X-Origin-Secret, so it can't set a trusted X-User-Id.
     if (headerOf(req, 'X-User-Id')) {
-      if (originSecrets.length === 0 || matchesOriginSecret(headerOf(req, 'X-Origin-Secret'), originSecrets)) return next();
+      if (
+        originSecrets.length === 0 ||
+        matchesOriginSecret(headerOf(req, 'X-Origin-Secret'), originSecrets)
+      )
+        return next();
     }
 
     const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
@@ -75,14 +80,17 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
     let isGatedRead = false;
     if ((req.method === 'GET' || req.method === 'HEAD') && !isCompileGet) {
       const c = classify(req.path);
-      if (!c) isGatedRead = true; // unrecognized route → default-deny
-      else if (c.global) isGatedRead = false; // safe global → open
+      if (!c)
+        isGatedRead = true; // unrecognized route → default-deny
+      else if (c.global)
+        isGatedRead = false; // safe global → open
       else isGatedRead = !publicIds.has(String(c.person)); // person data → gate unless public (null owner → gated)
     }
 
     if (!isWrite && !isCompileGet && !isGatedRead) return next();
 
-    const header = (req.get ? req.get('authorization') : req.headers && req.headers.authorization) || '';
+    const header =
+      (req.get ? req.get('authorization') : req.headers && req.headers.authorization) || '';
     const provided = header.startsWith('Bearer ') ? header.slice(7) : header;
     if (provided && provided === token) return next();
 

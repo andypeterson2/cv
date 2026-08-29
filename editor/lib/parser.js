@@ -59,7 +59,7 @@ function parseCventries(tex) {
       organization: organization.trim(),
       location: location.trim(),
       date: date.trim(),
-      items
+      items,
     });
   }
 
@@ -73,9 +73,9 @@ function parseCventries(tex) {
 function parseCvskills(tex) {
   const title = parseSectionTitle(tex);
   const commands = findCommand(tex, 'cvskill', 2);
-  const entries = commands.map(cmd => ({
+  const entries = commands.map((cmd) => ({
     category: cmd.args[0].trim(),
-    skills: cmd.args[1].trim()
+    skills: cmd.args[1].trim(),
   }));
   return { type: 'cvskills', title, entries };
 }
@@ -87,11 +87,11 @@ function parseCvskills(tex) {
 function parseCvhonors(tex) {
   const title = parseSectionTitle(tex);
   const commands = findCommand(tex, 'cvhonor', 4);
-  const entries = commands.map(cmd => ({
+  const entries = commands.map((cmd) => ({
     award: cmd.args[0].trim(),
     issuer: cmd.args[1].trim(),
     location: cmd.args[2].trim(),
-    date: cmd.args[3].trim()
+    date: cmd.args[3].trim(),
   }));
   return { type: 'cvhonors', title, entries };
 }
@@ -103,11 +103,11 @@ function parseCvhonors(tex) {
 function parseCvreferences(tex) {
   const title = parseSectionTitle(tex);
   const commands = findCommand(tex, 'cvreference', 4);
-  const entries = commands.map(cmd => ({
+  const entries = commands.map((cmd) => ({
     name: cmd.args[0].trim(),
     relation: cmd.args[1].trim(),
     phone: cmd.args[2].trim(),
-    email: cmd.args[3].trim()
+    email: cmd.args[3].trim(),
   }));
   return { type: 'cvreferences', title, entries };
 }
@@ -124,7 +124,7 @@ function parseCvparagraph(tex) {
     // Strip comment lines and leading/trailing whitespace
     text = m[1]
       .split('\n')
-      .filter(line => !line.trim().startsWith('%'))
+      .filter((line) => !line.trim().startsWith('%'))
       .join('\n')
       .trim();
   }
@@ -138,12 +138,18 @@ function parseCvparagraph(tex) {
 function parseSection(tex) {
   const type = detectSectionType(tex);
   switch (type) {
-    case 'cventries': return parseCventries(tex);
-    case 'cvskills': return parseCvskills(tex);
-    case 'cvhonors': return parseCvhonors(tex);
-    case 'cvreferences': return parseCvreferences(tex);
-    case 'cvparagraph': return parseCvparagraph(tex);
-    default: return { type: 'unknown', title: parseSectionTitle(tex), raw: tex };
+    case 'cventries':
+      return parseCventries(tex);
+    case 'cvskills':
+      return parseCvskills(tex);
+    case 'cvhonors':
+      return parseCvhonors(tex);
+    case 'cvreferences':
+      return parseCvreferences(tex);
+    case 'cvparagraph':
+      return parseCvparagraph(tex);
+    default:
+      return { type: 'unknown', title: parseSectionTitle(tex), raw: tex };
   }
 }
 
@@ -163,8 +169,9 @@ function parseDocument(tex) {
     if (activeMatch) {
       // Skip data.tex — it's the shared data file, not a content section
       if (activeMatch[1] === 'data.tex') continue;
-      const comment = trimmed.includes('%') ?
-        trimmed.substring(trimmed.indexOf('%') + 1).trim() : '';
+      const comment = trimmed.includes('%')
+        ? trimmed.substring(trimmed.indexOf('%') + 1).trim()
+        : '';
       sections.push({ file: activeMatch[1], enabled: true, comment });
       continue;
     }
@@ -185,6 +192,7 @@ function parseDocument(tex) {
 // data.tex parser
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 31; the LaTeX tokenizer state machine
 function parseData(tex) {
   const personal = {};
   const metrics = [];
@@ -199,9 +207,15 @@ function parseData(tex) {
     // Pattern: a comment line between two %--- separator lines
     if (trimmed.startsWith('%') && !trimmed.startsWith('%---') && !trimmed.startsWith('%-')) {
       const heading = trimmed.replace(/^%\s*/, '');
-      if (heading && !heading.startsWith('Edit') && !heading.startsWith('Replace') &&
-          !heading.startsWith('Placeholder') && !heading.startsWith('SHARED') &&
-          !heading.startsWith('Personal') && heading.length > 3) {
+      if (
+        heading &&
+        !heading.startsWith('Edit') &&
+        !heading.startsWith('Replace') &&
+        !heading.startsWith('Placeholder') &&
+        !heading.startsWith('SHARED') &&
+        !heading.startsWith('Personal') &&
+        heading.length > 3
+      ) {
         currentGroup = heading;
       }
     }
@@ -215,7 +229,15 @@ function parseData(tex) {
     }
 
     // Personal info: single-arg commands
-    const singleArgCmds = ['position', 'address', 'mobile', 'email', 'github', 'linkedin', 'homepage'];
+    const singleArgCmds = [
+      'position',
+      'address',
+      'mobile',
+      'email',
+      'github',
+      'linkedin',
+      'homepage',
+    ];
     let matched = false;
     for (const cmd of singleArgCmds) {
       const re = new RegExp(`^\\\\${cmd}\\{`);
@@ -223,7 +245,9 @@ function parseData(tex) {
         try {
           const { args } = extractBraceArgs(trimmed, trimmed.indexOf('{'), 1);
           personal[cmd] = args[0];
-        } catch (e) { /* skip malformed */ }
+        } catch (e) {
+          /* skip malformed */
+        }
         matched = true;
         break;
       }
@@ -261,7 +285,7 @@ function parseCoverletter(tex) {
     opening: '',
     closing: '',
     enclosure: { label: 'Attached', content: '' },
-    sections: []
+    sections: [],
   };
 
   // \recipient{name}{address}
@@ -291,7 +315,9 @@ function parseCoverletter(tex) {
     try {
       const { args } = extractBraceArgs(tex, afterBracket, 1);
       result.enclosure.content = args[0];
-    } catch (e) { /* skip malformed */ }
+    } catch (e) {
+      /* skip malformed */
+    }
   }
 
   // \lettersection{title}\nbody text until next \lettersection or \end{cvletter}
@@ -303,7 +329,11 @@ function parseCoverletter(tex) {
     const sectionStarts = [];
 
     while ((sMatch = sectionPattern.exec(body)) !== null) {
-      sectionStarts.push({ title: sMatch[1], index: sMatch.index, end: sMatch.index + sMatch[0].length });
+      sectionStarts.push({
+        title: sMatch[1],
+        index: sMatch.index,
+        end: sMatch.index + sMatch[0].length,
+      });
     }
 
     for (let i = 0; i < sectionStarts.length; i++) {
@@ -323,5 +353,5 @@ module.exports = {
   parseData,
   parseCoverletter,
   detectSectionType,
-  parseSectionTitle
+  parseSectionTitle,
 };

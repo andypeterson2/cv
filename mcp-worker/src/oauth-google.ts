@@ -17,22 +17,29 @@
  * redirect_uri and try to intercept the auth code. We pin an allowlist of redirect hosts
  * (ALLOWED_REDIRECT_HOSTS) — the code can only ever be sent to a Claude/localhost callback.
  */
-import type { Env } from "./types";
-import { signingSecret, signPayload, verifyPayload } from "./sign";
+import type { Env } from './types';
+import { signingSecret, signPayload, verifyPayload } from './sign';
 
-const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
-const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
-const GOOGLE_USERINFO = "https://openidconnect.googleapis.com/v1/userinfo";
+const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
+const GOOGLE_USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo';
 const TTL_MS = 5 * 60 * 1000; // signed state tokens valid for 5 minutes (interactive hop + slack)
 const GOOGLE_FETCH_TIMEOUT_MS = 8000;
 
 // Where an OAuth authorization code may be redirected. DCR is public, so this — not the
 // client's self-declared redirect_uri — is the real backstop against code interception.
 // Add a host here if a new legitimate client (a different Claude domain) ever needs it.
-const ALLOWED_REDIRECT_HOSTS = new Set(["claude.ai", "claude.com", "localhost", "127.0.0.1"]);
+const ALLOWED_REDIRECT_HOSTS = new Set(['claude.ai', 'claude.com', 'localhost', '127.0.0.1']);
 
-interface GoogleTokens { access_token?: string }
-interface GoogleProfile { sub?: string; email?: string; email_verified?: boolean | string; name?: string }
+interface GoogleTokens {
+  access_token?: string;
+}
+interface GoogleProfile {
+  sub?: string;
+  email?: string;
+  email_verified?: boolean | string;
+  name?: string;
+}
 
 function isAllowedRedirect(uri: unknown): boolean {
   try {
@@ -43,7 +50,11 @@ function isAllowedRedirect(uri: unknown): boolean {
 }
 
 function adminEmails(env: Env): string[] {
-  return String(env.ADMIN_EMAILS || "").toLowerCase().split(",").map((s) => s.trim()).filter(Boolean);
+  return String(env.ADMIN_EMAILS || '')
+    .toLowerCase()
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -58,14 +69,17 @@ async function upsertCvUser(
 ): Promise<number | null> {
   if (!env.CV_EDITOR_URL || !env.CV_ORIGIN_SECRET) return null;
   try {
-    const res = await fetch(`${env.CV_EDITOR_URL.replace(/\/$/, "")}/api/auth/upsert-user`, {
-      method: "POST",
+    const res = await fetch(`${env.CV_EDITOR_URL.replace(/\/$/, '')}/api/auth/upsert-user`, {
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
-        "X-Origin-Secret": env.CV_ORIGIN_SECRET,
+        'Content-Type': 'application/json',
+        'X-Origin-Secret': env.CV_ORIGIN_SECRET,
         // CF Access service-token in front of cv's tunnel host (Stage 6) — omitted until set.
         ...(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET
-          ? { "CF-Access-Client-Id": env.CF_ACCESS_CLIENT_ID, "CF-Access-Client-Secret": env.CF_ACCESS_CLIENT_SECRET }
+          ? {
+              'CF-Access-Client-Id': env.CF_ACCESS_CLIENT_ID,
+              'CF-Access-Client-Secret': env.CF_ACCESS_CLIENT_SECRET,
+            }
           : {}),
       },
       body: JSON.stringify(who),
@@ -73,37 +87,42 @@ async function upsertCvUser(
     });
     if (!res.ok) return null;
     const data = (await res.json()) as { userId?: number };
-    return typeof data.userId === "number" ? data.userId : null;
+    return typeof data.userId === 'number' ? data.userId : null;
   } catch {
     return null;
   }
 }
 
 function sanitizeText(text: string): string {
-  return String(text || "")
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function securityHeaders(): Headers {
   const csp = [
-    "default-src 'none'", "style-src 'self' 'unsafe-inline'",
+    "default-src 'none'",
+    "style-src 'self' 'unsafe-inline'",
     // MUST allow Google: the consent POST redirects (302) to accounts.google.com, and
     // modern browsers enforce form-action against the REDIRECT target — 'self' alone
     // silently blocks the hop to Google (the "Continue with Google click does nothing" bug).
     "form-action 'self' https://accounts.google.com",
-    "frame-ancestors 'none'", "base-uri 'self'",
-  ].join("; ");
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+  ].join('; ');
   return new Headers({
-    "Content-Type": "text/html; charset=utf-8",
-    "Content-Security-Policy": csp,
-    "X-Frame-Options": "DENY",
-    "X-Content-Type-Options": "nosniff",
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Security-Policy': csp,
+    'X-Frame-Options': 'DENY',
+    'X-Content-Type-Options': 'nosniff',
   });
 }
 
 function consentPage(opts: { clientName: string; query: string; token: string }): Response {
-  const name = sanitizeText(opts.clientName || "An MCP client");
+  const name = sanitizeText(opts.clientName || 'An MCP client');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Authorize cv MCP</title></head>
@@ -129,18 +148,22 @@ function denyPage(email: string): Response {
 }
 
 export const GoogleAuthHandler = {
+  // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 39; the OAuth code-exchange state machine — split when next touched
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const provider = env.OAUTH_PROVIDER;
     const url = new URL(request.url);
     const secret = signingSecret(env);
     if (!secret) {
       // Fail closed with a clear message instead of a cryptic HMAC DataError.
-      return new Response("Server misconfigured: set the COOKIE_SECRET (or GOOGLE_CLIENT_SECRET) worker secret.", { status: 500 });
+      return new Response(
+        'Server misconfigured: set the COOKIE_SECRET (or GOOGLE_CLIENT_SECRET) worker secret.',
+        { status: 500 },
+      );
     }
 
-    if (url.pathname === "/authorize") {
+    if (url.pathname === '/authorize') {
       // GET → show consent, embedding the parsed auth request in a signed token.
-      if (request.method === "GET") {
+      if (request.method === 'GET') {
         // parseAuthRequest THROWS on a malformed/incomplete request (no client_id, bad
         // response_type — or just a scanner poking /authorize). Unhandled, that's an
         // uncaught Worker exception: the caller gets an opaque Cloudflare 1101 and the
@@ -149,16 +172,16 @@ export const GoogleAuthHandler = {
         try {
           oauthReq = await provider.parseAuthRequest(request);
         } catch {
-          return new Response("Invalid authorization request.", { status: 400 });
+          return new Response('Invalid authorization request.', { status: 400 });
         }
         // Pin the redirect target (DCR is public — the client's redirect_uri is untrusted).
         if (!isAllowedRedirect(oauthReq.redirectUri)) {
-          return new Response("Unregistered redirect_uri.", { status: 400 });
+          return new Response('Unregistered redirect_uri.', { status: 400 });
         }
-        let clientName = "";
+        let clientName = '';
         try {
           const client = await provider.lookupClient(oauthReq.clientId);
-          clientName = (client as any)?.clientName || (client as any)?.clientId || "";
+          clientName = (client as any)?.clientName || (client as any)?.clientId || '';
         } catch {
           /* unknown client — render with a generic label */
         }
@@ -167,61 +190,65 @@ export const GoogleAuthHandler = {
       }
 
       // POST → verify the signed token (CSRF; no lookup), then redirect to Google.
-      if (request.method === "POST") {
+      if (request.method === 'POST') {
         // Same reasoning as the GET: formData() throws on a non-form body, and an
         // unauthenticated endpoint must not answer garbage with an uncaught throw.
         let form: FormData;
         try {
           form = await request.formData();
         } catch {
-          return new Response("Invalid authorization request.", { status: 400 });
+          return new Response('Invalid authorization request.', { status: 400 });
         }
-        const oauthReq = await verifyPayload(String(form.get("t") || ""), secret, TTL_MS);
+        const oauthReq = await verifyPayload(String(form.get('t') || ''), secret, TTL_MS);
         if (!oauthReq) {
-          return new Response("Consent expired or invalid — please restart the connection.", { status: 400 });
+          return new Response('Consent expired or invalid — please restart the connection.', {
+            status: 400,
+          });
         }
         const stateToken = await signPayload(oauthReq, secret);
         const googleUrl = new URL(GOOGLE_AUTH);
-        googleUrl.searchParams.set("client_id", env.GOOGLE_CLIENT_ID);
-        googleUrl.searchParams.set("redirect_uri", `${url.origin}/callback`);
-        googleUrl.searchParams.set("response_type", "code");
-        googleUrl.searchParams.set("scope", "openid email profile");
-        googleUrl.searchParams.set("state", stateToken);
-        googleUrl.searchParams.set("access_type", "online");
-        googleUrl.searchParams.set("prompt", "select_account");
+        googleUrl.searchParams.set('client_id', env.GOOGLE_CLIENT_ID);
+        googleUrl.searchParams.set('redirect_uri', `${url.origin}/callback`);
+        googleUrl.searchParams.set('response_type', 'code');
+        googleUrl.searchParams.set('scope', 'openid email profile');
+        googleUrl.searchParams.set('state', stateToken);
+        googleUrl.searchParams.set('access_type', 'online');
+        googleUrl.searchParams.set('prompt', 'select_account');
         return Response.redirect(googleUrl.toString(), 302);
       }
 
-      return new Response("Method Not Allowed", { status: 405, headers: { Allow: "GET, POST" } });
+      return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'GET, POST' } });
     }
 
     // Google redirects back with ?code&state — verify the signed state, then finish.
-    if (url.pathname === "/callback" && request.method === "GET") {
-      const code = url.searchParams.get("code");
-      const oauthReq = await verifyPayload(url.searchParams.get("state") || "", secret, TTL_MS);
+    if (url.pathname === '/callback' && request.method === 'GET') {
+      const code = url.searchParams.get('code');
+      const oauthReq = await verifyPayload(url.searchParams.get('state') || '', secret, TTL_MS);
       if (!code || !oauthReq) {
-        return new Response("Invalid or expired authorization — please restart the connection.", { status: 400 });
+        return new Response('Invalid or expired authorization — please restart the connection.', {
+          status: 400,
+        });
       }
 
       // Exchange the code for tokens at Google (bounded — don't hang on a stalled IdP).
       let tokens: GoogleTokens;
       try {
         const tokenRes = await fetch(GOOGLE_TOKEN, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({
             code,
             client_id: env.GOOGLE_CLIENT_ID,
             client_secret: env.GOOGLE_CLIENT_SECRET,
             redirect_uri: `${url.origin}/callback`,
-            grant_type: "authorization_code",
+            grant_type: 'authorization_code',
           }),
           signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
         });
-        if (!tokenRes.ok) return new Response("Google token exchange failed", { status: 502 });
+        if (!tokenRes.ok) return new Response('Google token exchange failed', { status: 502 });
         tokens = (await tokenRes.json()) as GoogleTokens;
       } catch {
-        return new Response("Google token exchange timed out", { status: 504 });
+        return new Response('Google token exchange timed out', { status: 504 });
       }
 
       // Fetch the verified profile.
@@ -231,27 +258,30 @@ export const GoogleAuthHandler = {
           headers: { Authorization: `Bearer ${tokens.access_token}` },
           signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
         });
-        if (!userRes.ok) return new Response("Google userinfo failed", { status: 502 });
+        if (!userRes.ok) return new Response('Google userinfo failed', { status: 502 });
         profile = (await userRes.json()) as GoogleProfile;
       } catch {
-        return new Response("Google userinfo timed out", { status: 504 });
+        return new Response('Google userinfo timed out', { status: 504 });
       }
 
-      const email = String(profile.email || "").toLowerCase();
-      const verified = profile.email_verified === true || profile.email_verified === "true";
+      const email = String(profile.email || '').toLowerCase();
+      const verified = profile.email_verified === true || profile.email_verified === 'true';
 
       if (!email || !verified || !adminEmails(env).includes(email)) {
-        return denyPage(email || "(unknown)");
+        return denyPage(email || '(unknown)');
       }
 
-      const sub = String(profile.sub || "");
-      if (!sub) return new Response("Google did not return a stable subject id", { status: 502 });
+      const sub = String(profile.sub || '');
+      if (!sub) return new Response('Google did not return a stable subject id', { status: 502 });
 
       // Resolve this identity to its OWN cv account (create-or-adopt). cv then scopes
       // every call to it via X-User-Id — no shared owner token. Still admin-gated above,
       // so today this is the owner mapping to @owner; the plumbing is per-user.
       const cvUserId = await upsertCvUser(env, { googleSub: sub, email, name: profile.name });
-      if (cvUserId == null) return new Response("Could not provision your cv account — try again shortly.", { status: 502 });
+      if (cvUserId == null)
+        return new Response('Could not provision your cv account — try again shortly.', {
+          status: 502,
+        });
 
       // Complete the grant — identity flows into CvMcp via this.props.
       const { redirectTo } = await provider.completeAuthorization({
@@ -264,6 +294,6 @@ export const GoogleAuthHandler = {
       return Response.redirect(redirectTo, 302);
     }
 
-    return new Response("Not found", { status: 404 });
+    return new Response('Not found', { status: 404 });
   },
 };

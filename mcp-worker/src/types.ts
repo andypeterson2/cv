@@ -1,4 +1,4 @@
-import type { OAuthHelpers } from "@cloudflare/workers-oauth-provider";
+import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 
 /**
  * Worker bindings + secrets. cv data lives on Railway; this Worker is a thin MCP
