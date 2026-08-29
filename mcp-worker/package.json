@@ -2,7 +2,7 @@
   "name": "cv-mcp-worker",
   "version": "1.0.0",
   "private": true,
-  "description": "Remote MCP server for the cv editor (Cloudflare Worker, admin-only, Google OAuth). Single server \u2014 supersedes the stdio ../mcp-server.",
+  "description": "Remote MCP server for the cv editor (Cloudflare Worker, admin-only, Google OAuth). Single server — supersedes the stdio ../mcp-server.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -22,7 +22,7 @@
     "agents": "^0.17.3"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.18.0",
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^4.20260627.1",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
