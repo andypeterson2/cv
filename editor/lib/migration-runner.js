@@ -16,11 +16,15 @@ function runMigrations(db) {
   `);
 
   const applied = new Set(
-    db.prepare('SELECT name FROM _migrations').all().map(r => r.name)
+    db
+      .prepare('SELECT name FROM _migrations')
+      .all()
+      .map((r) => r.name),
   );
 
-  const files = fs.readdirSync(MIGRATIONS_DIR)
-    .filter(f => (f.endsWith('.sql') || f.endsWith('.js')) && !f.includes('rollback'))
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => (f.endsWith('.sql') || f.endsWith('.js')) && !f.includes('rollback'))
     .sort();
 
   for (const file of files) {

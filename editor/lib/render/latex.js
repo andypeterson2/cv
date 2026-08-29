@@ -20,14 +20,23 @@ function runLatex(buildDir, mainTexFile, { timeoutMs = COMPILE_TIMEOUT_MS } = {}
     execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
       execFile(
         'xelatex',
-        ['--no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', path.basename(mainTexFile)],
+        [
+          '--no-shell-escape',
+          '-interaction=nonstopmode',
+          '-halt-on-error',
+          path.basename(mainTexFile),
+        ],
         // SECURITY: openin_any/openout_any=p (kpathsea "paranoid") confines file
         // reads/writes to buildDir — no absolute paths, no `..`, no dotfiles. Combined
         // with --no-shell-escape, this blocks LaTeX-injection exfil (e.g. a CV field
         // value of \input{/etc/passwd} or \openin on /proc/self/environ) from reading
         // server files into the PDF/log. Relative \input of the layout's own files in
         // buildDir, and \usepackage from the texmf tree, are unaffected.
-        { cwd: buildDir, timeout: timeoutMs, env: { ...process.env, openin_any: 'p', openout_any: 'p' } },
+        {
+          cwd: buildDir,
+          timeout: timeoutMs,
+          env: { ...process.env, openin_any: 'p', openout_any: 'p' },
+        },
         (error, stdout, stderr) => {
           const log = stdout + (stderr ? '\n' + stderr : '');
           const pdfPath = path.join(buildDir, path.basename(mainTexFile, '.tex') + '.pdf');
@@ -36,7 +45,7 @@ function runLatex(buildDir, mainTexFile, { timeoutMs = COMPILE_TIMEOUT_MS } = {}
           } else {
             resolve({ ok: true, pdfPath, log, pages: pagesFromLog(log) });
           }
-        }
+        },
       );
     });
   });

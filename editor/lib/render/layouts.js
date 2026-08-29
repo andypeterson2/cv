@@ -13,8 +13,8 @@ const BUILTIN_LAYOUTS_DIR = path.join(__dirname, '..', '..', 'layouts');
 
 // Writable store for uploaded bundles. Deploy sets CV_LAYOUTS_DIR=/data/layouts
 // (under the cv_data volume). Dev default sits next to the package.
-const CV_LAYOUTS_DIR = process.env.CV_LAYOUTS_DIR
-  || path.join(__dirname, '..', '..', '..', 'layouts-store');
+const CV_LAYOUTS_DIR =
+  process.env.CV_LAYOUTS_DIR || path.join(__dirname, '..', '..', '..', 'layouts-store');
 
 const DEFAULT_LAYOUT_ID = 'awesome-cv';
 

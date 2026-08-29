@@ -22,7 +22,7 @@ module.exports = function migrate(db) {
     const entriesFor = db.prepare('SELECT id, fields FROM entries WHERE section_id = ?');
     const itemCount = db.prepare('SELECT COUNT(*) AS n FROM items WHERE entry_id = ?');
     const insertItem = db.prepare(
-      'INSERT INTO items (entry_id, sort_order, content, title) VALUES (?, ?, ?, ?)'
+      'INSERT INTO items (entry_id, sort_order, content, title) VALUES (?, ?, ?, ?)',
     );
     const updateFields = db.prepare('UPDATE entries SET fields = ? WHERE id = ?');
 

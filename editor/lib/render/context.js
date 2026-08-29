@@ -34,9 +34,7 @@ function buildPersonal(personalIn) {
   const p = Object.assign({}, personalIn);
 
   // Photo: DB stores photoEnabled ('1'/'0') + photoFile; templates want an object.
-  const photo = p.photoEnabled === '1'
-    ? { enabled: true, file: p.photoFile || 'profile' }
-    : null;
+  const photo = p.photoEnabled === '1' ? { enabled: true, file: p.photoFile || 'profile' } : null;
   delete p.photoEnabled;
   delete p.photoFile;
 
@@ -69,9 +67,7 @@ function buildSection(section) {
     // A paragraph section may hold several entries — each is its own paragraph.
     // `texts` is the full ordered list; `text` stays as the first entry for
     // backward compatibility with layouts authored against contextVersion 1.
-    out.texts = (section.entries || [])
-      .map((e) => e.fields.text || '')
-      .filter((t) => t !== '');
+    out.texts = (section.entries || []).map((e) => e.fields.text || '').filter((t) => t !== '');
     out.text = out.texts[0] || '';
     return out;
   }
@@ -82,7 +78,10 @@ function buildSection(section) {
     const typeInfo = SECTION_TYPE_MAP[section.type];
     if (typeInfo && typeInfo.combine) {
       const { target, from, join } = typeInfo.combine;
-      fields[target] = from.map((k) => fields[k] || '').join(join).trim();
+      fields[target] = from
+        .map((k) => fields[k] || '')
+        .join(join)
+        .trim();
     }
     const entry = Object.assign({}, fields);
     // Only cventries render bullets; expose items as a plain string array.

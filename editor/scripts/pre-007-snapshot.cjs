@@ -46,53 +46,79 @@ if (!activeId) {
 
 // ---- Reproduce getAllForExport() from the live working tables ----
 const settingsByPrefix = (prefix) => {
-  const rows = db.prepare("SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || '%'").all(prefix + '.');
+  const rows = db
+    .prepare("SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || '%'")
+    .all(prefix + '.');
   const out = {};
   for (const r of rows) {
-    out[r.key.slice(prefix.length + 1)] = (r.value_num != null && r.value_unit != null)
-      ? { num: r.value_num, unit: r.value_unit } : r.value;
+    out[r.key.slice(prefix.length + 1)] =
+      r.value_num != null && r.value_unit != null
+        ? { num: r.value_num, unit: r.value_unit }
+        : r.value;
   }
   return out;
 };
 
 const personal = settingsByPrefix('personal');
 
-const sections = db.prepare('SELECT id, type, title FROM sections ORDER BY id').all().map((s) => ({
-  ...s,
-  entries: db.prepare('SELECT id, section_id, sort_order, fields, resume_included FROM entries WHERE section_id = ? ORDER BY sort_order').all(s.id).map((e) => ({
-    id: e.id,
-    section_id: e.section_id,
-    sort_order: e.sort_order,
-    fields: JSON.parse(e.fields),
-    resumeIncluded: !!e.resume_included,
-    items: db.prepare('SELECT id, entry_id, sort_order, content, resume_included, title FROM items WHERE entry_id = ? ORDER BY sort_order').all(e.id).map((i) => ({
-      id: i.id,
-      entry_id: i.entry_id,
-      sort_order: i.sort_order,
-      content: i.content,
-      resumeIncluded: !!i.resume_included,
-      title: i.title,
-    })),
-  })),
-}));
+const sections = db
+  .prepare('SELECT id, type, title FROM sections ORDER BY id')
+  .all()
+  .map((s) => ({
+    ...s,
+    entries: db
+      .prepare(
+        'SELECT id, section_id, sort_order, fields, resume_included FROM entries WHERE section_id = ? ORDER BY sort_order',
+      )
+      .all(s.id)
+      .map((e) => ({
+        id: e.id,
+        section_id: e.section_id,
+        sort_order: e.sort_order,
+        fields: JSON.parse(e.fields),
+        resumeIncluded: !!e.resume_included,
+        items: db
+          .prepare(
+            'SELECT id, entry_id, sort_order, content, resume_included, title FROM items WHERE entry_id = ? ORDER BY sort_order',
+          )
+          .all(e.id)
+          .map((i) => ({
+            id: i.id,
+            entry_id: i.entry_id,
+            sort_order: i.sort_order,
+            content: i.content,
+            resumeIncluded: !!i.resume_included,
+            title: i.title,
+          })),
+      })),
+  }));
 
 const documents = {};
 for (const variant of ['cv', 'resume']) {
-  documents[variant] = db.prepare('SELECT section_id, enabled, sort_order, resume_paragraph_text FROM document_sections WHERE variant = ? ORDER BY sort_order').all(variant).map((r) => ({
-    sectionId: r.section_id,
-    enabled: !!r.enabled,
-    sortOrder: r.sort_order,
-    resumeParagraphText: r.resume_paragraph_text,
-  }));
+  documents[variant] = db
+    .prepare(
+      'SELECT section_id, enabled, sort_order, resume_paragraph_text FROM document_sections WHERE variant = ? ORDER BY sort_order',
+    )
+    .all(variant)
+    .map((r) => ({
+      sectionId: r.section_id,
+      enabled: !!r.enabled,
+      sortOrder: r.sort_order,
+      resumeParagraphText: r.resume_paragraph_text,
+    }));
 }
 
 const coverletter = settingsByPrefix('coverletter');
-coverletter.sections = db.prepare('SELECT id, sort_order, title, body FROM coverletter_sections ORDER BY sort_order').all();
+coverletter.sections = db
+  .prepare('SELECT id, sort_order, title, body FROM coverletter_sections ORDER BY sort_order')
+  .all();
 
 const blob = JSON.stringify({ personal, sections, documents, coverletter });
 db.prepare('UPDATE persons SET data = ? WHERE id = ?').run(blob, activeId);
 db.pragma('wal_checkpoint(TRUNCATE)');
 
 const name = db.prepare('SELECT name FROM persons WHERE id = ?').get(activeId);
-console.log(`pre-007-snapshot: flushed active person #${activeId} (${name ? name.name : '?'}) — ${sections.length} sections, ${blob.length} bytes.`);
+console.log(
+  `pre-007-snapshot: flushed active person #${activeId} (${name ? name.name : '?'}) — ${sections.length} sections, ${blob.length} bytes.`,
+);
 db.close();

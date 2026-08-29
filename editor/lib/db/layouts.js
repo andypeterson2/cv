@@ -32,7 +32,11 @@ function rowToLayout(r, full = false) {
 
 function safeParse(json, fallback) {
   if (json == null) return fallback;
-  try { return JSON.parse(json); } catch { return fallback; }
+  try {
+    return JSON.parse(json);
+  } catch {
+    return fallback;
+  }
 }
 
 class LayoutStore {
@@ -57,9 +61,19 @@ class LayoutStore {
       kinds: JSON.stringify(l.kinds || []),
       status: l.status || 'active',
       source: l.source || 'upload',
-      manifest: l.manifest == null ? null : (typeof l.manifest === 'string' ? l.manifest : JSON.stringify(l.manifest)),
+      manifest:
+        l.manifest == null
+          ? null
+          : typeof l.manifest === 'string'
+            ? l.manifest
+            : JSON.stringify(l.manifest),
       checksum: l.checksum ?? null,
-      report: l.report == null ? null : (typeof l.report === 'string' ? l.report : JSON.stringify(l.report)),
+      report:
+        l.report == null
+          ? null
+          : typeof l.report === 'string'
+            ? l.report
+            : JSON.stringify(l.report),
       verified_at: l.verified_at ?? null,
     });
     return this.getLayout(l.id);

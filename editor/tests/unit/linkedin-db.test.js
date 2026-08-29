@@ -17,9 +17,19 @@ beforeEach(() => {
   db.clearAllContent(); // drop seeded Jane Doe → blank slate
   pid = db.createPerson('Test Person');
   const sec = db.createSection(pid, 'experience', 'experience', 'Experience');
-  entryA = db.createEntry(sec, { position: 'Engineer', organization: 'Acme', location: 'NYC', date: 'January 2020 -- March 2022' });
+  entryA = db.createEntry(sec, {
+    position: 'Engineer',
+    organization: 'Acme',
+    location: 'NYC',
+    date: 'January 2020 -- March 2022',
+  });
   db.createItem(entryA, 'Shipped the thing', '');
-  entryB = db.createEntry(sec, { position: 'Intern', organization: 'Globex', location: 'Remote', date: 'June 2019 -- August 2019' });
+  entryB = db.createEntry(sec, {
+    position: 'Intern',
+    organization: 'Globex',
+    location: 'Remote',
+    date: 'June 2019 -- August 2019',
+  });
   db.createItem(entryB, 'Learned the ropes', '');
   variantId = db.createVariant(pid, 'CV', 'cv');
 });
@@ -46,7 +56,10 @@ test('mark-synced flips to synced and stamps syncedAt', () => {
 
 test('editing one entry drifts only that entry', () => {
   db.markLinkedinSynced(pid, marks(positions()), '2026-07-15T00:00:00.000Z');
-  const item = db.getMain(pid).sections.find((s) => s.type === 'experience').entries.find((e) => e.id === entryA).items[0];
+  const item = db
+    .getMain(pid)
+    .sections.find((s) => s.type === 'experience')
+    .entries.find((e) => e.id === entryA).items[0];
   db.updateItem(item.id, { content: 'Shipped the thing, faster' });
   const by = stateById(db.linkedinStatus(pid, positions()));
   expect(by[entryA]).toBe('drifted');
@@ -54,7 +67,11 @@ test('editing one entry drifts only that entry', () => {
 });
 
 test('marking a subset stamps only those; the rest stay new', () => {
-  db.markLinkedinSynced(pid, marks(positions().filter((p) => p.entryId === entryA)), '2026-07-15T00:00:00.000Z');
+  db.markLinkedinSynced(
+    pid,
+    marks(positions().filter((p) => p.entryId === entryA)),
+    '2026-07-15T00:00:00.000Z',
+  );
   const by = stateById(db.linkedinStatus(pid, positions()));
   expect(by[entryA]).toBe('synced');
   expect(by[entryB]).toBe('new');

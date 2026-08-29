@@ -156,7 +156,13 @@ module.exports = function migrate(db) {
   try {
     const tx = db.transaction(() => {
       // 1. Move old content tables aside (keep for rollback; 008 drops them).
-      for (const t of ['sections', 'entries', 'items', 'document_sections', 'coverletter_sections']) {
+      for (const t of [
+        'sections',
+        'entries',
+        'items',
+        'document_sections',
+        'coverletter_sections',
+      ]) {
         db.exec(`ALTER TABLE ${t} RENAME TO ${t}_old`);
       }
 
@@ -176,20 +182,32 @@ module.exports = function migrate(db) {
       const skipped = [];
 
       const ins = {
-        setting: db.prepare('INSERT OR REPLACE INTO person_settings (person_id, key, value) VALUES (?,?,?)'),
-        section: db.prepare('INSERT INTO sections (person_id, slug, type, title, sort_order) VALUES (?,?,?,?,?)'),
+        setting: db.prepare(
+          'INSERT OR REPLACE INTO person_settings (person_id, key, value) VALUES (?,?,?)',
+        ),
+        section: db.prepare(
+          'INSERT INTO sections (person_id, slug, type, title, sort_order) VALUES (?,?,?,?,?)',
+        ),
         entry: db.prepare('INSERT INTO entries (section_id, sort_order, fields) VALUES (?,?,?)'),
-        item: db.prepare('INSERT INTO items (entry_id, sort_order, content, title) VALUES (?,?,?,?)'),
+        item: db.prepare(
+          'INSERT INTO items (entry_id, sort_order, content, title) VALUES (?,?,?,?)',
+        ),
         variant: db.prepare('INSERT INTO variants (person_id, name, kind) VALUES (?,?,?)'),
-        vsection: db.prepare('INSERT OR IGNORE INTO variant_sections (variant_id, section_id, enabled, sort_order) VALUES (?,?,?,?)'),
+        vsection: db.prepare(
+          'INSERT OR IGNORE INTO variant_sections (variant_id, section_id, enabled, sort_order) VALUES (?,?,?,?)',
+        ),
         eoverride: db.prepare(
           'INSERT INTO entry_overrides (variant_id, entry_id, included, text_override) VALUES (?,?,?,?) ' +
-          'ON CONFLICT(variant_id, entry_id) DO UPDATE SET ' +
-          'included = COALESCE(excluded.included, entry_overrides.included), ' +
-          'text_override = COALESCE(excluded.text_override, entry_overrides.text_override)'
+            'ON CONFLICT(variant_id, entry_id) DO UPDATE SET ' +
+            'included = COALESCE(excluded.included, entry_overrides.included), ' +
+            'text_override = COALESCE(excluded.text_override, entry_overrides.text_override)',
         ),
-        ioverride: db.prepare('INSERT OR IGNORE INTO item_overrides (variant_id, item_id, included) VALUES (?,?,?)'),
-        letter: db.prepare('INSERT INTO variant_letter_sections (variant_id, sort_order, title, body) VALUES (?,?,?,?)'),
+        ioverride: db.prepare(
+          'INSERT OR IGNORE INTO item_overrides (variant_id, item_id, included) VALUES (?,?,?)',
+        ),
+        letter: db.prepare(
+          'INSERT INTO variant_letter_sections (variant_id, sort_order, title, body) VALUES (?,?,?,?)',
+        ),
       };
 
       for (const person of persons) {
@@ -203,7 +221,9 @@ module.exports = function migrate(db) {
           // Guarantee at least a bare CV variant so the person isn't orphaned.
           try {
             ins.variant.run(person.id, 'CV', 'cv');
-          } catch { /* a variant may already exist from a partial pass */ }
+          } catch {
+            /* a variant may already exist from a partial pass */
+          }
         }
       }
 
@@ -227,16 +247,21 @@ module.exports = function migrate(db) {
           throw new Error(`007 count mismatch for ${k}: expected ${expect[k]}, got ${got[k]}`);
         }
       }
-      const noCv = db.prepare(
-        "SELECT p.id FROM persons p WHERE NOT EXISTS " +
-        "(SELECT 1 FROM variants v WHERE v.person_id = p.id AND v.kind = 'cv')"
-      ).all();
+      const noCv = db
+        .prepare(
+          'SELECT p.id FROM persons p WHERE NOT EXISTS ' +
+            "(SELECT 1 FROM variants v WHERE v.person_id = p.id AND v.kind = 'cv')",
+        )
+        .all();
       if (noCv.length) {
-        throw new Error('007: persons without a CV variant: ' + noCv.map(r => r.id).join(','));
+        throw new Error('007: persons without a CV variant: ' + noCv.map((r) => r.id).join(','));
       }
 
       if (skipped.length) {
-        console.warn(`007_normalize: ${skipped.length} person(s) with empty/malformed data, scaffolded bare:\n  ` + skipped.join('\n  '));
+        console.warn(
+          `007_normalize: ${skipped.length} person(s) with empty/malformed data, scaffolded bare:\n  ` +
+            skipped.join('\n  '),
+        );
       }
     });
     tx();
@@ -252,8 +277,13 @@ module.exports = function migrate(db) {
  */
 function backfillPerson(db, ins, person) {
   let data;
-  try { data = JSON.parse(person.data || '{}'); } catch { data = {}; }
-  const hasContent = data && (data.personal || (Array.isArray(data.sections) && data.sections.length));
+  try {
+    data = JSON.parse(person.data || '{}');
+  } catch {
+    data = {};
+  }
+  const hasContent =
+    data && (data.personal || (Array.isArray(data.sections) && data.sections.length));
   if (!hasContent) throw new Error('empty or malformed persons.data');
 
   const pid = person.id;
@@ -261,7 +291,8 @@ function backfillPerson(db, ins, person) {
 
   // ---- person_settings: personal.* and coverletter.* header (minus sections) ----
   if (data.personal) {
-    for (const [k, v] of Object.entries(data.personal)) ins.setting.run(pid, 'personal.' + k, valStr(v));
+    for (const [k, v] of Object.entries(data.personal))
+      ins.setting.run(pid, 'personal.' + k, valStr(v));
   }
   if (data.coverletter) {
     for (const [k, v] of Object.entries(data.coverletter)) {
@@ -272,10 +303,10 @@ function backfillPerson(db, ins, person) {
 
   // ---- main section order: cv document order, then any blob sections not in cv ----
   const blobSections = Array.isArray(data.sections) ? data.sections : [];
-  const cvDoc = (data.documents && Array.isArray(data.documents.cv)) ? data.documents.cv : [];
+  const cvDoc = data.documents && Array.isArray(data.documents.cv) ? data.documents.cv : [];
   const orderedSlugs = [];
   for (const d of cvDoc) {
-    if (blobSections.some(s => s.id === d.sectionId) && !orderedSlugs.includes(d.sectionId)) {
+    if (blobSections.some((s) => s.id === d.sectionId) && !orderedSlugs.includes(d.sectionId)) {
       orderedSlugs.push(d.sectionId);
     }
   }
@@ -291,7 +322,7 @@ function backfillPerson(db, ins, person) {
 
   let sOrder = 0;
   for (const slug of orderedSlugs) {
-    const sec = blobSections.find(s => s.id === slug);
+    const sec = blobSections.find((s) => s.id === slug);
     const type = normType(sec.type);
     const newSecId = ins.section.run(pid, slug, type, sec.title || '', sOrder++).lastInsertRowid;
     sectionIdBySlug[slug] = newSecId;
@@ -306,14 +337,23 @@ function backfillPerson(db, ins, person) {
       if (e.id != null) entryIdByOld[e.id] = newEntryId;
       counts.entries++;
 
-      if (CVPARAGRAPH_TYPES.has(type) && e.resumeIncluded !== false && firstResumeEntryNewIdBySlug[slug] == null) {
+      if (
+        CVPARAGRAPH_TYPES.has(type) &&
+        e.resumeIncluded !== false &&
+        firstResumeEntryNewIdBySlug[slug] == null
+      ) {
         firstResumeEntryNewIdBySlug[slug] = newEntryId;
       }
 
       const items = Array.isArray(e.items) ? e.items : [];
       let iOrder = 0;
       for (const it of items) {
-        const newItemId = ins.item.run(newEntryId, iOrder++, it.content || '', it.title || '').lastInsertRowid;
+        const newItemId = ins.item.run(
+          newEntryId,
+          iOrder++,
+          it.content || '',
+          it.title || '',
+        ).lastInsertRowid;
         if (it.id != null) itemIdByOld[it.id] = newItemId;
         counts.items++;
       }
@@ -326,16 +366,17 @@ function backfillPerson(db, ins, person) {
 
   // ---- Resume variant: no rules; explicit section list + per-row exclude overrides
   //      + paragraph text overrides. (A tag rule would lose section-level filtering.) ----
-  const resumeDoc = (data.documents && Array.isArray(data.documents.resume)) ? data.documents.resume : [];
+  const resumeDoc =
+    data.documents && Array.isArray(data.documents.resume) ? data.documents.resume : [];
   const resumeVarId = ins.variant.run(pid, 'Resume', 'resume').lastInsertRowid;
   writeVariantSections(ins, resumeVarId, resumeDoc, sectionIdBySlug);
 
   for (const sec of blobSections) {
-    for (const e of (sec.entries || [])) {
+    for (const e of sec.entries || []) {
       if (e.resumeIncluded === false && entryIdByOld[e.id] != null) {
         ins.eoverride.run(resumeVarId, entryIdByOld[e.id], 0, null);
       }
-      for (const it of (e.items || [])) {
+      for (const it of e.items || []) {
         if (it.resumeIncluded === false && itemIdByOld[it.id] != null) {
           ins.ioverride.run(resumeVarId, itemIdByOld[it.id], 0);
         }
@@ -344,12 +385,18 @@ function backfillPerson(db, ins, person) {
   }
   for (const d of resumeDoc) {
     if (d.resumeParagraphText != null && firstResumeEntryNewIdBySlug[d.sectionId] != null) {
-      ins.eoverride.run(resumeVarId, firstResumeEntryNewIdBySlug[d.sectionId], null, d.resumeParagraphText);
+      ins.eoverride.run(
+        resumeVarId,
+        firstResumeEntryNewIdBySlug[d.sectionId],
+        null,
+        d.resumeParagraphText,
+      );
     }
   }
 
   // ---- Cover Letter variant: only if there are letter paragraphs ----
-  const clSections = (data.coverletter && Array.isArray(data.coverletter.sections)) ? data.coverletter.sections : [];
+  const clSections =
+    data.coverletter && Array.isArray(data.coverletter.sections) ? data.coverletter.sections : [];
   if (clSections.length) {
     const clVarId = ins.variant.run(pid, 'Cover Letter', 'coverletter').lastInsertRowid;
     let clOrder = 0;
@@ -365,7 +412,7 @@ function writeVariantSections(ins, variantId, docRows, sectionIdBySlug) {
     const secId = sectionIdBySlug[d.sectionId];
     if (secId == null) continue; // section referenced by doc but absent from blob.sections
     const enabled = d.enabled === false ? 0 : 1;
-    const sortOrder = (typeof d.sortOrder === 'number') ? d.sortOrder : order;
+    const sortOrder = typeof d.sortOrder === 'number' ? d.sortOrder : order;
     ins.vsection.run(variantId, secId, enabled, sortOrder);
     order++;
   }

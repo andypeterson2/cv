@@ -6,9 +6,9 @@
  */
 module.exports = function migrate(db) {
   // Check if metrics table exists
-  const tableExists = db.prepare(
-    "SELECT name FROM sqlite_master WHERE type='table' AND name='metrics'"
-  ).get();
+  const tableExists = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='metrics'")
+    .get();
   if (!tableExists) return;
 
   const metrics = db.prepare('SELECT command, value FROM metrics').all();

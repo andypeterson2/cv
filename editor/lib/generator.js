@@ -7,11 +7,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const {
-  serializeSection,
-  serializeData,
-  sanitizeLatex: san,
-} = require('./serializer');
+const { serializeSection, serializeData, sanitizeLatex: san } = require('./serializer');
 const { getLatexType, SECTION_TYPE_MAP } = require('./latex-type-map');
 
 // ---------------------------------------------------------------------------
@@ -27,9 +23,7 @@ function generateDataTex(personal) {
   // Pass all personal fields through — the serializer decides which to emit.
   const p = Object.assign({}, personal);
   // Transform photo fields into the nested object the serializer expects
-  p.photo = p.photoEnabled === '1'
-    ? { enabled: true, file: p.photoFile || 'profile' }
-    : null;
+  p.photo = p.photoEnabled === '1' ? { enabled: true, file: p.photoFile || 'profile' } : null;
   delete p.photoEnabled;
   delete p.photoFile;
 
@@ -51,20 +45,23 @@ function generateSectionTex(section) {
   if (latexType === 'cvparagraph') {
     // cvparagraph expects { type, title, text }
     const entry = section.entries[0];
-    data.text = entry ? (entry.fields.text || '') : '';
+    data.text = entry ? entry.fields.text || '' : '';
   } else {
     // All other types expect { type, title, entries: [...] }
-    data.entries = section.entries.map(e => {
+    data.entries = section.entries.map((e) => {
       const entry = { ...e.fields };
       // Apply combine rules (e.g. education: program + major → position)
       const typeInfo = SECTION_TYPE_MAP[section.type];
       if (typeInfo && typeInfo.combine) {
         const { target, from, join } = typeInfo.combine;
-        entry[target] = from.map(k => entry[k] || '').join(join).trim();
+        entry[target] = from
+          .map((k) => entry[k] || '')
+          .join(join)
+          .trim();
       }
       // cventries have items (bullet points)
       if (latexType === 'cventries' && e.items) {
-        entry.items = e.items.map(i => i.content);
+        entry.items = e.items.map((i) => i.content);
       }
       return entry;
     });
@@ -79,8 +76,7 @@ function generateSectionTex(section) {
 
 const { STYLE_DEFAULTS, SPACING_DEFAULTS, FONT_DEFAULTS } = require('./style-defaults');
 const ACCENT_COLORS = require('./accent-colors');
-const PRESET_COLOR_KEYS = ACCENT_COLORS.map(c => c.key);
-
+const PRESET_COLOR_KEYS = ACCENT_COLORS.map((c) => c.key);
 
 function buildPreamble(style, spacing, fonts) {
   const s = Object.assign({}, STYLE_DEFAULTS, style);
@@ -94,7 +90,9 @@ function buildPreamble(style, spacing, fonts) {
   lines.push('');
 
   // Page geometry — horizontalMargin applies to both left and right
-  lines.push(`\\geometry{left=${sp.horizontalMargin}, top=${sp.marginTop}, right=${sp.horizontalMargin}, bottom=${sp.marginBottom}, footskip=${sp.footskip}}`);
+  lines.push(
+    `\\geometry{left=${sp.horizontalMargin}, top=${sp.marginTop}, right=${sp.horizontalMargin}, bottom=${sp.marginBottom}, footskip=${sp.footskip}}`,
+  );
   lines.push('');
 
   // Accent color
@@ -151,33 +149,75 @@ function buildPreamble(style, spacing, fonts) {
 
   // Font size overrides
   // headerNameSize: first and last name in header
-  lines.push(`\\renewcommand*{\\headerfirstnamestyle}[1]{{\\fontsize{${f.headerNameSize}}{1em}\\headerfontlight\\color{graytext} #1}}`);
-  lines.push(`\\renewcommand*{\\headerlastnamestyle}[1]{{\\fontsize{${f.headerNameSize}}{1em}\\headerfont\\bfseries\\color{text} #1}}`);
+  lines.push(
+    `\\renewcommand*{\\headerfirstnamestyle}[1]{{\\fontsize{${f.headerNameSize}}{1em}\\headerfontlight\\color{graytext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\headerlastnamestyle}[1]{{\\fontsize{${f.headerNameSize}}{1em}\\headerfont\\bfseries\\color{text} #1}}`,
+  );
   // headerPositionSize: position/title line
-  lines.push(`\\renewcommand*{\\headerpositionstyle}[1]{{\\fontsize{${f.headerPositionSize}}{1em}\\bodyfont\\scshape\\color{awesome} #1}}`);
+  lines.push(
+    `\\renewcommand*{\\headerpositionstyle}[1]{{\\fontsize{${f.headerPositionSize}}{1em}\\bodyfont\\scshape\\color{awesome} #1}}`,
+  );
   // headerSocialSize: social links
-  lines.push(`\\renewcommand*{\\headersocialstyle}[1]{{\\fontsize{${f.headerSocialSize}}{1em}\\headerfont\\color{text} #1}}`);
+  lines.push(
+    `\\renewcommand*{\\headersocialstyle}[1]{{\\fontsize{${f.headerSocialSize}}{1em}\\headerfont\\color{text} #1}}`,
+  );
   // secondaryTextSize: address, footer, entry position/date
-  lines.push(`\\renewcommand*{\\headeraddressstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\headerfont\\itshape\\color{lighttext} #1}}`);
-  lines.push(`\\renewcommand*{\\footerstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\footerfont\\scshape\\color{lighttext} #1}}`);
-  lines.push(`\\renewcommand*{\\entrypositionstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\bodyfont\\scshape\\color{graytext} #1}}`);
-  lines.push(`\\renewcommand*{\\entrydatestyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\bodyfontlight\\slshape\\color{graytext} #1}}`);
+  lines.push(
+    `\\renewcommand*{\\headeraddressstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\headerfont\\itshape\\color{lighttext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\footerstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\footerfont\\scshape\\color{lighttext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\entrypositionstyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\bodyfont\\scshape\\color{graytext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\entrydatestyle}[1]{{\\fontsize{${f.secondaryTextSize}}{1em}\\bodyfontlight\\slshape\\color{graytext} #1}}`,
+  );
   // contentTextSize: body copy, descriptions, honors, skills set, quote, paragraph
-  lines.push(`\\renewcommand*{\\headerquotestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\itshape\\color{darktext} #1}}`);
-  lines.push(`\\renewcommand{\\paragraphstyle}{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\upshape\\color{text}}`);
-  lines.push(`\\renewcommand*{\\entrylocationstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\slshape\\color{awesome} #1}}`);
-  lines.push(`\\renewcommand*{\\descriptionstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\upshape\\color{text} #1}}`);
-  lines.push(`\\renewcommand*{\\honortitlestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\color{graytext} #1}}`);
-  lines.push(`\\renewcommand*{\\honorpositionstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`);
-  lines.push(`\\renewcommand*{\\honordatestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\color{graytext} #1}}`);
-  lines.push(`\\renewcommand*{\\honorlocationstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\slshape\\color{awesome} #1}}`);
-  lines.push(`\\renewcommand*{\\skillsetstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\color{text} #1}}`);
+  lines.push(
+    `\\renewcommand*{\\headerquotestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\itshape\\color{darktext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand{\\paragraphstyle}{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\upshape\\color{text}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\entrylocationstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\slshape\\color{awesome} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\descriptionstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\upshape\\color{text} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\honortitlestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\color{graytext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\honorpositionstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\honordatestyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfont\\color{graytext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\honorlocationstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\slshape\\color{awesome} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\skillsetstyle}[1]{{\\fontsize{${f.contentTextSize}}{1em}\\bodyfontlight\\color{text} #1}}`,
+  );
   // itemTitleSize: entry titles, skill type labels
-  lines.push(`\\renewcommand*{\\entrytitlestyle}[1]{{\\fontsize{${f.itemTitleSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`);
-  lines.push(`\\renewcommand*{\\skilltypestyle}[1]{{\\fontsize{${f.itemTitleSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`);
+  lines.push(
+    `\\renewcommand*{\\entrytitlestyle}[1]{{\\fontsize{${f.itemTitleSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\skilltypestyle}[1]{{\\fontsize{${f.itemTitleSize}}{1em}\\bodyfont\\bfseries\\color{darktext} #1}}`,
+  );
   // sectionTitleSize and subsectionTitleSize
-  lines.push(`\\renewcommand*{\\sectionstyleface}[1]{{\\fontsize{${f.sectionTitleSize}}{1em}\\bodyfont\\bfseries #1}}`);
-  lines.push(`\\renewcommand*{\\subsectionstyle}[1]{{\\fontsize{${f.subsectionTitleSize}}{1em}\\bodyfont\\scshape\\textcolor{text}{#1}}}`);
+  lines.push(
+    `\\renewcommand*{\\sectionstyleface}[1]{{\\fontsize{${f.sectionTitleSize}}{1em}\\bodyfont\\bfseries #1}}`,
+  );
+  lines.push(
+    `\\renewcommand*{\\subsectionstyle}[1]{{\\fontsize{${f.subsectionTitleSize}}{1em}\\bodyfont\\scshape\\textcolor{text}{#1}}}`,
+  );
   lines.push('');
 
   // Entry/items/skills spacing overrides via environment redefinitions
@@ -186,7 +226,9 @@ function buildPreamble(style, spacing, fonts) {
   lines.push(`  \\vspace{${sp.contentTopAdjust}}%`);
   lines.push('  \\setlength\\tabcolsep{0pt}%');
   lines.push('  \\setlength{\\extrarowheight}{0pt}%');
-  lines.push('  \\begin{tabular*}{\\textwidth}{@{\\extracolsep{\\fill}} L{\\textwidth - 4.5cm} R{4.5cm}}');
+  lines.push(
+    '  \\begin{tabular*}{\\textwidth}{@{\\extracolsep{\\fill}} L{\\textwidth - 4.5cm} R{4.5cm}}',
+  );
   lines.push('    \\ifempty{#2#3}');
   lines.push('      {\\entrypositionstyle{#1} & \\entrydatestyle{#4} \\\\}');
   lines.push('      {\\entrytitlestyle{#2} & \\entrylocationstyle{#3} \\\\');
@@ -216,7 +258,9 @@ function buildPreamble(style, spacing, fonts) {
   lines.push(`  \\vspace{${sp.contentTopAdjust}}`);
   lines.push(`    \\setlength\\tabcolsep{${sp.skillsColSep}}`);
   lines.push('    \\setlength{\\extrarowheight}{0pt}');
-  lines.push('    \\tabularx{\\textwidth}{r>{\\raggedright\\let\\newline\\\\\\arraybackslash\\hspace{0pt}}X}');
+  lines.push(
+    '    \\tabularx{\\textwidth}{r>{\\raggedright\\let\\newline\\\\\\arraybackslash\\hspace{0pt}}X}',
+  );
   lines.push('}{%');
   lines.push('\\endtabularx\\par');
   lines.push('}');
@@ -281,7 +325,9 @@ function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   lines.push(`\\lettertitle{${san(coverletter.title || '')}}`);
   lines.push(`\\letteropening{${san(coverletter.opening || '')}}`);
   lines.push(`\\letterclosing{${san(coverletter.closing || '')}}`);
-  lines.push(`\\letterenclosure[${san(coverletter.enclosureLabel || 'Attached')}]{${san(coverletter.enclosureContent || '')}}`);
+  lines.push(
+    `\\letterenclosure[${san(coverletter.enclosureLabel || 'Attached')}]{${san(coverletter.enclosureContent || '')}}`,
+  );
   lines.push('');
   lines.push('');
   lines.push('\\begin{document}');
@@ -290,7 +336,9 @@ function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   lines.push('');
   lines.push('\\makecvfooter');
   lines.push('  {\\today}');
-  lines.push(`  {${san(personal.firstName || '')} ${san(personal.lastName || '')}~~~\\cdotp~~~Cover Letter}`);
+  lines.push(
+    `  {${san(personal.firstName || '')} ${san(personal.lastName || '')}~~~\\cdotp~~~Cover Letter}`,
+  );
   lines.push('  {}');
   lines.push('');
   lines.push('\\makelettertitle');

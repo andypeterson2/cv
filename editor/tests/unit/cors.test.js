@@ -15,13 +15,18 @@ function makeRequest(method, path, headers = {}) {
       };
       const req = http.request(options, (res) => {
         let body = '';
-        res.on('data', (chunk) => { body += chunk; });
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
         res.on('end', () => {
           server.close();
           resolve({ status: res.statusCode, headers: res.headers, body });
         });
       });
-      req.on('error', (err) => { server.close(); reject(err); });
+      req.on('error', (err) => {
+        server.close();
+        reject(err);
+      });
       req.end();
     });
   });
