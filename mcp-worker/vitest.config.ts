@@ -10,6 +10,10 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
+      // Tests never talk to real Cloudflare resources: don't honor the
+      // `remote: true` on OAUTH_KV (dev-session convenience only) — CI has no
+      // Cloudflare token, and tests must not touch the production namespace.
+      remoteBindings: false,
       miniflare: {
         bindings: {
           CV_EDITOR_URL: "http://cv.test",
