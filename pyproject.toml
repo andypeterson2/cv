@@ -1,0 +1,34 @@
+[project]
+name = "cv-contract-tests"
+version = "1.0.0"
+description = "Tooling config for the Python in this repo (tests/contract); the apps are Node"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# The fleet lint baseline: complexity budgets (C90/PLR) + rewrite-to-shorter
+# families (SIM/RET/C4/PIE/PERF/FURB/PTH) on top of the correctness floor.
+select = [
+  "E", "W", "F", "I",
+  "N", "UP", "B", "A",
+  "S", "T20",
+  "C90", "PLR", "PLW", "PLE",
+  "SIM", "RET", "RSE", "PIE", "C4",
+  "PERF", "FURB", "PTH",
+  "ARG", "ISC", "TID", "TRY", "RUF",
+]
+ignore = [
+  "TRY003",   # long exception messages — verbosity pedantry
+  "PLR2004",  # magic-value comparisons — noisy outside tests
+  "RUF001", "RUF002", "RUF003",  # typographic chars in prose/output are intentional
+  "PERF203",  # try/except in loop — flags legitimate per-item error isolation
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S110", "S310", "PLR0913", "ARG", "T201", "N806"]

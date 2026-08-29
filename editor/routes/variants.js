@@ -281,12 +281,10 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     const r = db.bumpCompileQuota(req.userId, limit);
     if (!r.ok) {
       res.setHeader('Retry-After', '3600');
-      return res
-        .status(429)
-        .json({
-          success: false,
-          log: `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.`,
-        });
+      return res.status(429).json({
+        success: false,
+        log: `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.`,
+      });
     }
     next();
   }

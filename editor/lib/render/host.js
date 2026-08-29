@@ -51,11 +51,12 @@ function prepare(compileData, layoutDir) {
 
 // Write the rendered .tex + stage the layout's class files and assets into the
 // build dir, returning the main .tex path for xelatex.
+// eslint-disable-next-line max-params -- mirrors the render-callback surface; grandfathered
 function finish(buildDir, manifest, kind, tex, layoutDir, assetsDir) {
   fs.mkdirSync(buildDir, { recursive: true });
   copyDirFlat(path.join(layoutDir, 'class'), buildDir); // .cls/.sty/fonts/.fd → root
   copyAssets(path.join(layoutDir, 'assets'), buildDir); // layout-bundled images, then
-  copyAssets(assetsDir, buildDir);                       // project assets (project wins on clash)
+  copyAssets(assetsDir, buildDir); // project assets (project wins on clash)
   const mainPath = path.join(buildDir, mainTexName(manifest, kind));
   fs.writeFileSync(mainPath, tex.endsWith('\n') ? tex : tex + '\n', 'utf-8');
   return mainPath;
@@ -85,7 +86,8 @@ function renderVariant(compileData, buildDir, opts = {}) {
 async function renderVariantIsolated(compileData, buildDir, opts = {}) {
   const { manifest, kind, entryRel, context } = prepare(compileData, opts.layoutDir);
   const tex = await renderInWorker(opts.layoutDir, entryRel, context, {
-    timeoutMs: opts.timeoutMs, maxBytes: opts.maxBytes,
+    timeoutMs: opts.timeoutMs,
+    maxBytes: opts.maxBytes,
   });
   return finish(buildDir, manifest, kind, tex, opts.layoutDir, opts.assetsDir);
 }

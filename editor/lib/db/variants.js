@@ -49,8 +49,14 @@ class VariantStore {
     const canon = (t) => this._canonicalTag(pid, t);
     const tx = this.db.transaction(() => {
       this._stmts.clearVariantRules.run(variantId);
-      for (const t of include) { const tag = canon(t); if (tag) this._stmts.insertVariantRule.run(variantId, tag, 'include'); }
-      for (const t of exclude) { const tag = canon(t); if (tag) this._stmts.insertVariantRule.run(variantId, tag, 'exclude'); }
+      for (const t of include) {
+        const tag = canon(t);
+        if (tag) this._stmts.insertVariantRule.run(variantId, tag, 'include');
+      }
+      for (const t of exclude) {
+        const tag = canon(t);
+        if (tag) this._stmts.insertVariantRule.run(variantId, tag, 'exclude');
+      }
     });
     tx();
   }
@@ -107,7 +113,7 @@ class VariantStore {
           variantId,
           s.sectionId,
           s.enabled === false ? 0 : 1,
-          typeof s.sortOrder === 'number' ? s.sortOrder : i
+          typeof s.sortOrder === 'number' ? s.sortOrder : i,
         );
       }
     });
@@ -132,28 +138,54 @@ class VariantStore {
   getItemOverrides(variantId) {
     const m = new Map();
     for (const r of this._stmts.getItemOverrides.all(variantId)) {
-      m.set(r.item_id, { included: r.included, textOverride: r.text_override, sortOverride: r.sort_override });
+      m.set(r.item_id, {
+        included: r.included,
+        textOverride: r.text_override,
+        sortOverride: r.sort_override,
+      });
     }
     return m;
   }
 
   /** Upsert (or, if all fields null/undefined, delete) an entry override. */
-  setEntryOverride(variantId, entryId, { included = null, textOverride = null, sortOverride = null, fieldsOverride = null } = {}) {
+  setEntryOverride(
+    variantId,
+    entryId,
+    { included = null, textOverride = null, sortOverride = null, fieldsOverride = null } = {},
+  ) {
     // Empty {} clears the patch; a non-empty object is a sparse field map.
-    const fo = fieldsOverride && Object.keys(fieldsOverride).length ? JSON.stringify(fieldsOverride) : null;
+    const fo =
+      fieldsOverride && Object.keys(fieldsOverride).length ? JSON.stringify(fieldsOverride) : null;
     if (included == null && textOverride == null && sortOverride == null && fo == null) {
       this._stmts.deleteEntryOverride.run(variantId, entryId);
       return;
     }
-    this._stmts.upsertEntryOverride.run(variantId, entryId, included == null ? null : (included ? 1 : 0), textOverride, sortOverride, fo);
+    this._stmts.upsertEntryOverride.run(
+      variantId,
+      entryId,
+      included == null ? null : included ? 1 : 0,
+      textOverride,
+      sortOverride,
+      fo,
+    );
   }
 
-  setItemOverride(variantId, itemId, { included = null, textOverride = null, sortOverride = null } = {}) {
+  setItemOverride(
+    variantId,
+    itemId,
+    { included = null, textOverride = null, sortOverride = null } = {},
+  ) {
     if (included == null && textOverride == null && sortOverride == null) {
       this._stmts.deleteItemOverride.run(variantId, itemId);
       return;
     }
-    this._stmts.upsertItemOverride.run(variantId, itemId, included == null ? null : (included ? 1 : 0), textOverride, sortOverride);
+    this._stmts.upsertItemOverride.run(
+      variantId,
+      itemId,
+      included == null ? null : included ? 1 : 0,
+      textOverride,
+      sortOverride,
+    );
   }
 
   // ---- cover-letter paragraphs ----
@@ -168,7 +200,9 @@ class VariantStore {
   }
 
   updateLetterSection(id, { title, body }) {
-    const cur = this.db.prepare('SELECT title, body FROM variant_letter_sections WHERE id = ?').get(id);
+    const cur = this.db
+      .prepare('SELECT title, body FROM variant_letter_sections WHERE id = ?')
+      .get(id);
     if (!cur) return;
     this._stmts.updateLetterSection.run(title ?? cur.title, body ?? cur.body, id);
   }
@@ -205,7 +239,7 @@ class VariantStore {
       m.recipientName ?? '',
       m.recipientAddress ?? '',
       m.opening ?? '',
-      m.closing ?? ''
+      m.closing ?? '',
     );
   }
 
@@ -235,6 +269,7 @@ class VariantStore {
    * @throws Error('Variant not found')
    */
   resolveVariant(variantId) {
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 40; the variant-resolution rules engine — split when next touched
     return this.db.transaction(() => {
       const v = this._stmts.getVariant.get(variantId);
       if (!v) throw new Error('Variant not found');
@@ -244,8 +279,19 @@ class VariantStore {
 
       if (v.kind === 'coverletter') {
         const coverletter = this.getLetterHeader(variantId);
-        coverletter.sections = this.getLetterSections(variantId).map((s) => ({ title: s.title, body: s.body }));
-        return { personal, sections: [], coverletter, variant: 'coverletter', style, spacing, fonts };
+        coverletter.sections = this.getLetterSections(variantId).map((s) => ({
+          title: s.title,
+          body: s.body,
+        }));
+        return {
+          personal,
+          sections: [],
+          coverletter,
+          variant: 'coverletter',
+          style,
+          spacing,
+          fonts,
+        };
       }
 
       const rawRules = this.getVariantRules(variantId);
@@ -281,7 +327,8 @@ class VariantStore {
             // Legacy paragraph-only text override (fields.text), then the generic
             // per-variant field patch — fields_override subsumes it and can vary
             // any field (role subheading, date, …). The patch wins on overlap.
-            if (eov.textOverride != null && isParagraph) fields = { ...fields, text: eov.textOverride };
+            if (eov.textOverride != null && isParagraph)
+              fields = { ...fields, text: eov.textOverride };
             if (eov.fieldsOverride) fields = { ...fields, ...eov.fieldsOverride };
           }
 
@@ -290,11 +337,20 @@ class VariantStore {
             const iov = itemOv.get(it.id);
             if (!this._included(it.tags, rules, iov)) continue;
             const content = iov && iov.textOverride != null ? iov.textOverride : it.content;
-            items.push({ ...it, content, _sort: sortKey(iov && iov.sortOverride, it.sortOrder, it.id) });
+            items.push({
+              ...it,
+              content,
+              _sort: sortKey(iov && iov.sortOverride, it.sortOrder, it.id),
+            });
           }
           items.sort(bySort);
 
-          entries.push({ ...e, fields, items, _sort: sortKey(eov && eov.sortOverride, e.sortOrder, e.id) });
+          entries.push({
+            ...e,
+            fields,
+            items,
+            _sort: sortKey(eov && eov.sortOverride, e.sortOrder, e.id),
+          });
         }
         entries.sort(bySort);
         if (entries.length === 0) continue; // drop empty section
