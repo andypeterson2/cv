@@ -44,12 +44,25 @@ class ImportExport {
       const entryOverrides = [];
       for (const [eid, o] of eov) {
         const pos = entryPos.get(eid);
-        if (pos) entryOverrides.push({ ...pos, included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride, fieldsOverride: o.fieldsOverride });
+        if (pos)
+          entryOverrides.push({
+            ...pos,
+            included: o.included,
+            textOverride: o.textOverride,
+            sortOverride: o.sortOverride,
+            fieldsOverride: o.fieldsOverride,
+          });
       }
       const itemOverrides = [];
       for (const [iid, o] of iov) {
         const pos = itemPos.get(iid);
-        if (pos) itemOverrides.push({ ...pos, included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+        if (pos)
+          itemOverrides.push({
+            ...pos,
+            included: o.included,
+            textOverride: o.textOverride,
+            sortOverride: o.sortOverride,
+          });
       }
       return {
         name: v.name,
@@ -62,9 +75,10 @@ class ImportExport {
         })),
         entryOverrides,
         itemOverrides,
-        letterSections: v.kind === 'coverletter'
-          ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
-          : undefined,
+        letterSections:
+          v.kind === 'coverletter'
+            ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
+            : undefined,
         header: v.kind === 'coverletter' ? this.getLetterHeader(v.id) : undefined,
       };
     });
@@ -95,6 +109,7 @@ class ImportExport {
   }
 
   _importNewShape(personId, data) {
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 30; export mirrors the import walk
     const tx = this.db.transaction(() => {
       if (data.personal) this.setPersonal(personId, data.personal);
 
@@ -102,7 +117,7 @@ class ImportExport {
       const sectionIdBySlug = {};
       const entryIdByPos = {}; // `${slug}#${ei}` -> entryId
       const itemIdByPos = {}; // `${slug}#${ei}#${ii}` -> itemId
-      for (const sec of (data.sections || [])) {
+      for (const sec of data.sections || []) {
         const sectionId = this.createSection(personId, sec.slug, sec.type, sec.title || '');
         sectionIdBySlug[sec.slug] = sectionId;
         (sec.entries || []).forEach((e, ei) => {
@@ -117,23 +132,42 @@ class ImportExport {
         });
       }
 
-      for (const v of (data.variants || [])) {
+      for (const v of data.variants || []) {
         const variantId = this.createVariant(personId, v.name, v.kind);
         if (v.rules) this.setVariantRules(variantId, v.rules);
         if (Array.isArray(v.sections)) {
-          this.setVariantSections(variantId, v.sections
-            .map((r) => ({ sectionId: sectionIdBySlug[r.slug], enabled: r.enabled, sortOrder: r.sortOrder }))
-            .filter((r) => r.sectionId != null));
+          this.setVariantSections(
+            variantId,
+            v.sections
+              .map((r) => ({
+                sectionId: sectionIdBySlug[r.slug],
+                enabled: r.enabled,
+                sortOrder: r.sortOrder,
+              }))
+              .filter((r) => r.sectionId != null),
+          );
         }
-        for (const o of (v.entryOverrides || [])) {
+        for (const o of v.entryOverrides || []) {
           const eid = entryIdByPos[`${o.slug}#${o.ei}`];
-          if (eid != null) this.setEntryOverride(variantId, eid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride, fieldsOverride: o.fieldsOverride });
+          if (eid != null)
+            this.setEntryOverride(variantId, eid, {
+              included: o.included,
+              textOverride: o.textOverride,
+              sortOverride: o.sortOverride,
+              fieldsOverride: o.fieldsOverride,
+            });
         }
-        for (const o of (v.itemOverrides || [])) {
+        for (const o of v.itemOverrides || []) {
           const iid = itemIdByPos[`${o.slug}#${o.ei}#${o.ii}`];
-          if (iid != null) this.setItemOverride(variantId, iid, { included: o.included, textOverride: o.textOverride, sortOverride: o.sortOverride });
+          if (iid != null)
+            this.setItemOverride(variantId, iid, {
+              included: o.included,
+              textOverride: o.textOverride,
+              sortOverride: o.sortOverride,
+            });
         }
-        for (const s of (v.letterSections || [])) this.createLetterSection(variantId, s.title || '', s.body || '');
+        for (const s of v.letterSections || [])
+          this.createLetterSection(variantId, s.title || '', s.body || '');
         // per-variant header; older exports carried it once at the top level (data.coverletter)
         const header = v.header || (v.kind === 'coverletter' ? data.coverletter : null);
         if (header) this.setLetterHeader(variantId, header);
@@ -141,16 +175,22 @@ class ImportExport {
 
       // Aliases (exported content is already canonical, so a plain upsert is
       // enough — no retroactive rewrite needed).
-      for (const al of (data.tagAliases || [])) {
+      for (const al of data.tagAliases || []) {
         const a = normTag(al.alias);
         const c = normTag(al.canonical);
         if (a && c && a !== c) this._stmts.upsertAlias.run(personId, a, c, al.source || 'manual');
       }
 
       // Catalog (already-canonical tags; plain upsert).
-      for (const ce of (data.tagCatalog || [])) {
+      for (const ce of data.tagCatalog || []) {
         const t = normTag(ce.tag);
-        if (t) this._stmts.upsertCatalogTag.run(personId, t, ce.description ?? null, ce.category ?? null);
+        if (t)
+          this._stmts.upsertCatalogTag.run(
+            personId,
+            t,
+            ce.description ?? null,
+            ce.category ?? null,
+          );
       }
     });
     tx();
@@ -174,13 +214,15 @@ class ImportExport {
    * per-person backfill. Used for seeding and importing legacy backups.
    */
   importLegacyData(personId, data) {
+    // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 56; the import walks the whole document tree — split when next touched
     const tx = this.db.transaction(() => {
       // personal (the cover-letter header is applied to the letter variant below)
       if (data.personal) this.setPersonal(personId, data.personal);
 
       const blobSections = Array.isArray(data.sections) ? data.sections : [];
-      const cvDoc = (data.documents && Array.isArray(data.documents.cv)) ? data.documents.cv : [];
-      const resumeDoc = (data.documents && Array.isArray(data.documents.resume)) ? data.documents.resume : [];
+      const cvDoc = data.documents && Array.isArray(data.documents.cv) ? data.documents.cv : [];
+      const resumeDoc =
+        data.documents && Array.isArray(data.documents.resume) ? data.documents.resume : [];
 
       // main order = cv order, then leftovers
       const orderedSlugs = [];
@@ -203,13 +245,13 @@ class ImportExport {
         sectionIdBySlug[slug] = sectionId;
         const paragraph = getLatexType(type) === 'cvparagraph';
 
-        for (const e of (sec.entries || [])) {
+        for (const e of sec.entries || []) {
           const entryId = this.createEntry(sectionId, e.fields || {});
           if (e.id != null) entryIdByOld[e.id] = entryId;
           if (paragraph && e.resumeIncluded !== false && firstResumeEntryBySlug[slug] == null) {
             firstResumeEntryBySlug[slug] = entryId;
           }
-          for (const it of (e.items || [])) {
+          for (const it of e.items || []) {
             const itemId = this.createItem(entryId, it.content || '', it.title || '');
             if (it.id != null) itemIdByOld[it.id] = itemId;
           }
@@ -224,11 +266,11 @@ class ImportExport {
       const resumeId = this.createVariant(personId, 'Resume', 'resume');
       this.setVariantSections(resumeId, mapDocToVariantSections(resumeDoc, sectionIdBySlug));
       for (const sec of blobSections) {
-        for (const e of (sec.entries || [])) {
+        for (const e of sec.entries || []) {
           if (e.resumeIncluded === false && entryIdByOld[e.id] != null) {
             this.setEntryOverride(resumeId, entryIdByOld[e.id], { included: false });
           }
-          for (const it of (e.items || [])) {
+          for (const it of e.items || []) {
             if (it.resumeIncluded === false && itemIdByOld[it.id] != null) {
               this.setItemOverride(resumeId, itemIdByOld[it.id], { included: false });
             }
@@ -237,12 +279,17 @@ class ImportExport {
       }
       for (const d of resumeDoc) {
         if (d.resumeParagraphText != null && firstResumeEntryBySlug[d.sectionId] != null) {
-          this.setEntryOverride(resumeId, firstResumeEntryBySlug[d.sectionId], { textOverride: d.resumeParagraphText });
+          this.setEntryOverride(resumeId, firstResumeEntryBySlug[d.sectionId], {
+            textOverride: d.resumeParagraphText,
+          });
         }
       }
 
       // Cover Letter variant (only if there are paragraphs)
-      const clSections = (data.coverletter && Array.isArray(data.coverletter.sections)) ? data.coverletter.sections : [];
+      const clSections =
+        data.coverletter && Array.isArray(data.coverletter.sections)
+          ? data.coverletter.sections
+          : [];
       if (clSections.length) {
         const clId = this.createVariant(personId, 'Cover Letter', 'coverletter');
         for (const s of clSections) this.createLetterSection(clId, s.title || '', s.body || '');

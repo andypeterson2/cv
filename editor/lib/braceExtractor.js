@@ -10,6 +10,7 @@
  * Example: extractBraceArgs("{hello}{wor{l}d}", 0, 2)
  *   => { args: ["hello", "wor{l}d"], endIndex: 16 }
  */
+// eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 22; the brace-matching scan is one loop
 function extractBraceArgs(text, startIndex, count) {
   const args = [];
   let i = startIndex;

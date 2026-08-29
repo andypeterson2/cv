@@ -6,14 +6,13 @@ Point ``CV_EDITOR_URL`` at a running editor; auto-skips if unreachable (the CI
 the stable read shapes API clients (the editor UI, the MCP server) rely on.
 """
 
-import os
 import sys
+from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, str(Path(__file__).parent))
 
-import pytest  # noqa: E402
-
-from _contract import (  # noqa: E402
+import pytest
+from _contract import (
     assert_matches,
     base_url,
     http_get,

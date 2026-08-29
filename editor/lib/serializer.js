@@ -225,12 +225,18 @@ function serializeCvparagraph(data) {
 function serializeSection(data) {
   const latexType = getLatexType(data.type);
   switch (latexType) {
-    case 'cventries': return serializeCventries(data);
-    case 'cvskills': return serializeCvskills(data);
-    case 'cvhonors': return serializeCvhonors(data);
-    case 'cvreferences': return serializeCvreferences(data);
-    case 'cvparagraph': return serializeCvparagraph(data);
-    default: throw new Error(`Unknown section type: ${data.type} (latex: ${latexType})`);
+    case 'cventries':
+      return serializeCventries(data);
+    case 'cvskills':
+      return serializeCvskills(data);
+    case 'cvhonors':
+      return serializeCvhonors(data);
+    case 'cvreferences':
+      return serializeCvreferences(data);
+    case 'cvparagraph':
+      return serializeCvparagraph(data);
+    default:
+      throw new Error(`Unknown section type: ${data.type} (latex: ${latexType})`);
   }
 }
 
@@ -238,6 +244,7 @@ function serializeSection(data) {
 // Document serializer (resume.tex / cv.tex) — rewrite \input lines
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 33; the LaTeX emitter walks the whole tree
 function serializeDocumentSections(tex, sections) {
   const lines = tex.split('\n');
   const result = [];
@@ -255,6 +262,7 @@ function serializeDocumentSections(tex, sections) {
         inSectionBlock = true;
         // Write all sections here
         for (const s of sections) {
+          // eslint-disable-next-line max-depth -- grandfathered; depth follows the document nesting
           if (s.enabled) {
             const comment = s.comment ? ` % ${s.comment}` : '';
             result.push(`\\input{${s.file}}${comment}`);
@@ -284,6 +292,7 @@ function serializeDocumentSections(tex, sections) {
 // data.tex serializer
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 19; split when next touched
 function serializeData(data) {
   const lines = [];
 
@@ -312,13 +321,14 @@ function serializeData(data) {
   // Social/link commands — driven by catalog
   for (const cat of SOCIAL_CATALOG) {
     if (cat.args === 2) {
-      const v1 = p[cat.fields[0]], v2 = p[cat.fields[1]];
+      const v1 = p[cat.fields[0]],
+        v2 = p[cat.fields[1]];
       if (v1 || v2) lines.push(`\\${cat.key}{${san(v1 || '')}}{${san(v2 || '')}}`);
     } else {
       if (p[cat.key]) lines.push(`\\${cat.key}{${san(p[cat.key])}}`);
     }
   }
-  if (p.quote) lines.push('\\quote{``' + san(p.quote) + "''"  + '}');
+  if (p.quote) lines.push('\\quote{``' + san(p.quote) + "''" + '}');
   if (p.extrainfo) lines.push(`\\extrainfo{${san(p.extrainfo)}}`);
   lines.push('');
 
@@ -346,8 +356,10 @@ function serializeCoverletter(tex, data) {
 
   // Replace \recipient{...}{...}
   const recipientPattern = /\\recipient\s*\n?\s*\{[\s\S]*?\}\s*\n?\s*\{[\s\S]*?\}/;
-  result = result.replace(recipientPattern,
-    `\\recipient\n  {${san(data.recipient.name)}}\n  {${san(data.recipient.address)}}`);
+  result = result.replace(
+    recipientPattern,
+    `\\recipient\n  {${san(data.recipient.name)}}\n  {${san(data.recipient.address)}}`,
+  );
 
   // Replace \lettertitle{...}
   result = replaceCommand(result, 'lettertitle', `\\lettertitle{${san(data.title)}}`);
@@ -359,17 +371,19 @@ function serializeCoverletter(tex, data) {
   result = replaceCommand(result, 'letterclosing', `\\letterclosing{${san(data.closing)}}`);
 
   // Replace \letterenclosure[...]{...}
-  result = result.replace(/\\letterenclosure\[[^\]]*\]\{[\s\S]*?\}/,
-    `\\letterenclosure[${san(data.enclosure.label)}]{${san(data.enclosure.content)}}`);
+  result = result.replace(
+    /\\letterenclosure\[[^\]]*\]\{[\s\S]*?\}/,
+    `\\letterenclosure[${san(data.enclosure.label)}]{${san(data.enclosure.content)}}`,
+  );
 
   // Replace letter body (between \begin{cvletter} and \end{cvletter})
-  const bodyContent = data.sections.map(s =>
-    `\\lettersection{${san(s.title)}}\n${san(s.body)}`
-  ).join('\n\n');
+  const bodyContent = data.sections
+    .map((s) => `\\lettersection{${san(s.title)}}\n${san(s.body)}`)
+    .join('\n\n');
 
   result = result.replace(
     /\\begin\{cvletter\}[\s\S]*?\\end\{cvletter\}/,
-    `\\begin{cvletter}\n\n${bodyContent}\n\n\\end{cvletter}`
+    `\\begin{cvletter}\n\n${bodyContent}\n\n\\end{cvletter}`,
   );
 
   return result;
@@ -407,8 +421,8 @@ function serializeFilteredSection(sectionData, configEntry) {
 
       // Filter items/bullets if applicable
       if (entry.items && entryConfig && entryConfig.items) {
-        entry.items = entry.items.filter((_, j) =>
-          j >= entryConfig.items.length || entryConfig.items[j] !== false
+        entry.items = entry.items.filter(
+          (_, j) => j >= entryConfig.items.length || entryConfig.items[j] !== false,
         );
       }
 
@@ -425,5 +439,5 @@ module.exports = {
   serializeFilteredSection,
   serializeDocumentSections,
   serializeData,
-  serializeCoverletter
+  serializeCoverletter,
 };

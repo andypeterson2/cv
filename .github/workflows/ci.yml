@@ -17,6 +17,22 @@ jobs:
         with:
           node-version: "22"
       - run: npm install
+      - run: npm run lint
+      - run: npm test
+
+  mcp-worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
       - run: npm test
 
   contract:
@@ -32,7 +48,9 @@ jobs:
       - name: Install deps
         run: |
           (cd editor && npm install)
-          pip install pytest jsonschema
+          pip install pytest jsonschema "ruff~=0.15.16"
+      - name: Lint the contract tests
+        run: ruff check .
       - name: Boot the editor and run the live-HTTP contract tests
         run: |
           cd editor

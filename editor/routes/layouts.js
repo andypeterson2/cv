@@ -133,15 +133,13 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
           samples: gatherSamples(getDb()),
         });
         if (!report.ok) {
-          return res
-            .status(422)
-            .json({
-              error: {
-                code: 'verification_failed',
-                message: 'Layout failed verification',
-                details: report,
-              },
-            });
+          return res.status(422).json({
+            error: {
+              code: 'verification_failed',
+              message: 'Layout failed verification',
+              details: report,
+            },
+          });
         }
 
         const dest = uploadedLayoutDir(manifest.id);
