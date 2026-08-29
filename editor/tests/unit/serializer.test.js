@@ -4,7 +4,7 @@ const {
   serializeFilteredSection,
   serializeDocumentSections,
   serializeData,
-  serializeCoverletter
+  serializeCoverletter,
 } = require('../../lib/serializer');
 
 // ---- sanitizeLatex ----
@@ -52,9 +52,9 @@ describe('serializeSection - cventries', () => {
         organization: 'Acme Corp',
         location: 'Remote',
         date: '2023 - Present',
-        items: ['Built systems', 'Led team']
-      }
-    ]
+        items: ['Built systems', 'Led team'],
+      },
+    ],
   };
 
   test('produces valid LaTeX', () => {
@@ -90,7 +90,7 @@ describe('serializeSection - cventries', () => {
   test('serializes multiple entries', () => {
     const multi = {
       ...data,
-      entries: [data.entries[0], { ...data.entries[0], organization: 'Other Corp' }]
+      entries: [data.entries[0], { ...data.entries[0], organization: 'Other Corp' }],
     };
     const tex = serializeSection(multi);
     expect(tex).toContain('Acme Corp');
@@ -106,8 +106,8 @@ describe('serializeSection - cvskills', () => {
     title: 'Skills',
     entries: [
       { category: 'Languages', skills: 'Python, Rust, Go' },
-      { category: 'Tools', skills: 'Docker, Git' }
-    ]
+      { category: 'Tools', skills: 'Docker, Git' },
+    ],
   };
 
   test('produces valid LaTeX', () => {
@@ -131,9 +131,7 @@ describe('serializeSection - cvhonors', () => {
   const data = {
     type: 'cvhonors',
     title: 'Certifications',
-    entries: [
-      { award: 'AWS Solutions Architect', issuer: 'Amazon', location: '', date: '2024' }
-    ]
+    entries: [{ award: 'AWS Solutions Architect', issuer: 'Amazon', location: '', date: '2024' }],
   };
 
   test('produces valid LaTeX', () => {
@@ -157,7 +155,7 @@ describe('serializeSection - cvparagraph', () => {
   const data = {
     type: 'cvparagraph',
     title: 'Summary',
-    text: 'I am a software engineer.'
+    text: 'I am a software engineer.',
   };
 
   test('produces valid LaTeX', () => {
@@ -175,9 +173,7 @@ describe('serializeSection - cvreferences', () => {
   const data = {
     type: 'cvreferences',
     title: 'References',
-    entries: [
-      { name: 'Dr. Smith', relation: 'Advisor', phone: '555-0100', email: 'smith@edu' }
-    ]
+    entries: [{ name: 'Dr. Smith', relation: 'Advisor', phone: '555-0100', email: 'smith@edu' }],
   };
 
   test('produces valid LaTeX', () => {
@@ -203,10 +199,16 @@ describe('serializeFilteredSection', () => {
     type: 'cventries',
     title: 'Experience',
     entries: [
-      { position: 'A', organization: 'Org A', location: '', date: '', items: ['bullet1', 'bullet2', 'bullet3'] },
+      {
+        position: 'A',
+        organization: 'Org A',
+        location: '',
+        date: '',
+        items: ['bullet1', 'bullet2', 'bullet3'],
+      },
       { position: 'B', organization: 'Org B', location: '', date: '', items: ['b1', 'b2'] },
-      { position: 'C', organization: 'Org C', location: '', date: '', items: ['c1'] }
-    ]
+      { position: 'C', organization: 'Org C', location: '', date: '', items: ['c1'] },
+    ],
   };
 
   test('returns full section when no config', () => {
@@ -221,8 +223,8 @@ describe('serializeFilteredSection', () => {
       entries: [
         { resume: true, items: [] },
         { resume: false, items: [] },
-        { resume: true, items: [] }
-      ]
+        { resume: true, items: [] },
+      ],
     };
     const tex = serializeFilteredSection(sectionData, config);
     expect(tex).toContain('Org A');
@@ -235,8 +237,8 @@ describe('serializeFilteredSection', () => {
       entries: [
         { resume: true, items: [true, false, true] },
         { resume: true, items: [] },
-        { resume: true, items: [] }
-      ]
+        { resume: true, items: [] },
+      ],
     };
     const tex = serializeFilteredSection(sectionData, config);
     expect(tex).toContain('bullet1');
@@ -266,15 +268,11 @@ describe('serializeFilteredSection', () => {
       entries: [
         { category: 'Languages', skills: 'Python' },
         { category: 'Quantum', skills: 'Qiskit' },
-        { category: 'DevOps', skills: 'Docker' }
-      ]
+        { category: 'DevOps', skills: 'Docker' },
+      ],
     };
     const config = {
-      entries: [
-        { resume: true },
-        { resume: false },
-        { resume: true }
-      ]
+      entries: [{ resume: true }, { resume: false }, { resume: true }],
     };
     const tex = serializeFilteredSection(skills, config);
     expect(tex).toContain('Languages');
@@ -293,14 +291,14 @@ describe('serializeDocumentSections', () => {
     '\\input{cv/summary.tex}',
     '\\input{cv/experience.tex}',
     '% \\input{cv/honors.tex}',
-    '\\end{document}'
+    '\\end{document}',
   ].join('\n');
 
   test('rewrites input lines with new section list', () => {
     const sections = [
       { file: 'cv/experience.tex', enabled: true, comment: '' },
       { file: 'cv/summary.tex', enabled: true, comment: '' },
-      { file: 'cv/honors.tex', enabled: false, comment: '' }
+      { file: 'cv/honors.tex', enabled: false, comment: '' },
     ];
     const result = serializeDocumentSections(baseTex, sections);
     expect(result).toContain('\\input{cv/experience.tex}');
@@ -323,9 +321,7 @@ describe('serializeDocumentSections', () => {
   });
 
   test('includes comments on sections', () => {
-    const sections = [
-      { file: 'cv/experience.tex', enabled: true, comment: 'done' }
-    ];
+    const sections = [{ file: 'cv/experience.tex', enabled: true, comment: 'done' }];
     const result = serializeDocumentSections(baseTex, sections);
     expect(result).toContain('\\input{cv/experience.tex} % done');
   });
@@ -345,7 +341,7 @@ describe('serializeData', () => {
       github: 'johndoe',
       linkedin: 'john-doe',
       quote: '',
-      photo: { enabled: false, file: 'profile' }
+      photo: { enabled: false, file: 'profile' },
     },
   };
 
@@ -367,7 +363,7 @@ describe('serializeData', () => {
   test('includes photo when enabled', () => {
     const withPhoto = {
       ...data,
-      personal: { ...data.personal, photo: { enabled: true, file: 'myimage' } }
+      personal: { ...data.personal, photo: { enabled: true, file: 'myimage' } },
     };
     const tex = serializeData(withPhoto);
     expect(tex).toContain('\\photo[circle,noedge,left]{myimage}');
@@ -403,7 +399,7 @@ describe('serializeCoverletter', () => {
     '\\lettersection{Intro}',
     'Old intro text.',
     '\\end{cvletter}',
-    '\\end{document}'
+    '\\end{document}',
   ].join('\n');
 
   const newData = {
@@ -414,8 +410,8 @@ describe('serializeCoverletter', () => {
     enclosure: { label: 'Enclosed', content: 'CV' },
     sections: [
       { title: 'About', body: 'New body text.' },
-      { title: 'Why', body: 'Because reasons.' }
-    ]
+      { title: 'Why', body: 'Because reasons.' },
+    ],
   };
 
   test('replaces recipient', () => {

@@ -6,11 +6,15 @@ class AppError extends Error {
 }
 
 class NotFoundError extends AppError {
-  constructor(msg = 'Not found') { super(msg, 404); }
+  constructor(msg = 'Not found') {
+    super(msg, 404);
+  }
 }
 
 class ConflictError extends AppError {
-  constructor(msg = 'Conflict') { super(msg, 409); }
+  constructor(msg = 'Conflict') {
+    super(msg, 409);
+  }
 }
 
 class ValidationError extends AppError {

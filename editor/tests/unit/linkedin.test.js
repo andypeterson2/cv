@@ -11,7 +11,12 @@ const { exportLinkedin, clean, parseRange } = require('../../lib/linkedin');
 const RESOLVED = {
   personal: { firstName: 'Andrew', lastName: 'Peterson' },
   sections: [
-    { id: 'summary', type: 'summary', title: 'Summary', entries: [{ id: 243, fields: { text: 'Ignore me.' }, items: [] }] },
+    {
+      id: 'summary',
+      type: 'summary',
+      title: 'Summary',
+      entries: [{ id: 243, fields: { text: 'Ignore me.' }, items: [] }],
+    },
     {
       id: 'experience',
       type: 'experience',
@@ -19,23 +24,55 @@ const RESOLVED = {
       entries: [
         {
           id: 244,
-          fields: { date: 'July 2022 -- December 2024', location: 'San Diego, CA', organization: 'Qualcomm Institute (CALIT2)', position: 'Research Intern' },
+          fields: {
+            date: 'July 2022 -- December 2024',
+            location: 'San Diego, CA',
+            organization: 'Qualcomm Institute (CALIT2)',
+            position: 'Research Intern',
+          },
           items: [
-            { id: 454, content: 'Designed a signaling server (Python/Flask, Socket.IO) with cryptographic room assignment' },
-            { id: 456, content: 'Built parallel solver implementations --- classical brute-force and Grover\'s quantum search --- for systematic comparison' },
+            {
+              id: 454,
+              content:
+                'Designed a signaling server (Python/Flask, Socket.IO) with cryptographic room assignment',
+            },
+            {
+              id: 456,
+              content:
+                "Built parallel solver implementations --- classical brute-force and Grover's quantum search --- for systematic comparison",
+            },
           ],
         },
         {
           id: 245,
-          fields: { date: 'August 2020 -- May 2022', location: 'Remote', organization: 'RIT Esports', position: 'Web Developer' },
+          fields: {
+            date: 'August 2020 -- May 2022',
+            location: 'Remote',
+            organization: 'RIT Esports',
+            position: 'Web Developer',
+          },
           items: [
-            { id: 462, content: 'Maintained 99.9\\% uptime on DigitalOcean Droplets with Nginx reverse proxies' },
+            {
+              id: 462,
+              content:
+                'Maintained 99.9\\% uptime on DigitalOcean Droplets with Nginx reverse proxies',
+            },
           ],
         },
         {
           id: 246,
-          fields: { date: 'March 2020 -- September 2021', location: 'Southern California', organization: 'Mathnasium', position: 'Tutor / IT Lead' },
-          items: [{ id: 463, content: 'Led the center\'s transition to remote operations during COVID-19' }],
+          fields: {
+            date: 'March 2020 -- September 2021',
+            location: 'Southern California',
+            organization: 'Mathnasium',
+            position: 'Tutor / IT Lead',
+          },
+          items: [
+            {
+              id: 463,
+              content: "Led the center's transition to remote operations during COVID-19",
+            },
+          ],
         },
       ],
     },
@@ -89,13 +126,23 @@ describe('exportLinkedin — fingerprint is drift, not noise', () => {
 
 describe('formats + parse edges', () => {
   test('plaintext drops the glyph, markdown uses "-"', () => {
-    expect(exportLinkedin(RESOLVED, 'plaintext').positions[2].description).toBe('Led the center\'s transition to remote operations during COVID-19');
-    expect(exportLinkedin(RESOLVED, 'markdown').positions[2].description.startsWith('- ')).toBe(true);
+    expect(exportLinkedin(RESOLVED, 'plaintext').positions[2].description).toBe(
+      "Led the center's transition to remote operations during COVID-19",
+    );
+    expect(exportLinkedin(RESOLVED, 'markdown').positions[2].description.startsWith('- ')).toBe(
+      true,
+    );
   });
 
   test('year-only range → month null; Present → open end', () => {
-    expect(parseRange('2021 -- 2024')).toEqual({ start: { month: null, year: 2021 }, end: { month: null, year: 2024 } });
-    expect(parseRange('June 2021 - Present')).toEqual({ start: { month: 6, year: 2021 }, end: null });
+    expect(parseRange('2021 -- 2024')).toEqual({
+      start: { month: null, year: 2021 },
+      end: { month: null, year: 2024 },
+    });
+    expect(parseRange('June 2021 - Present')).toEqual({
+      start: { month: 6, year: 2021 },
+      end: null,
+    });
   });
 
   test('clean turns the arrow macro into a glyph', () => {

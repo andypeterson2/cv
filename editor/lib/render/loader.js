@@ -28,7 +28,11 @@ function resolveInBundle(layoutDir, relPath) {
   const abs = path.resolve(root, relPath);
   // realpath the existing prefix so a symlink can't tunnel out.
   let real = abs;
-  try { real = fs.realpathSync(abs); } catch { /* file may not exist yet — check the lexical path */ }
+  try {
+    real = fs.realpathSync(abs);
+  } catch {
+    /* file may not exist yet — check the lexical path */
+  }
   const rel = path.relative(root, real);
   if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) {
     throw new LayoutError(`Bundle path escapes its directory: ${relPath}`);

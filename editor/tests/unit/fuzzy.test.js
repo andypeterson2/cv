@@ -23,7 +23,10 @@ describe('diceCoefficient', () => {
   });
 
   test('symmetric', () => {
-    expect(diceCoefficient('frontend', 'frontends')).toBeCloseTo(diceCoefficient('frontends', 'frontend'), 10);
+    expect(diceCoefficient('frontend', 'frontends')).toBeCloseTo(
+      diceCoefficient('frontends', 'frontend'),
+      10,
+    );
   });
 
   test('near strings score high, disjoint score low', () => {
@@ -99,11 +102,15 @@ describe('searchTags', () => {
       { tag: 'beta', count: 9 },
     ];
     // All score identically (exact) only if query equals — instead force equal scores via prefix of same ratio.
-    const out = searchTags('x', [
-      { tag: 'xa', count: 1 },
-      { tag: 'xb', count: 9 },
-      { tag: 'xc', count: 1 },
-    ], { minScore: 0 });
+    const out = searchTags(
+      'x',
+      [
+        { tag: 'xa', count: 1 },
+        { tag: 'xb', count: 9 },
+        { tag: 'xc', count: 1 },
+      ],
+      { minScore: 0 },
+    );
     // equal prefix score (ratio 1/2 each) → count desc then tag asc
     expect(out.map((r) => r.tag)).toEqual(['xb', 'xa', 'xc']);
     expect(tied).toBeDefined();

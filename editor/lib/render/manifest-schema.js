@@ -36,7 +36,9 @@ const validateFn = ajv.compile(schema);
 /** @returns {{ ok: boolean, errors: string[] }} */
 function validateManifest(manifest) {
   const ok = validateFn(manifest);
-  const errors = ok ? [] : (validateFn.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`);
+  const errors = ok
+    ? []
+    : (validateFn.errors || []).map((e) => `${e.instancePath || '/'} ${e.message}`);
   return { ok, errors };
 }
 

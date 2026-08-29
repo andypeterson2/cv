@@ -25,7 +25,8 @@ function selectLayout(db, variant) {
     const row = db.getLayout ? db.getLayout(id) : null;
     if (!row || row.status !== 'active') continue;
     // If the chosen layout doesn't support this kind, skip to the next candidate.
-    if (variant && variant.kind && Array.isArray(row.kinds) && !row.kinds.includes(variant.kind)) continue;
+    if (variant && variant.kind && Array.isArray(row.kinds) && !row.kinds.includes(variant.kind))
+      continue;
     return { id, dir: layoutDirForRow(row), fallback: false };
   }
 

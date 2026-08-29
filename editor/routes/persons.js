@@ -41,274 +41,385 @@ module.exports = function createPersonsRouter(getDb) {
 
   // ---- Person CRUD ----
 
-  router.get('/', wrap((req, res) => {
-    res.json({ persons: getDb().getPersonsForUser(req.userId) });
-  }));
+  router.get(
+    '/',
+    wrap((req, res) => {
+      res.json({ persons: getDb().getPersonsForUser(req.userId) });
+    }),
+  );
 
-  router.post('/', validate('createPerson'), wrap((req, res) => {
-    try {
-      res.status(201).json({ id: Number(getDb().createPerson(req.body.name, req.userId)) });
-    } catch (e) {
-      if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('Person with that name already exists');
-      throw e;
-    }
-  }));
+  router.post(
+    '/',
+    validate('createPerson'),
+    wrap((req, res) => {
+      try {
+        res.status(201).json({ id: Number(getDb().createPerson(req.body.name, req.userId)) });
+      } catch (e) {
+        if (e.message && e.message.includes('UNIQUE'))
+          throw new ConflictError('Person with that name already exists');
+        throw e;
+      }
+    }),
+  );
 
   // Full main content (sections → entries → items → tags, variants, tag vocab).
-  router.get('/:pid', wrap((req, res) => {
-    const main = getDb().getMainForUser(intParam(req.params.pid, 'person id'), req.userId);
-    if (!main) throw new NotFoundError('Person not found');
-    res.json(main);
-  }));
+  router.get(
+    '/:pid',
+    wrap((req, res) => {
+      const main = getDb().getMainForUser(intParam(req.params.pid, 'person id'), req.userId);
+      if (!main) throw new NotFoundError('Person not found');
+      res.json(main);
+    }),
+  );
 
-  router.put('/:pid', validate('updatePerson'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    try {
-      getDb().renamePerson(id, req.body.name);
+  router.put(
+    '/:pid',
+    validate('updatePerson'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      try {
+        getDb().renamePerson(id, req.body.name);
+        res.json({ success: true });
+      } catch (e) {
+        if (e.message && e.message.includes('UNIQUE'))
+          throw new ConflictError('Person with that name already exists');
+        throw e;
+      }
+    }),
+  );
+
+  router.delete(
+    '/:pid',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      getDb().deletePerson(id);
       res.json({ success: true });
-    } catch (e) {
-      if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('Person with that name already exists');
-      throw e;
-    }
-  }));
-
-  router.delete('/:pid', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    getDb().deletePerson(id);
-    res.json({ success: true });
-  }));
+    }),
+  );
 
   // ---- Personal info ----
 
-  router.get('/:pid/personal', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json(getDb().getPersonal(id));
-  }));
+  router.get(
+    '/:pid/personal',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json(getDb().getPersonal(id));
+    }),
+  );
 
-  router.patch('/:pid/personal', validate('personal'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    getDb().setPersonal(id, req.body);
-    res.json({ success: true });
-  }));
+  router.patch(
+    '/:pid/personal',
+    validate('personal'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      getDb().setPersonal(id, req.body);
+      res.json({ success: true });
+    }),
+  );
 
   // The cover-letter header moved to a per-variant table + PATCH
   // /variants/:id/header (design #14); the old per-person route is gone.
 
   // ---- Export / import ----
 
-  router.get('/:pid/export', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const data = getDb().getPersonExport(id);
-    if (!data) throw new NotFoundError('Person not found');
-    res.json(data);
-  }));
+  router.get(
+    '/:pid/export',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const data = getDb().getPersonExport(id);
+      if (!data) throw new NotFoundError('Person not found');
+      res.json(data);
+    }),
+  );
 
-  router.post('/:pid/import', validate('import'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    getDb().importPersonData(id, req.body);
-    res.json({ success: true });
-  }));
+  router.post(
+    '/:pid/import',
+    validate('import'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      getDb().importPersonData(id, req.body);
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Version history (ADR-006 increment 1) ----
   // Reads of a public person's list stay open; snapshot + restore are writes, so
   // tokenAuth gates them to the owner (see server.js). A checkpoint snapshots the
   // person's authoritative state server-side; restore re-imports it over the person.
 
-  router.get('/:pid/versions', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json({ versions: getDb().listVersions(id) });
-  }));
+  router.get(
+    '/:pid/versions',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json({ versions: getDb().listVersions(id) });
+    }),
+  );
 
   // One checkpoint in full, including its doc snapshot (for the diff view).
-  router.get('/:pid/versions/:vid', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    const vid = intParam(req.params.vid, 'version id');
-    requirePerson(id, req.userId);
-    const version = getDb().getVersion(id, vid);
-    if (!version) throw new NotFoundError('Version not found');
-    res.json(version);
-  }));
+  router.get(
+    '/:pid/versions/:vid',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      const vid = intParam(req.params.vid, 'version id');
+      requirePerson(id, req.userId);
+      const version = getDb().getVersion(id, vid);
+      if (!version) throw new NotFoundError('Version not found');
+      res.json(version);
+    }),
+  );
 
-  router.post('/:pid/versions', validate('createVersion'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const b = req.body || {};
-    const vid = getDb().createVersion(id, b.label || '', b.branch || 'main', b.parent ?? null);
-    res.status(201).json({ id: Number(vid) });
-  }));
+  router.post(
+    '/:pid/versions',
+    validate('createVersion'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const b = req.body || {};
+      const vid = getDb().createVersion(id, b.label || '', b.branch || 'main', b.parent ?? null);
+      res.status(201).json({ id: Number(vid) });
+    }),
+  );
 
-  router.post('/:pid/versions/:vid/restore', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    const vid = intParam(req.params.vid, 'version id');
-    requirePerson(id, req.userId);
-    if (!getDb().restoreVersion(id, vid)) throw new NotFoundError('Version not found');
-    res.json({ success: true });
-  }));
+  router.post(
+    '/:pid/versions/:vid/restore',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      const vid = intParam(req.params.vid, 'version id');
+      requirePerson(id, req.userId);
+      if (!getDb().restoreVersion(id, vid)) throw new NotFoundError('Version not found');
+      res.json({ success: true });
+    }),
+  );
 
   // Tag a checkpoint with a frozen provenance name (ADR-006 inc 3).
-  router.post('/:pid/versions/:vid/tag', validate('tagVersion'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    const vid = intParam(req.params.vid, 'version id');
-    requirePerson(id, req.userId);
-    if (!getDb().setTag(id, vid, (req.body && req.body.tag) || '')) {
-      throw new NotFoundError('Version not found');
-    }
-    res.json({ success: true });
-  }));
+  router.post(
+    '/:pid/versions/:vid/tag',
+    validate('tagVersion'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      const vid = intParam(req.params.vid, 'version id');
+      requirePerson(id, req.userId);
+      if (!getDb().setTag(id, vid, (req.body && req.body.tag) || '')) {
+        throw new NotFoundError('Version not found');
+      }
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Tag vocabulary ----
 
-  router.get('/:pid/tags', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    if (req.query.withCounts) {
-      res.json({ tags: getDb().listTagsWithCounts(id) });
-    } else {
-      res.json({ tags: getDb().listTags(id) });
-    }
-  }));
+  router.get(
+    '/:pid/tags',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      if (req.query.withCounts) {
+        res.json({ tags: getDb().listTagsWithCounts(id) });
+      } else {
+        res.json({ tags: getDb().listTags(id) });
+      }
+    }),
+  );
 
   // Fuzzy tag search — approximate, for discovery/authoring (NOT resolution).
-  router.get('/:pid/tags/search', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const q = req.query.q;
-    if (typeof q !== 'string' || !q.trim()) throw new AppError('Query param "q" is required', 400);
-    const limit = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 10;
-    const minScore = req.query.min_score !== undefined ? parseFloat(req.query.min_score) : 0.3;
-    res.json(getDb().searchTags(id, q, {
-      limit: Number.isFinite(limit) ? limit : 10,
-      minScore: Number.isFinite(minScore) ? minScore : 0.3,
-    }));
-  }));
+  router.get(
+    '/:pid/tags/search',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const q = req.query.q;
+      if (typeof q !== 'string' || !q.trim())
+        throw new AppError('Query param "q" is required', 400);
+      const limit = req.query.limit !== undefined ? parseInt(req.query.limit, 10) : 10;
+      const minScore = req.query.min_score !== undefined ? parseFloat(req.query.min_score) : 0.3;
+      res.json(
+        getDb().searchTags(id, q, {
+          limit: Number.isFinite(limit) ? limit : 10,
+          minScore: Number.isFinite(minScore) ? minScore : 0.3,
+        }),
+      );
+    }),
+  );
 
   // ---- Tag aliases (alias → canonical; folded in at tag/rule write time) ----
 
-  router.get('/:pid/tag-aliases', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json({ aliases: getDb().getTagAliases(id) });
-  }));
+  router.get(
+    '/:pid/tag-aliases',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json({ aliases: getDb().getTagAliases(id) });
+    }),
+  );
 
-  router.put('/:pid/tag-aliases', validate('setTagAlias'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const result = getDb().setTagAlias(id, req.body.alias, req.body.canonical);
-    res.json({ success: true, ...result });
-  }));
+  router.put(
+    '/:pid/tag-aliases',
+    validate('setTagAlias'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const result = getDb().setTagAlias(id, req.body.alias, req.body.canonical);
+      res.json({ success: true, ...result });
+    }),
+  );
 
-  router.delete('/:pid/tag-aliases/:alias', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    getDb().deleteTagAlias(id, req.params.alias);
-    res.json({ success: true });
-  }));
+  router.delete(
+    '/:pid/tag-aliases/:alias',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      getDb().deleteTagAlias(id, req.params.alias);
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Tag catalog (per-person controlled vocabulary; soft guide) ----
 
-  router.get('/:pid/tags/catalog', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json({ catalog: getDb().getTagCatalog(id) });
-  }));
+  router.get(
+    '/:pid/tags/catalog',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json({ catalog: getDb().getTagCatalog(id) });
+    }),
+  );
 
-  router.put('/:pid/tags/catalog', validate('setCatalogTag'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const result = getDb().setCatalogTag(id, req.body.tag, {
-      description: req.body.description ?? null,
-      category: req.body.category ?? null,
-    });
-    res.json({ success: true, ...result });
-  }));
+  router.put(
+    '/:pid/tags/catalog',
+    validate('setCatalogTag'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const result = getDb().setCatalogTag(id, req.body.tag, {
+        description: req.body.description ?? null,
+        category: req.body.category ?? null,
+      });
+      res.json({ success: true, ...result });
+    }),
+  );
 
-  router.delete('/:pid/tags/catalog/:tag', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    getDb().deleteCatalogTag(id, req.params.tag);
-    res.json({ success: true });
-  }));
+  router.delete(
+    '/:pid/tags/catalog/:tag',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      getDb().deleteCatalogTag(id, req.params.tag);
+      res.json({ success: true });
+    }),
+  );
 
-  router.post('/:pid/tags/catalog/seed', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json({ success: true, ...getDb().seedCatalogFromUsage(id) });
-  }));
+  router.post(
+    '/:pid/tags/catalog/seed',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json({ success: true, ...getDb().seedCatalogFromUsage(id) });
+    }),
+  );
 
   // ---- Tag suggestion (free text → ranked EXISTING tags; discovery only) ----
 
-  router.post('/:pid/tags/suggest', validate('suggestTags'), wrap(async (req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const { text, limit, minScore, scorer } = req.body;
-    res.json(await getDb().suggestTags(id, text, { limit, minScore, scorer: resolveScorer(scorer) }));
-  }));
+  router.post(
+    '/:pid/tags/suggest',
+    validate('suggestTags'),
+    wrap(async (req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const { text, limit, minScore, scorer } = req.body;
+      res.json(
+        await getDb().suggestTags(id, text, { limit, minScore, scorer: resolveScorer(scorer) }),
+      );
+    }),
+  );
 
   // Suggest tags for EVERY entry/item at once (e.g. after an untagged import).
   // Suggest-only; all fields optional so an empty body is fine.
-  router.post('/:pid/tags/suggest-bulk', wrap(async (req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const b = req.body || {};
-    const opts = { scorer: resolveScorer(b.scorer) };
-    if (b.limit !== undefined) opts.limit = b.limit;
-    if (b.minScore !== undefined) opts.minScore = b.minScore;
-    res.json(await getDb().suggestBulk(id, opts));
-  }));
+  router.post(
+    '/:pid/tags/suggest-bulk',
+    wrap(async (req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const b = req.body || {};
+      const opts = { scorer: resolveScorer(b.scorer) };
+      if (b.limit !== undefined) opts.limit = b.limit;
+      if (b.minScore !== undefined) opts.minScore = b.minScore;
+      res.json(await getDb().suggestBulk(id, opts));
+    }),
+  );
 
   // ---- Sections (person-scoped list + create + reorder) ----
 
-  router.get('/:pid/sections', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json(getDb().getSections(id));
-  }));
+  router.get(
+    '/:pid/sections',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json(getDb().getSections(id));
+    }),
+  );
 
-  router.post('/:pid/sections', validate('createSection'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    try {
-      const sectionId = getDb().createSection(id, req.body.slug, req.body.type, req.body.title);
-      res.status(201).json({ id: Number(sectionId) });
-    } catch (e) {
-      if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('A section with that slug already exists');
-      throw e;
-    }
-  }));
+  router.post(
+    '/:pid/sections',
+    validate('createSection'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      try {
+        const sectionId = getDb().createSection(id, req.body.slug, req.body.type, req.body.title);
+        res.status(201).json({ id: Number(sectionId) });
+      } catch (e) {
+        if (e.message && e.message.includes('UNIQUE'))
+          throw new ConflictError('A section with that slug already exists');
+        throw e;
+      }
+    }),
+  );
 
-  router.patch('/:pid/sections/order', validate('reorder'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    getDb().reorderSections(id, req.body.ids);
-    res.json({ success: true });
-  }));
+  router.patch(
+    '/:pid/sections/order',
+    validate('reorder'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      getDb().reorderSections(id, req.body.ids);
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Variants (person-scoped list + create) ----
 
-  router.get('/:pid/variants', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    res.json(getDb().getVariants(id));
-  }));
+  router.get(
+    '/:pid/variants',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json(getDb().getVariants(id));
+    }),
+  );
 
-  router.post('/:pid/variants', validate('createVariant'), wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    try {
-      const variantId = getDb().createVariant(id, req.body.name, req.body.kind);
-      res.status(201).json({ id: Number(variantId) });
-    } catch (e) {
-      if (e.message && e.message.includes('UNIQUE')) throw new ConflictError('A variant with that name already exists');
-      throw e;
-    }
-  }));
+  router.post(
+    '/:pid/variants',
+    validate('createVariant'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      try {
+        const variantId = getDb().createVariant(id, req.body.name, req.body.kind);
+        res.status(201).json({ id: Number(variantId) });
+      } catch (e) {
+        if (e.message && e.message.includes('UNIQUE'))
+          throw new ConflictError('A variant with that name already exists');
+        throw e;
+      }
+    }),
+  );
 
   // ---- LinkedIn / Indeed / Handshake export + drift tracking ----
   // Turn a resolved variant into paste-ready work-history blocks (lib/linkedin) and
@@ -331,35 +442,47 @@ module.exports = function createPersonsRouter(getDb) {
 
   const FORMATS = new Set(['linkedin', 'plaintext', 'markdown']);
 
-  router.get('/:pid/linkedin', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const variantId = pickVariant(id, req.query.variant);
-    const format = FORMATS.has(req.query.format) ? req.query.format : 'linkedin';
-    res.json({ variantId, ...linkedin.exportLinkedin(getDb().resolveVariant(variantId), format) });
-  }));
+  router.get(
+    '/:pid/linkedin',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const variantId = pickVariant(id, req.query.variant);
+      const format = FORMATS.has(req.query.format) ? req.query.format : 'linkedin';
+      res.json({
+        variantId,
+        ...linkedin.exportLinkedin(getDb().resolveVariant(variantId), format),
+      });
+    }),
+  );
 
-  router.get('/:pid/linkedin/status', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const variantId = pickVariant(id, req.query.variant);
-    const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
-    res.json({ variantId, positions: getDb().linkedinStatus(id, positions) });
-  }));
+  router.get(
+    '/:pid/linkedin/status',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const variantId = pickVariant(id, req.query.variant);
+      const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
+      res.json({ variantId, positions: getDb().linkedinStatus(id, positions) });
+    }),
+  );
 
-  router.post('/:pid/linkedin/mark-synced', wrap((req, res) => {
-    const id = intParam(req.params.pid, 'person id');
-    requirePerson(id, req.userId);
-    const b = req.body || {};
-    const variantId = pickVariant(id, b.variant);
-    const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
-    const only = Array.isArray(b.entryIds) && b.entryIds.length ? new Set(b.entryIds) : null;
-    const entries = positions
-      .filter((p) => !only || only.has(p.entryId))
-      .map((p) => ({ entryId: p.entryId, fingerprint: p.fingerprint }));
-    const marked = getDb().markLinkedinSynced(id, entries, new Date().toISOString());
-    res.json({ variantId, marked });
-  }));
+  router.post(
+    '/:pid/linkedin/mark-synced',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      const b = req.body || {};
+      const variantId = pickVariant(id, b.variant);
+      const { positions } = linkedin.exportLinkedin(getDb().resolveVariant(variantId));
+      const only = Array.isArray(b.entryIds) && b.entryIds.length ? new Set(b.entryIds) : null;
+      const entries = positions
+        .filter((p) => !only || only.has(p.entryId))
+        .map((p) => ({ entryId: p.entryId, fingerprint: p.fingerprint }));
+      const marked = getDb().markLinkedinSynced(id, entries, new Date().toISOString());
+      res.json({ variantId, marked });
+    }),
+  );
 
   return router;
 };

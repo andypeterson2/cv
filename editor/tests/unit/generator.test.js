@@ -102,9 +102,7 @@ describe('generateSectionTex', () => {
     const section = {
       type: 'cvskills',
       title: 'Skills',
-      entries: [
-        { fields: { category: 'Languages', skills: 'JavaScript, Python' } },
-      ],
+      entries: [{ fields: { category: 'Languages', skills: 'JavaScript, Python' } }],
     };
     const tex = generateSectionTex(section);
     expect(tex).toContain('\\cvsection{Skills}');
@@ -116,9 +114,7 @@ describe('generateSectionTex', () => {
     const section = {
       type: 'cvhonors',
       title: 'Awards',
-      entries: [
-        { fields: { award: 'Best Paper', issuer: 'IEEE', location: 'NYC', date: '2023' } },
-      ],
+      entries: [{ fields: { award: 'Best Paper', issuer: 'IEEE', location: 'NYC', date: '2023' } }],
     };
     const tex = generateSectionTex(section);
     expect(tex).toContain('\\cvsection{Awards}');
@@ -131,7 +127,14 @@ describe('generateSectionTex', () => {
       type: 'cvreferences',
       title: 'References',
       entries: [
-        { fields: { name: 'Dr. Smith', relation: 'Advisor', phone: '555-0000', email: 'smith@uni.edu' } },
+        {
+          fields: {
+            name: 'Dr. Smith',
+            relation: 'Advisor',
+            phone: '555-0000',
+            email: 'smith@uni.edu',
+          },
+        },
       ],
     };
     const tex = generateSectionTex(section);
@@ -143,9 +146,7 @@ describe('generateSectionTex', () => {
     const section = {
       type: 'cvparagraph',
       title: 'Summary',
-      entries: [
-        { fields: { text: 'I am a great engineer.' } },
-      ],
+      entries: [{ fields: { text: 'I am a great engineer.' } }],
     };
     const tex = generateSectionTex(section);
     expect(tex).toContain('\\cvsection{Summary}');
@@ -284,7 +285,7 @@ describe('generateCoverletterTex', () => {
         opening: 'Dear A&B,',
         enclosureContent: 'Cost #1',
         sections: [{ title: 'Budget', body: 'Saved $5 & 10% time' }],
-      }
+      },
     );
     expect(tex).toContain('{R\\&D Team}');
     expect(tex).toContain('\\lettertitle{100\\% Match}');
@@ -341,9 +342,7 @@ describe('generateAll', () => {
         id: 'skills',
         type: 'cvskills',
         title: 'Skills',
-        entries: [
-          { fields: { category: 'Languages', skills: 'JS' } },
-        ],
+        entries: [{ fields: { category: 'Languages', skills: 'JS' } }],
       },
     ],
     coverletter: null,
@@ -385,7 +384,7 @@ describe('generateAll', () => {
   it('generates coverletter variant', () => {
     const clData = {
       personal: { firstName: 'Andrew', lastName: 'Peterson' },
-        sections: [],
+      sections: [],
       coverletter: {
         recipientName: 'HR',
         recipientAddress: '123 St',

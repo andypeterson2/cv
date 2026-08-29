@@ -21,8 +21,18 @@ const LIMITS = { description: 2000, headline: 220, about: 2600 };
 const BULLETS = { linkedin: '• ', plaintext: '', markdown: '- ' };
 
 const MONTHS = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12,
 };
 
 /**
@@ -33,15 +43,15 @@ const MONTHS = {
  */
 function clean(s) {
   return String(s ?? '')
-    .replace(/\\([&%$#_{}])/g, '$1')            // \& \% \$ \# \_ \{ \} → literal
+    .replace(/\\([&%$#_{}])/g, '$1') // \& \% \$ \# \_ \{ \} → literal
     .replace(/\\textrightarrow\s*\{\}/g, ' → ') // the one arrow macro in the data
-    .replace(/\\[a-zA-Z]+\s*\{\}/g, '')         // any other empty-argument control word
-    .replace(/\\[a-zA-Z]+/g, '')                // …and any bare control word
-    .replace(/---/g, '—')                       // LaTeX em-dash
-    .replace(/--/g, '–')                        // LaTeX en-dash
-    .replace(/~/g, ' ')                         // non-breaking space
-    .replace(/\\\\/g, ' ')                       // explicit line break
-    .replace(/\s+/g, ' ')                        // collapse the gaps removals opened
+    .replace(/\\[a-zA-Z]+\s*\{\}/g, '') // any other empty-argument control word
+    .replace(/\\[a-zA-Z]+/g, '') // …and any bare control word
+    .replace(/---/g, '—') // LaTeX em-dash
+    .replace(/--/g, '–') // LaTeX en-dash
+    .replace(/~/g, ' ') // non-breaking space
+    .replace(/\\\\/g, ' ') // explicit line break
+    .replace(/\s+/g, ' ') // collapse the gaps removals opened
     .trim();
 }
 
@@ -59,7 +69,10 @@ function parseRange(raw) {
     if (!v || /present|current|now|ongoing/i.test(v)) return null;
     const m = v.match(/([A-Za-z]+)?\s*(\d{4})/); // "July 2022" | "2022"
     if (!m) return null;
-    return { month: m[1] ? (MONTHS[m[1].slice(0, 3).toLowerCase()] ?? null) : null, year: Number(m[2]) };
+    return {
+      month: m[1] ? (MONTHS[m[1].slice(0, 3).toLowerCase()] ?? null) : null,
+      year: Number(m[2]),
+    };
   };
   return { start: one(parts[0]), end: parts.length > 1 ? one(parts[1]) : null };
 }
@@ -90,7 +103,9 @@ function exportLinkedin(resolved, format = 'linkedin') {
     // Fingerprint over normalised, glyph-free values — a cosmetic LaTeX-escaping or
     // format change must not read as drift; a real content change must.
     pos.fingerprint = createHash('sha256')
-      .update(JSON.stringify([pos.title, pos.company, pos.location, start, end, bullets.join('\n')]))
+      .update(
+        JSON.stringify([pos.title, pos.company, pos.location, start, end, bullets.join('\n')]),
+      )
       .digest('hex');
     return pos;
   });

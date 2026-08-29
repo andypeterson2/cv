@@ -22,10 +22,44 @@ const fuzzy = require('./fuzzy');
 // content verbs ("built", "designed") because they simply score low and the
 // minScore filter handles them, whereas over-pruning hurts recall.
 const STOPWORDS = new Set([
-  'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'with', 'by',
-  'at', 'from', 'as', 'is', 'was', 'were', 'be', 'been', 'being', 'that',
-  'this', 'these', 'those', 'it', 'its', 'into', 'than', 'then', 'but', 'not',
-  'via', 'per', 'across', 'our', 'their', 'using',
+  'the',
+  'a',
+  'an',
+  'and',
+  'or',
+  'of',
+  'to',
+  'in',
+  'on',
+  'for',
+  'with',
+  'by',
+  'at',
+  'from',
+  'as',
+  'is',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'that',
+  'this',
+  'these',
+  'those',
+  'it',
+  'its',
+  'into',
+  'than',
+  'then',
+  'but',
+  'not',
+  'via',
+  'per',
+  'across',
+  'our',
+  'their',
+  'using',
 ]);
 
 /**
@@ -34,7 +68,10 @@ const STOPWORDS = new Set([
  * sequence but skipped when either side is a stopword.
  */
 function tokenize(text) {
-  const raw = String(text).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const raw = String(text)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
   const unigrams = raw.filter((w) => w.length >= 2 && !STOPWORDS.has(w));
   const bigrams = [];
   for (let i = 0; i < raw.length - 1; i++) {
@@ -78,7 +115,13 @@ async function suggestTags(text, candidates, { limit = 8, minScore = 0.35, score
       .filter((r) => meta.has(r.tag))
       .map((r) => {
         const c = meta.get(r.tag);
-        return { tag: r.tag, score: round(r.score), inCatalog: !!c.inCatalog, count: c.count || 0, via: 'embedding' };
+        return {
+          tag: r.tag,
+          score: round(r.score),
+          inCatalog: !!c.inCatalog,
+          count: c.count || 0,
+          via: 'embedding',
+        };
       });
   } else {
     const tokens = tokenize(text);
@@ -99,11 +142,12 @@ async function suggestTags(text, candidates, { limit = 8, minScore = 0.35, score
 
   const out = scored.filter((r) => r.score >= minScore);
   // Total order → deterministic: score desc, catalog first, count desc, tag asc.
-  out.sort((a, b) =>
-    b.score - a.score ||
-    (b.inCatalog === a.inCatalog ? 0 : b.inCatalog ? 1 : -1) ||
-    b.count - a.count ||
-    (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0)
+  out.sort(
+    (a, b) =>
+      b.score - a.score ||
+      (b.inCatalog === a.inCatalog ? 0 : b.inCatalog ? 1 : -1) ||
+      b.count - a.count ||
+      (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0),
   );
   return limit > 0 ? out.slice(0, limit) : out;
 }

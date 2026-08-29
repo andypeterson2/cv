@@ -20,9 +20,12 @@ const nunjucks = require('nunjucks');
 const { registerFilters } = require('./filters');
 
 const TAGS = {
-  blockStart: '<%', blockEnd: '%>',
-  variableStart: '<<', variableEnd: '>>',
-  commentStart: '<#', commentEnd: '#>',
+  blockStart: '<%',
+  blockEnd: '%>',
+  variableStart: '<<',
+  variableEnd: '>>',
+  commentStart: '<#',
+  commentEnd: '#>',
 };
 
 /**
@@ -68,17 +71,32 @@ function renderTemplate(layoutDir, entryRelPath, context) {
  * instead of blocking the event loop. context must be structured-cloneable
  * (buildContext output is plain data). Resolves the rendered string.
  */
-function renderInWorker(layoutDir, entryRelPath, context, { timeoutMs = 10000, maxBytes = 5_000_000 } = {}) {
+function renderInWorker(
+  layoutDir,
+  entryRelPath,
+  context,
+  { timeoutMs = 10000, maxBytes = 5_000_000 } = {},
+) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(path.join(__dirname, 'render-worker.js'), {
       workerData: { layoutDir, entryRel: entryRelPath, context },
     });
     let settled = false;
-    const done = (fn, arg) => { if (settled) return; settled = true; clearTimeout(timer); worker.terminate(); fn(arg); };
-    const timer = setTimeout(() => done(reject, new Error(`Template render timed out after ${timeoutMs}ms`)), timeoutMs);
+    const done = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate();
+      fn(arg);
+    };
+    const timer = setTimeout(
+      () => done(reject, new Error(`Template render timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
     worker.once('message', (m) => {
       if (!m.ok) return done(reject, new Error(m.error));
-      if (typeof m.out === 'string' && m.out.length > maxBytes) return done(reject, new Error(`Rendered output exceeds ${maxBytes} bytes`));
+      if (typeof m.out === 'string' && m.out.length > maxBytes)
+        return done(reject, new Error(`Rendered output exceeds ${maxBytes} bytes`));
       done(resolve, m.out);
     });
     worker.once('error', (e) => done(reject, e));

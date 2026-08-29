@@ -20,7 +20,10 @@ function bundleChecksum(dir) {
       const full = path.join(d, name);
       const st = fs.statSync(full);
       if (st.isDirectory()) walk(full);
-      else if (/\.(njk|json)$/.test(name)) { h.update(name); h.update(fs.readFileSync(full)); }
+      else if (/\.(njk|json)$/.test(name)) {
+        h.update(name);
+        h.update(fs.readFileSync(full));
+      }
     }
   };
   walk(dir);
@@ -33,7 +36,11 @@ function seedBuiltinLayouts(db) {
     const dir = path.join(BUILTIN_LAYOUTS_DIR, id);
     if (!fs.statSync(dir).isDirectory()) continue;
     let manifest;
-    try { ({ manifest } = loadLayout(dir)); } catch { continue; }
+    try {
+      ({ manifest } = loadLayout(dir));
+    } catch {
+      continue;
+    }
     db.upsertLayout({
       id: manifest.id,
       name: manifest.name || manifest.id,

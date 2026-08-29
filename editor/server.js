@@ -39,29 +39,40 @@ function getDb() {
 }
 
 // Allow tests to inject an in-memory DB.
-app.setDb = function (testDb) { db = testDb; };
-app.getDb = function () { return getDb(); };
+app.setDb = function (testDb) {
+  db = testDb;
+};
+app.getDb = function () {
+  return getDb();
+};
 
 // Explicit (prefix, router) mount table. GET /api discovery reports fully-qualified
 // paths from this table instead of reverse-engineering Express's internal mount
 // regexps — those changed in Express 5 (path-to-regexp v8) and broke the old
 // hand-rolled router-stack walk. Order matters: the catch-all '/api' router is last.
 const API_ROUTERS = [
-  ['/api/settings', createSettingsRouter(getDb)],     // global style/spacing/fonts
-  ['/api/persons', createPersonsRouter(getDb)],       // persons + personal + sections/variants/tags scope
-  ['/api/sections', createSectionsRouter(getDb)],     // section by id + its entries
-  ['/api/entries', createEntriesRouter(getDb)],       // entry by id + its items + tags
-  ['/api/items', createItemsRouter(getDb)],           // item by id + tags
+  ['/api/settings', createSettingsRouter(getDb)], // global style/spacing/fonts
+  ['/api/persons', createPersonsRouter(getDb)], // persons + personal + sections/variants/tags scope
+  ['/api/sections', createSectionsRouter(getDb)], // section by id + its entries
+  ['/api/entries', createEntriesRouter(getDb)], // entry by id + its items + tags
+  ['/api/items', createItemsRouter(getDb)], // item by id + tags
   ['/api/variants', createVariantsRouter(getDb, PROJECT_ROOT)], // variant by id + rules/sections/overrides/resolve/pdf
-  ['/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)],   // layout list/get/upload/verify/delete + default
-  ['/api', createDataRouter(getDb)],                  // catalog + health
+  ['/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)], // layout list/get/upload/verify/delete + default
+  ['/api', createDataRouter(getDb)], // catalog + health
 ];
 
 // HTTP status -> stable machine code for the error envelope.
 const STATUS_CODES = {
-  400: 'bad_request', 401: 'unauthorized', 403: 'forbidden', 404: 'not_found',
-  405: 'method_not_allowed', 409: 'conflict', 413: 'payload_too_large',
-  415: 'unsupported_media_type', 422: 'unprocessable_entity', 429: 'rate_limited',
+  400: 'bad_request',
+  401: 'unauthorized',
+  403: 'forbidden',
+  404: 'not_found',
+  405: 'method_not_allowed',
+  409: 'conflict',
+  413: 'payload_too_large',
+  415: 'unsupported_media_type',
+  422: 'unprocessable_entity',
+  429: 'rate_limited',
   500: 'internal_error',
 };
 
@@ -96,7 +107,9 @@ function listEndpoints(expressApp) {
   for (const [prefix, router] of API_ROUTERS) {
     for (const layer of router.stack || []) addRouteLayer(prefix, layer);
   }
-  out.sort((a, b) => (a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path)));
+  out.sort((a, b) =>
+    a.path === b.path ? a.method.localeCompare(b.method) : a.path.localeCompare(b.path),
+  );
   return out;
 }
 
@@ -104,18 +117,23 @@ function listEndpoints(expressApp) {
 // exact origins may be added via CV_CORS_ORIGINS (comma-separated).
 const CV_PROD_ORIGIN = process.env.CV_PROD_ORIGIN || 'https://andypeterson.dev';
 const CV_EXTRA_ORIGINS = (process.env.CV_CORS_ORIGINS || '')
-  .split(',').map((s) => s.trim()).filter(Boolean);
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const LOCALHOST_ORIGIN_RE = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
-app.use(cors({
-  origin(origin, cb) {
-    // No Origin header (curl, same-origin, server-to-server) → allow.
-    if (!origin) return cb(null, true);
-    const ok = LOCALHOST_ORIGIN_RE.test(origin)
-      || origin === CV_PROD_ORIGIN
-      || CV_EXTRA_ORIGINS.includes(origin);
-    return cb(null, ok);
-  },
-}));
+app.use(
+  cors({
+    origin(origin, cb) {
+      // No Origin header (curl, same-origin, server-to-server) → allow.
+      if (!origin) return cb(null, true);
+      const ok =
+        LOCALHOST_ORIGIN_RE.test(origin) ||
+        origin === CV_PROD_ORIGIN ||
+        CV_EXTRA_ORIGINS.includes(origin);
+      return cb(null, ok);
+    },
+  }),
+);
 // Front door: this origin is publicly reachable, so require the shared secret that
 // our gateway + MCP workers inject (health + preflight exempt — see lib/origin-guard).
 // Sits before the body parser so a rejected request never costs a 2 MB parse, and is
@@ -160,7 +178,14 @@ app.get('/api', (req, res) => {
 // CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated. Public demo
 // persons (e.g. the Jane Doe seed, id 1) stay readable unauthenticated; any other
 // person's reads + all writes + the /pdf compile require the token.
-app.use('/api', tokenAuth(process.env.CV_EDITOR_TOKEN, { publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1', getDb, originSecret: process.env.CV_ORIGIN_SECRET }));
+app.use(
+  '/api',
+  tokenAuth(process.env.CV_EDITOR_TOKEN, {
+    publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1',
+    getDb,
+    originSecret: process.env.CV_ORIGIN_SECRET,
+  }),
+);
 
 // Resolve the request → a user id (multi-tenancy phase 1). Runs after the token
 // gate, so only already-allowed requests reach it; every route reads `req.userId`

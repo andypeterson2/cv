@@ -67,15 +67,29 @@ beforeEach(() => {
   db.clearAllContent();
   pid = db.createPerson('Test');
   const sec = db.createSection(pid, 'experience', 'experience', 'Experience');
-  entryA = db.createEntry(sec, { position: 'Engineer', organization: 'Acme', location: 'NYC', date: 'January 2020 -- March 2022' });
+  entryA = db.createEntry(sec, {
+    position: 'Engineer',
+    organization: 'Acme',
+    location: 'NYC',
+    date: 'January 2020 -- March 2022',
+  });
   db.createItem(entryA, 'Shipped the thing', '');
-  entryB = db.createEntry(sec, { position: 'Intern', organization: 'Globex', location: 'Remote', date: 'June 2019 -- August 2019' });
+  entryB = db.createEntry(sec, {
+    position: 'Intern',
+    organization: 'Globex',
+    location: 'Remote',
+    date: 'June 2019 -- August 2019',
+  });
   db.createItem(entryB, 'Learned the ropes', '');
   vid = db.createVariant(pid, 'CV', 'cv');
 });
 
 const stateById = (positions) => Object.fromEntries(positions.map((p) => [p.entryId, p.state]));
-const experienceItem0 = () => db.getMain(pid).sections.find((s) => s.type === 'experience').entries.find((e) => e.id === entryA).items[0];
+const experienceItem0 = () =>
+  db
+    .getMain(pid)
+    .sections.find((s) => s.type === 'experience')
+    .entries.find((e) => e.id === entryA).items[0];
 
 describe('LinkedIn endpoints', () => {
   test('GET /linkedin exports the cv variant by default — cleaned, bulleted, fingerprinted', async () => {
@@ -84,7 +98,12 @@ describe('LinkedIn endpoints', () => {
     expect(res.body.variantId).toBe(vid); // default = the person's cv-kind variant
     expect(res.body.format).toBe('linkedin');
     expect(res.body.positions).toHaveLength(2);
-    expect(res.body.positions[0]).toMatchObject({ entryId: entryA, title: 'Engineer', company: 'Acme', location: 'NYC' });
+    expect(res.body.positions[0]).toMatchObject({
+      entryId: entryA,
+      title: 'Engineer',
+      company: 'Acme',
+      location: 'NYC',
+    });
     expect(res.body.positions[0].start).toEqual({ month: 1, year: 2020 });
     expect(res.body.positions[0].description.startsWith('• ')).toBe(true);
     expect(typeof res.body.positions[0].fingerprint).toBe('string');
@@ -120,9 +139,13 @@ describe('LinkedIn endpoints', () => {
     expect(by[entryA]).toBe('drifted');
     expect(by[entryB]).toBe('synced');
 
-    const mark = await request('POST', `/api/persons/${pid}/linkedin/mark-synced`, { entryIds: [entryA] });
+    const mark = await request('POST', `/api/persons/${pid}/linkedin/mark-synced`, {
+      entryIds: [entryA],
+    });
     expect(mark.body.marked).toBe(1);
-    const resynced = stateById((await request('GET', `/api/persons/${pid}/linkedin/status`)).body.positions);
+    const resynced = stateById(
+      (await request('GET', `/api/persons/${pid}/linkedin/status`)).body.positions,
+    );
     expect(resynced[entryA]).toBe('synced');
   });
 });

@@ -64,21 +64,45 @@ const CASES = {
   'coverletter — default style': makeKitchenSink({ variant: 'coverletter' }),
   'cv — roboto + custom hex + a4 + custom spacing/fonts': makeKitchenSink({
     variant: 'cv',
-    style: { fontFamily: 'roboto', accentColor: 'custom', customHex: '#123ABC', fontSize: '10pt', pageSize: 'a4paper' },
+    style: {
+      fontFamily: 'roboto',
+      accentColor: 'custom',
+      customHex: '#123ABC',
+      fontSize: '10pt',
+      pageSize: 'a4paper',
+    },
     spacing: { horizontalMargin: '2cm', itemsLeftMargin: '3ex', skillsColSep: '2ex' },
     fonts: { headerNameSize: '28pt', contentTextSize: '8.5pt' },
   }),
   'cv — preset accent': makeKitchenSink({ variant: 'cv', style: { accentColor: 'awesome-red' } }),
-  'cv — legacy raw-hex accent': makeKitchenSink({ variant: 'cv', style: { accentColor: '#ABCDEF' } }),
-  'cv — empty accent (no color line)': makeKitchenSink({ variant: 'cv', style: { accentColor: '' } }),
-  'cv — empty personal + no sections': makeKitchenSink({ variant: 'cv', personal: {}, sections: [] }),
-  'coverletter — no sections + empty fields': makeKitchenSink({ variant: 'coverletter', personal: {}, coverletter: { sections: [] } }),
+  'cv — legacy raw-hex accent': makeKitchenSink({
+    variant: 'cv',
+    style: { accentColor: '#ABCDEF' },
+  }),
+  'cv — empty accent (no color line)': makeKitchenSink({
+    variant: 'cv',
+    style: { accentColor: '' },
+  }),
+  'cv — empty personal + no sections': makeKitchenSink({
+    variant: 'cv',
+    personal: {},
+    sections: [],
+  }),
+  'coverletter — no sections + empty fields': makeKitchenSink({
+    variant: 'coverletter',
+    personal: {},
+    coverletter: { sections: [] },
+  }),
 };
 
 describe('builtin awesome-cv layout reproduces legacy generator output', () => {
   let tmp;
-  beforeAll(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-')); });
-  afterAll(() => { fs.rmSync(tmp, { recursive: true, force: true }); });
+  beforeAll(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'golden-'));
+  });
+  afterAll(() => {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
 
   for (const [name, data] of Object.entries(CASES)) {
     it(name, () => {

@@ -37,7 +37,10 @@ function boot(env, { killOnListen = false } = {}) {
 describe('server boot — eager DB init', () => {
   test('a DB that cannot be opened exits non-zero BEFORE listening', async () => {
     // Parent dir does not exist → better-sqlite3 can't open the file → init throws.
-    const { code, out, err } = await boot({ CV_DB_PATH: '/nonexistent-cv-boot-dir/cv.db', PORT: '0' });
+    const { code, out, err } = await boot({
+      CV_DB_PATH: '/nonexistent-cv-boot-dir/cv.db',
+      PORT: '0',
+    });
     expect(code).toBe(1);
     expect(err).toMatch(/FATAL: database initialization failed/i);
     expect(out).not.toMatch(/running at/i); // the port was never opened

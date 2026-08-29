@@ -6,16 +6,23 @@ const STYLE_DEFAULTS = {
 };
 
 const SPACING_DEFAULTS = {
-  horizontalMargin: '1.4cm', marginTop: '0.6cm',
-  marginBottom: '0.9cm', footskip: '0.5cm',
+  horizontalMargin: '1.4cm',
+  marginTop: '0.6cm',
+  marginBottom: '0.9cm',
+  footskip: '0.5cm',
   headerLineGap: '.4mm',
-  headerAfterAddressSkip: '-.5mm', headerAfterSocialSkip: '6mm',
+  headerAfterAddressSkip: '-.5mm',
+  headerAfterSocialSkip: '6mm',
   headerAfterQuoteSkip: '5mm',
-  sectionTopSkip: '1.4mm', sectionContentTopSkip: '1.2mm',
+  sectionTopSkip: '1.4mm',
+  sectionContentTopSkip: '1.2mm',
   contentTopAdjust: '-3.6mm',
-  itemsTopSkip: '-4.0mm', itemsBottomSkip: '-1.0mm', itemsLeftMargin: '2ex',
+  itemsTopSkip: '-4.0mm',
+  itemsBottomSkip: '-1.0mm',
+  itemsLeftMargin: '2ex',
   skillsColSep: '1ex',
-  paragraphTopAdjust: '-3mm', paragraphBottomSkip: '2mm',
+  paragraphTopAdjust: '-3mm',
+  paragraphBottomSkip: '2mm',
 };
 
 const FONT_DEFAULTS = {

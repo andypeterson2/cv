@@ -15,15 +15,21 @@ function intId(value, label = 'id') {
 }
 
 function slugifyName(s) {
-  return String(s || 'document')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 80) || 'document';
+  return (
+    String(s || 'document')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'document'
+  );
 }
 
 function cleanupDir(dir) {
-  try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+  try {
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch {
+    /* best effort */
+  }
 }
 
 const { renderVariant } = require('../lib/render/host');
@@ -41,142 +47,211 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
 
   // ---- Variant CRUD ----
 
-  router.get('/:id', wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    const v = requireVariant(id);
-    const db = getDb();
-    const body = {
-      ...v,
-      rules: db.getVariantRules(id),
-      sections: db.getVariantSections(id),
-      entryOverrides: Object.fromEntries(db.getEntryOverrides(id)),
-      itemOverrides: Object.fromEntries(db.getItemOverrides(id)),
-    };
-    if (v.kind === 'coverletter') {
-      body.letterSections = db.getLetterSections(id);
-      body.header = db.getLetterHeader(id);
-    }
-    res.json(body);
-  }));
+  router.get(
+    '/:id',
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      const v = requireVariant(id);
+      const db = getDb();
+      const body = {
+        ...v,
+        rules: db.getVariantRules(id),
+        sections: db.getVariantSections(id),
+        entryOverrides: Object.fromEntries(db.getEntryOverrides(id)),
+        itemOverrides: Object.fromEntries(db.getItemOverrides(id)),
+      };
+      if (v.kind === 'coverletter') {
+        body.letterSections = db.getLetterSections(id);
+        body.header = db.getLetterHeader(id);
+      }
+      res.json(body);
+    }),
+  );
 
-  router.put('/:id', validate('updateVariant'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    getDb().updateVariant(id, { name: req.body.name });
-    res.json({ success: true });
-  }));
+  router.put(
+    '/:id',
+    validate('updateVariant'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      getDb().updateVariant(id, { name: req.body.name });
+      res.json({ success: true });
+    }),
+  );
 
-  router.delete('/:id', wrap((req, res) => {
-    getDb().deleteVariant(intId(req.params.id, 'variant id'));
-    res.json({ success: true });
-  }));
+  router.delete(
+    '/:id',
+    wrap((req, res) => {
+      getDb().deleteVariant(intId(req.params.id, 'variant id'));
+      res.json({ success: true });
+    }),
+  );
 
   // Choose this variant's layout. `layout_id: null` (or "") reverts to the
   // global default. A non-null id must exist, be active, and support the kind.
-  router.put('/:id/layout', wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    const v = requireVariant(id);
-    const layoutId = req.body ? req.body.layout_id : undefined;
-    if (layoutId == null || layoutId === '') {
-      getDb().setVariantLayout(id, null);
-      return res.json({ success: true, layout_id: null });
-    }
-    if (typeof layoutId !== 'string') throw new AppError('layout_id must be a string or null', 400);
-    const layout = getDb().getLayout(layoutId);
-    if (!layout) throw new NotFoundError('Layout not found');
-    if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
-    if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
-      throw new AppError(`Layout "${layoutId}" does not support ${v.kind}`, 409);
-    }
-    getDb().setVariantLayout(id, layoutId);
-    res.json({ success: true, layout_id: layoutId });
-  }));
+  router.put(
+    '/:id/layout',
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      const v = requireVariant(id);
+      const layoutId = req.body ? req.body.layout_id : undefined;
+      if (layoutId == null || layoutId === '') {
+        getDb().setVariantLayout(id, null);
+        return res.json({ success: true, layout_id: null });
+      }
+      if (typeof layoutId !== 'string')
+        throw new AppError('layout_id must be a string or null', 400);
+      const layout = getDb().getLayout(layoutId);
+      if (!layout) throw new NotFoundError('Layout not found');
+      if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
+      if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
+        throw new AppError(`Layout "${layoutId}" does not support ${v.kind}`, 409);
+      }
+      getDb().setVariantLayout(id, layoutId);
+      res.json({ success: true, layout_id: layoutId });
+    }),
+  );
 
   // ---- Rules / sections / overrides ----
 
-  router.put('/:id/rules', validate('variantRules'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    getDb().setVariantRules(id, { include: req.body.include || [], exclude: req.body.exclude || [] });
-    res.json({ success: true });
-  }));
+  router.put(
+    '/:id/rules',
+    validate('variantRules'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      getDb().setVariantRules(id, {
+        include: req.body.include || [],
+        exclude: req.body.exclude || [],
+      });
+      res.json({ success: true });
+    }),
+  );
 
   // Author-time fuzzy expansion: grow the include set from the current seed tags
   // and write the concrete result back. Resolution stays exact (see lib/db).
-  router.post('/:id/rules/expand', validate('expandRules'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    const result = getDb().expandVariantRules(id, { threshold: req.body.threshold, limit: req.body.limit });
-    res.json({ success: true, ...result });
-  }));
+  router.post(
+    '/:id/rules/expand',
+    validate('expandRules'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      const result = getDb().expandVariantRules(id, {
+        threshold: req.body.threshold,
+        limit: req.body.limit,
+      });
+      res.json({ success: true, ...result });
+    }),
+  );
 
-  router.put('/:id/sections', validate('variantSections'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    getDb().setVariantSections(id, req.body.sections);
-    res.json({ success: true });
-  }));
+  router.put(
+    '/:id/sections',
+    validate('variantSections'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      getDb().setVariantSections(id, req.body.sections);
+      res.json({ success: true });
+    }),
+  );
 
-  router.put('/:id/overrides', validate('variantOverride'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    const { targetType, targetId, included, textOverride, sortOverride, fieldsOverride } = req.body;
-    if (targetType === 'entry') {
-      getDb().setEntryOverride(id, targetId, { included, textOverride, sortOverride, fieldsOverride });
-    } else {
-      getDb().setItemOverride(id, targetId, { included, textOverride, sortOverride });
-    }
-    res.json({ success: true });
-  }));
+  router.put(
+    '/:id/overrides',
+    validate('variantOverride'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      const { targetType, targetId, included, textOverride, sortOverride, fieldsOverride } =
+        req.body;
+      if (targetType === 'entry') {
+        getDb().setEntryOverride(id, targetId, {
+          included,
+          textOverride,
+          sortOverride,
+          fieldsOverride,
+        });
+      } else {
+        getDb().setItemOverride(id, targetId, { included, textOverride, sortOverride });
+      }
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Cover-letter paragraphs ----
 
-  router.get('/:id/letter-sections', wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    res.json(getDb().getLetterSections(id));
-  }));
+  router.get(
+    '/:id/letter-sections',
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      res.json(getDb().getLetterSections(id));
+    }),
+  );
 
-  router.post('/:id/letter-sections', validate('createLetterSection'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    res.status(201).json({ id: Number(getDb().createLetterSection(id, req.body.title, req.body.body)) });
-  }));
+  router.post(
+    '/:id/letter-sections',
+    validate('createLetterSection'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      res
+        .status(201)
+        .json({ id: Number(getDb().createLetterSection(id, req.body.title, req.body.body)) });
+    }),
+  );
 
-  router.put('/:id/letter-sections/:lid', validate('updateLetterSection'), wrap((req, res) => {
-    intId(req.params.id, 'variant id');
-    getDb().updateLetterSection(intId(req.params.lid, 'letter section id'), req.body);
-    res.json({ success: true });
-  }));
+  router.put(
+    '/:id/letter-sections/:lid',
+    validate('updateLetterSection'),
+    wrap((req, res) => {
+      intId(req.params.id, 'variant id');
+      getDb().updateLetterSection(intId(req.params.lid, 'letter section id'), req.body);
+      res.json({ success: true });
+    }),
+  );
 
-  router.delete('/:id/letter-sections/:lid', wrap((req, res) => {
-    getDb().deleteLetterSection(intId(req.params.lid, 'letter section id'));
-    res.json({ success: true });
-  }));
+  router.delete(
+    '/:id/letter-sections/:lid',
+    wrap((req, res) => {
+      getDb().deleteLetterSection(intId(req.params.lid, 'letter section id'));
+      res.json({ success: true });
+    }),
+  );
 
-  router.patch('/:id/letter-sections/order', validate('reorder'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    getDb().reorderLetterSections(id, req.body.ids);
-    res.json({ success: true });
-  }));
+  router.patch(
+    '/:id/letter-sections/order',
+    validate('reorder'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      getDb().reorderLetterSections(id, req.body.ids);
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Cover-letter header (per variant) ----
 
-  router.patch('/:id/header', validate('letterHeader'), wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    getDb().setLetterHeader(id, req.body);
-    res.json({ success: true });
-  }));
+  router.patch(
+    '/:id/header',
+    validate('letterHeader'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      getDb().setLetterHeader(id, req.body);
+      res.json({ success: true });
+    }),
+  );
 
   // ---- Resolution preview ----
 
-  router.get('/:id/resolve', wrap((req, res) => {
-    const id = intId(req.params.id, 'variant id');
-    requireVariant(id);
-    res.json(getDb().resolveVariant(id));
-  }));
+  router.get(
+    '/:id/resolve',
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id);
+      res.json(getDb().resolveVariant(id));
+    }),
+  );
 
   // ---- Compile to PDF (resolve → generate → xelatex) ----
   //
@@ -208,7 +283,10 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       res.setHeader('Retry-After', '3600');
       return res
         .status(429)
-        .json({ success: false, log: `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.` });
+        .json({
+          success: false,
+          log: `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.`,
+        });
     }
     next();
   }
@@ -217,7 +295,12 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // concurrency-capped) xelatex run, then stream the PDF back inline or JSON the log.
   // `opts` carries what differs between a variant and the main document: the per-request
   // build root, the temp-dir prefix (kind), the layout selector, and the download name.
-  function runCompile(compileData, { buildRoot, kind, selectLayoutFor, filename }, res, { inline }) {
+  function runCompile(
+    compileData,
+    { buildRoot, kind, selectLayoutFor, filename },
+    res,
+    { inline },
+  ) {
     let buildDir, mainTexFile;
     try {
       fs.mkdirSync(buildRoot, { recursive: true });
@@ -260,13 +343,18 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     } catch (e) {
       return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
     }
-    return runCompile(compileData, {
-      buildRoot: path.join(projectRoot, 'build', 'variants', String(id)),
-      kind: variant.kind,
-      // Layout: the variant's own layout_id ?? global default ?? builtin.
-      selectLayoutFor: () => selectLayout(getDb(), variant),
-      filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
-    }, res, { inline });
+    return runCompile(
+      compileData,
+      {
+        buildRoot: path.join(projectRoot, 'build', 'variants', String(id)),
+        kind: variant.kind,
+        // Layout: the variant's own layout_id ?? global default ?? builtin.
+        selectLayoutFor: () => selectLayout(getDb(), variant),
+        filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
+      },
+      res,
+      { inline },
+    );
   }
 
   // The full "main" document — the whole CV with no variant lens (getDb().resolveMain).
@@ -281,20 +369,31 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     } catch (e) {
       return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
     }
-    return runCompile(compileData, {
-      buildRoot: path.join(projectRoot, 'build', 'persons', String(pid)),
-      kind: 'cv',
-      // The full document has no per-variant layout → global default ?? builtin.
-      selectLayoutFor: () => selectLayout(getDb(), { layoutId: null, kind: 'cv' }),
-      filename: `${slugifyName(person.name)}.pdf`,
-    }, res, { inline });
+    return runCompile(
+      compileData,
+      {
+        buildRoot: path.join(projectRoot, 'build', 'persons', String(pid)),
+        kind: 'cv',
+        // The full document has no per-variant layout → global default ?? builtin.
+        selectLayoutFor: () => selectLayout(getDb(), { layoutId: null, kind: 'cv' }),
+        filename: `${slugifyName(person.name)}.pdf`,
+      },
+      res,
+      { inline },
+    );
   }
 
   // /main/:pid/pdf (3 segments) can't collide with /:id/pdf (2 segments); registered
   // first for clarity.
-  router.get('/main/:pid/pdf', compileRateLimit, compileQuota, (req, res) => compileMain(intId(req.params.pid, 'person id'), res, { inline: true }));
-  router.get('/:id/pdf', compileRateLimit, compileQuota, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }));
-  router.post('/:id/compile', compileRateLimit, compileQuota, (req, res) => compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }));
+  router.get('/main/:pid/pdf', compileRateLimit, compileQuota, (req, res) =>
+    compileMain(intId(req.params.pid, 'person id'), res, { inline: true }),
+  );
+  router.get('/:id/pdf', compileRateLimit, compileQuota, (req, res) =>
+    compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }),
+  );
+  router.post('/:id/compile', compileRateLimit, compileQuota, (req, res) =>
+    compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }),
+  );
 
   return router;
 };

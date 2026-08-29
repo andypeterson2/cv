@@ -77,7 +77,12 @@ describe('tokenAuth', () => {
   // owned by public person 1.
   const db = {
     ownerPersonId(kind, id) {
-      const owners = { variant: { 10: 5, 91: 1 }, section: { 37: 5 }, entry: { 244: 5 }, item: { 454: 5 } };
+      const owners = {
+        variant: { 10: 5, 91: 1 },
+        section: { 37: 5 },
+        entry: { 244: 5 },
+        item: { 454: 5 },
+      };
       return (owners[kind] && owners[kind][id]) || null;
     },
   };
@@ -102,7 +107,14 @@ describe('tokenAuth', () => {
   });
 
   test('non-person globals stay open without a token', () => {
-    for (const p of ['/api/persons', '/api/settings', '/api/settings/style', '/api/layouts', '/api/catalog', '/api/health']) {
+    for (const p of [
+      '/api/persons',
+      '/api/settings',
+      '/api/settings/style',
+      '/api/layouts',
+      '/api/catalog',
+      '/api/health',
+    ]) {
       expect(invoke(gated, 'GET', p).nexted).toBe(true);
     }
   });

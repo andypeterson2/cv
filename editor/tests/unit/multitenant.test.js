@@ -125,7 +125,11 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
     const mine = db.createPerson('My real CV'); // defaults to the owner account
     expect(db.getUser(ownerId).google_sub).toBe('@owner');
 
-    const uid = db.upsertUser({ googleSub: 'google-real-123', email: 'ME@example.com', name: 'Me' });
+    const uid = db.upsertUser({
+      googleSub: 'google-real-123',
+      email: 'ME@example.com',
+      name: 'Me',
+    });
     expect(uid).toBe(ownerId); // same account, not a new one
     expect(db.getUser(ownerId).google_sub).toBe('google-real-123'); // relinked to Google
     expect(db.getUser(ownerId).name).toBe('Me');
@@ -137,8 +141,16 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
 
   test('a second owner sign-in is a normal profile update, not a new account', () => {
     process.env.OWNER_EMAIL = 'me@example.com';
-    const first = db.upsertUser({ googleSub: 'google-real-123', email: 'me@example.com', name: 'Me' });
-    const second = db.upsertUser({ googleSub: 'google-real-123', email: 'me@example.com', name: 'Me Again' });
+    const first = db.upsertUser({
+      googleSub: 'google-real-123',
+      email: 'me@example.com',
+      name: 'Me',
+    });
+    const second = db.upsertUser({
+      googleSub: 'google-real-123',
+      email: 'me@example.com',
+      name: 'Me Again',
+    });
     expect(second).toBe(first);
     expect(db.getUser(first).name).toBe('Me Again');
   });
@@ -146,7 +158,11 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
   test('a non-owner email never adopts — it gets its own fresh account', () => {
     process.env.OWNER_EMAIL = 'me@example.com';
     const ownerId = db.ownerUserId();
-    const uid = db.upsertUser({ googleSub: 'stranger-sub', email: 'stranger@example.com', name: 'S' });
+    const uid = db.upsertUser({
+      googleSub: 'stranger-sub',
+      email: 'stranger@example.com',
+      name: 'S',
+    });
     expect(uid).not.toBe(ownerId);
     expect(db.getUser(ownerId).google_sub).toBe('@owner'); // untouched
   });
@@ -157,14 +173,22 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
 
     // 1. Owner signs in while OWNER_EMAIL is unset → a stray ordinary account, no adoption.
     delete process.env.OWNER_EMAIL;
-    const strayId = db.upsertUser({ googleSub: 'google-real-123', email: 'me@example.com', name: 'Me' });
+    const strayId = db.upsertUser({
+      googleSub: 'google-real-123',
+      email: 'me@example.com',
+      name: 'Me',
+    });
     expect(strayId).not.toBe(ownerId);
     const theirs = db.createPerson('Draft made on the stray account', strayId);
     expect(db.getUser(ownerId).google_sub).toBe('@owner'); // placeholder still unclaimed
 
     // 2. OWNER_EMAIL gets configured; the same Google account signs in again.
     process.env.OWNER_EMAIL = 'me@example.com';
-    const uid = db.upsertUser({ googleSub: 'google-real-123', email: 'ME@example.com', name: 'Me' });
+    const uid = db.upsertUser({
+      googleSub: 'google-real-123',
+      email: 'ME@example.com',
+      name: 'Me',
+    });
 
     // Folded into @owner: same id, relinked, stray removed, ALL résumés under the owner.
     expect(uid).toBe(ownerId);
@@ -221,32 +245,50 @@ describe('per-user résumé-name uniqueness (migration 020)', () => {
     const raw = new Database(':memory:');
     raw.pragma('foreign_keys = ON');
     // Apply every migration BEFORE 020, so persons still has the OLD global UNIQUE(name).
-    raw.exec(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`);
-    for (const f of fs.readdirSync(dir).filter((x) => (x.endsWith('.sql') || x.endsWith('.js')) && !x.includes('rollback')).sort()) {
+    raw.exec(
+      `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    );
+    for (const f of fs
+      .readdirSync(dir)
+      .filter((x) => (x.endsWith('.sql') || x.endsWith('.js')) && !x.includes('rollback'))
+      .sort()) {
       if (parseInt(f, 10) >= 20) break;
       if (f.endsWith('.sql')) raw.exec(fs.readFileSync(path.join(dir, f), 'utf-8'));
       else require(path.join(dir, f))(raw);
       raw.prepare('INSERT INTO _migrations (name) VALUES (?)').run(f);
     }
     // Seed two accounts, two persons, and a child section under the first person.
-    raw.prepare("INSERT INTO users (google_sub, email, name, role) VALUES ('u1','1',NULL,'user'),('u2','2',NULL,'user')").run();
+    raw
+      .prepare(
+        "INSERT INTO users (google_sub, email, name, role) VALUES ('u1','1',NULL,'user'),('u2','2',NULL,'user')",
+      )
+      .run();
     const u1 = raw.prepare("SELECT id FROM users WHERE google_sub='u1'").get().id;
     const u2 = raw.prepare("SELECT id FROM users WHERE google_sub='u2'").get().id;
     raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u1);
     raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Beta', u2);
     const pAlpha = raw.prepare("SELECT id FROM persons WHERE name='Alpha'").get().id;
-    raw.prepare('INSERT INTO sections (person_id, slug, type) VALUES (?, ?, ?)').run(pAlpha, 'summary', 'summary');
+    raw
+      .prepare('INSERT INTO sections (person_id, slug, type) VALUES (?, ?, ?)')
+      .run(pAlpha, 'summary', 'summary');
 
     require('../../migrations/020_persons_per_user_unique')(raw);
 
     // Rows, ids, and columns survive; the child still points at its person; no dangling FKs.
     expect(raw.prepare('SELECT COUNT(*) AS n FROM persons').get().n).toBe(2);
-    expect(raw.prepare('SELECT name, user_id FROM persons WHERE id = ?').get(pAlpha)).toEqual({ name: 'Alpha', user_id: u1 });
+    expect(raw.prepare('SELECT name, user_id FROM persons WHERE id = ?').get(pAlpha)).toEqual({
+      name: 'Alpha',
+      user_id: u1,
+    });
     expect(raw.prepare('SELECT person_id FROM sections').get().person_id).toBe(pAlpha);
     expect(raw.pragma('foreign_key_check').length).toBe(0);
     // And the new constraint is live: cross-account dup ok, same-account dup rejected.
-    expect(() => raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u2)).not.toThrow();
-    expect(() => raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u1)).toThrow(/UNIQUE/);
+    expect(() =>
+      raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u2),
+    ).not.toThrow();
+    expect(() =>
+      raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Alpha', u1),
+    ).toThrow(/UNIQUE/);
     raw.close();
   });
 });

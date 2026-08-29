@@ -27,12 +27,16 @@ module.exports = function migrate(db) {
   const tx = db.transaction(() => {
     db.exec(DDL);
 
-    const variants = db.prepare("SELECT id, person_id FROM variants WHERE kind = 'coverletter'").all();
-    const getSetting = db.prepare('SELECT value FROM person_settings WHERE person_id = ? AND key = ?');
+    const variants = db
+      .prepare("SELECT id, person_id FROM variants WHERE kind = 'coverletter'")
+      .all();
+    const getSetting = db.prepare(
+      'SELECT value FROM person_settings WHERE person_id = ? AND key = ?',
+    );
     const insert = db.prepare(
       `INSERT INTO variant_letter_header
          (variant_id, recipient_name, recipient_address, opening, closing)
-       VALUES (?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?)`,
     );
     const val = (pid, k) => getSetting.get(pid, 'coverletter.' + k)?.value ?? '';
 
@@ -42,7 +46,7 @@ module.exports = function migrate(db) {
         val(v.person_id, 'recipientName'),
         val(v.person_id, 'recipientAddress'),
         val(v.person_id, 'opening'),
-        val(v.person_id, 'closing')
+        val(v.person_id, 'closing'),
       );
     }
   });

@@ -62,7 +62,9 @@ function renormalize(db, table, cols, tagCol) {
   const rows = db.prepare(`SELECT ${cols.join(', ')} FROM ${table}`).all();
   db.exec(`DELETE FROM ${table}`);
   const placeholders = cols.map(() => '?').join(', ');
-  const ins = db.prepare(`INSERT OR IGNORE INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})`);
+  const ins = db.prepare(
+    `INSERT OR IGNORE INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})`,
+  );
   for (const row of rows) {
     const t = normTag(row[tagCol]);
     if (!t) continue; // a tag that normalizes to empty is dropped

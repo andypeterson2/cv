@@ -32,14 +32,22 @@ module.exports = function migrate(db) {
     'INSERT OR IGNORE INTO users (google_sub, email, name, role) VALUES (?, ?, ?, ?)',
   );
   insUser.run('@system', 'system@local', 'Demo', 'system');
-  insUser.run('@owner', process.env.OWNER_EMAIL || 'owner@local', process.env.OWNER_NAME || 'Owner', 'owner');
+  insUser.run(
+    '@owner',
+    process.env.OWNER_EMAIL || 'owner@local',
+    process.env.OWNER_NAME || 'Owner',
+    'owner',
+  );
 
   const uid = (sub) => db.prepare('SELECT id FROM users WHERE google_sub = ?').get(sub).id;
   const systemId = uid('@system');
   const ownerId = uid('@owner');
 
   // Add ownership to persons (nullable FK so ALTER is safe; new rows always set it).
-  const cols = db.prepare('PRAGMA table_info(persons)').all().map((c) => c.name);
+  const cols = db
+    .prepare('PRAGMA table_info(persons)')
+    .all()
+    .map((c) => c.name);
   if (!cols.includes('user_id')) {
     db.exec('ALTER TABLE persons ADD COLUMN user_id INTEGER REFERENCES users(id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_persons_user ON persons(user_id)');

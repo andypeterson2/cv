@@ -37,9 +37,14 @@ describe('migration 011 — per-variant letter header backfill', () => {
     migrate011(db);
 
     const get = db.prepare(
-      'SELECT recipient_name, recipient_address, opening, closing FROM variant_letter_header WHERE variant_id = ?'
+      'SELECT recipient_name, recipient_address, opening, closing FROM variant_letter_header WHERE variant_id = ?',
     );
-    const shared = { recipient_name: 'Acme', recipient_address: '1 Terminal Way', opening: 'Dear Acme,', closing: 'Best,' };
+    const shared = {
+      recipient_name: 'Acme',
+      recipient_address: '1 Terminal Way',
+      opening: 'Dear Acme,',
+      closing: 'Best,',
+    };
     expect(get.get(10)).toEqual(shared); // both letters inherit the shared header
     expect(get.get(11)).toEqual(shared);
     expect(get.get(12)).toBeUndefined(); // cv variant gets no header row
@@ -54,7 +59,9 @@ describe('migration 011 — per-variant letter header backfill', () => {
     migrate011(db);
 
     expect(
-      db.prepare('SELECT recipient_name, opening FROM variant_letter_header WHERE variant_id = 20').get()
+      db
+        .prepare('SELECT recipient_name, opening FROM variant_letter_header WHERE variant_id = 20')
+        .get(),
     ).toEqual({ recipient_name: '', opening: '' });
     db.close();
   });

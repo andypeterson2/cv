@@ -34,21 +34,33 @@ describe('suggestTags (lexical)', () => {
   ];
 
   test('ranks content-matching tags first, drops unrelated', async () => {
-    const out = await suggestTags('Built the React frontend component library', vocab, { minScore: 0.35 });
+    const out = await suggestTags('Built the React frontend component library', vocab, {
+      minScore: 0.35,
+    });
     const tags = out.map((r) => r.tag);
     expect(tags.slice(0, 2).sort()).toEqual(['frontend', 'react']);
     expect(tags).not.toContain('kubernetes');
   });
 
   test('bigram lets "machine learning" hit machine-learning', async () => {
-    const out = await suggestTags('applied machine learning', [{ tag: 'machine-learning', count: 1, inCatalog: false }], { minScore: 0.5 });
+    const out = await suggestTags(
+      'applied machine learning',
+      [{ tag: 'machine-learning', count: 1, inCatalog: false }],
+      { minScore: 0.5 },
+    );
     expect(out[0].tag).toBe('machine-learning');
     expect(out[0].score).toBe(1);
   });
 
   test('catalog membership boosts an otherwise-equal near-miss', async () => {
-    const plain = await suggestTags('frontend', [{ tag: 'front-end', count: 0, inCatalog: false }], { minScore: 0 });
-    const cat = await suggestTags('frontend', [{ tag: 'front-end', count: 0, inCatalog: true }], { minScore: 0 });
+    const plain = await suggestTags(
+      'frontend',
+      [{ tag: 'front-end', count: 0, inCatalog: false }],
+      { minScore: 0 },
+    );
+    const cat = await suggestTags('frontend', [{ tag: 'front-end', count: 0, inCatalog: true }], {
+      minScore: 0,
+    });
     expect(cat[0].score).toBeCloseTo(plain[0].score + CATALOG_BOOST, 5);
     expect(cat[0].inCatalog).toBe(true);
   });
@@ -61,7 +73,10 @@ describe('suggestTags (lexical)', () => {
   test('minScore and limit are honored; empty text → []', async () => {
     expect(await suggestTags('', vocab)).toEqual([]);
     expect(await suggestTags('   ', vocab)).toEqual([]);
-    const limited = await suggestTags('react frontend python kubernetes', vocab, { minScore: 0, limit: 1 });
+    const limited = await suggestTags('react frontend python kubernetes', vocab, {
+      minScore: 0,
+      limit: 1,
+    });
     expect(limited).toHaveLength(1);
   });
 
@@ -87,7 +102,10 @@ describe('suggestTags (pluggable scorer — Phase B seam)', () => {
 
   test('ignores scorer results for tags not in the candidate set', async () => {
     const scorer = async () => [{ tag: 'ghost', score: 0.99 }];
-    const out = await suggestTags('x', [{ tag: 'real', count: 0, inCatalog: false }], { minScore: 0, scorer });
+    const out = await suggestTags('x', [{ tag: 'real', count: 0, inCatalog: false }], {
+      minScore: 0,
+      scorer,
+    });
     expect(out.map((r) => r.tag)).not.toContain('ghost');
   });
 });

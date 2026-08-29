@@ -4,7 +4,7 @@ const {
   parseData,
   parseCoverletter,
   detectSectionType,
-  parseSectionTitle
+  parseSectionTitle,
 } = require('../../lib/parser');
 const fs = require('fs');
 const path = require('path');
@@ -132,7 +132,7 @@ describe('parseSection - cvskills', () => {
   });
 
   test('handles escaped ampersands in category names', () => {
-    const sysEntry = parsed.entries.find(e => e.category.includes('Systems'));
+    const sysEntry = parsed.entries.find((e) => e.category.includes('Systems'));
     expect(sysEntry.category).toContain('\\&');
   });
 });
@@ -216,17 +216,17 @@ describe('parseDocument', () => {
   });
 
   test('finds enabled sections', () => {
-    const enabled = result.sections.filter(s => s.enabled);
+    const enabled = result.sections.filter((s) => s.enabled);
     expect(enabled.length).toBeGreaterThanOrEqual(4);
   });
 
   test('finds commented-out sections', () => {
-    const disabled = result.sections.filter(s => !s.enabled);
+    const disabled = result.sections.filter((s) => !s.enabled);
     expect(disabled.length).toBeGreaterThanOrEqual(1);
   });
 
   test('skips data.tex', () => {
-    const dataSection = result.sections.find(s => s.file === 'data.tex');
+    const dataSection = result.sections.find((s) => s.file === 'data.tex');
     expect(dataSection).toBeUndefined();
   });
 
@@ -239,7 +239,7 @@ describe('parseDocument', () => {
   });
 
   test('preserves section order from tex file', () => {
-    const files = result.sections.map(s => s.file);
+    const files = result.sections.map((s) => s.file);
     const eduIdx = files.indexOf('cv/education.tex');
     const expIdx = files.indexOf('cv/experience.tex');
     // education comes before experience in cv.tex

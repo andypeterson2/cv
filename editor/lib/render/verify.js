@@ -82,18 +82,27 @@ function securityScan(bundleDir) {
 
 function staticChecks(bundleDir) {
   let manifest;
-  try { ({ manifest } = loadLayout(bundleDir)); }
-  catch (e) { return { manifest: null, checks: [{ name: 'manifest:load', ok: false, detail: e.message }] }; }
+  try {
+    ({ manifest } = loadLayout(bundleDir));
+  } catch (e) {
+    return { manifest: null, checks: [{ name: 'manifest:load', ok: false, detail: e.message }] };
+  }
 
   const checks = [];
   const mv = validateManifest(manifest);
-  checks.push({ name: 'manifest:schema', ok: mv.ok, detail: mv.ok ? 'valid' : mv.errors.join('; ') });
+  checks.push({
+    name: 'manifest:schema',
+    ok: mv.ok,
+    detail: mv.ok ? 'valid' : mv.errors.join('; '),
+  });
 
   const cvOk = manifest.contextVersion == null || manifest.contextVersion === CONTEXT_VERSION;
   checks.push({
     name: 'manifest:contextVersion',
     ok: cvOk,
-    detail: cvOk ? `v${manifest.contextVersion ?? '(unset)'}` : `bundle wants v${manifest.contextVersion}, host is v${CONTEXT_VERSION}`,
+    detail: cvOk
+      ? `v${manifest.contextVersion ?? '(unset)'}`
+      : `bundle wants v${manifest.contextVersion}, host is v${CONTEXT_VERSION}`,
   });
 
   for (const [kind, rel] of Object.entries(manifest.entry || {})) {
@@ -116,16 +125,29 @@ function fixtureSamples() {
     { label: 'fixture:cv', data: makeKitchenSink({ variant: 'cv' }) },
     { label: 'fixture:resume', data: makeKitchenSink({ variant: 'resume' }) },
     { label: 'fixture:coverletter', data: makeKitchenSink({ variant: 'coverletter' }) },
-    { label: 'fixture:roboto-customhex', data: makeKitchenSink({ variant: 'cv', style: { fontFamily: 'roboto', accentColor: 'custom', customHex: '#3366CC' } }) },
+    {
+      label: 'fixture:roboto-customhex',
+      data: makeKitchenSink({
+        variant: 'cv',
+        style: { fontFamily: 'roboto', accentColor: 'custom', customHex: '#3366CC' },
+      }),
+    },
   ];
 }
 
-function tailLog(log) { return (log || '').split('\n').slice(-25).join('\n'); }
+function tailLog(log) {
+  return (log || '').split('\n').slice(-25).join('\n');
+}
 
 async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir }) {
   const name = `compile:${sample.label}`;
   if (Array.isArray(manifest.kinds) && !manifest.kinds.includes(sample.data.variant)) {
-    return { name, ok: true, detail: `skipped (kind ${sample.data.variant} unsupported)`, skipped: true };
+    return {
+      name,
+      ok: true,
+      detail: `skipped (kind ${sample.data.variant} unsupported)`,
+      skipped: true,
+    };
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-'));
   try {
@@ -138,7 +160,8 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir })
     }
     const result = await compile(tmp, mainTex);
     if (!result.ok) return { name, ok: false, detail: 'xelatex failed', log: tailLog(result.log) };
-    if ((result.pages || 0) < 1) return { name, ok: false, detail: 'produced 0 pages', log: tailLog(result.log) };
+    if ((result.pages || 0) < 1)
+      return { name, ok: false, detail: 'produced 0 pages', log: tailLog(result.log) };
     if (/Undefined control sequence/.test(result.log || '')) {
       return { name, ok: false, detail: 'undefined control sequence', log: tailLog(result.log) };
     }
@@ -164,7 +187,11 @@ async function verifyLayout(bundleDir, opts = {}) {
   const checks = [];
 
   const sec = securityScan(bundleDir);
-  checks.push({ name: 'security', ok: sec.length === 0, detail: sec.length ? sec.join('; ') : 'clean' });
+  checks.push({
+    name: 'security',
+    ok: sec.length === 0,
+    detail: sec.length ? sec.join('; ') : 'clean',
+  });
 
   const st = staticChecks(bundleDir);
   checks.push(...st.checks);
@@ -195,11 +222,15 @@ function gatherSamples(db, { maxSamples = 6 } = {}) {
         seenKinds.add(v.kind);
         try {
           samples.push({ label: `real:${person.id}:${v.kind}`, data: db.resolveVariant(v.id) });
-        } catch { /* skip unresolvable variant */ }
+        } catch {
+          /* skip unresolvable variant */
+        }
         if (samples.length >= maxSamples) return samples;
       }
     }
-  } catch { /* empty / unavailable db */ }
+  } catch {
+    /* empty / unavailable db */
+  }
   return samples;
 }
 

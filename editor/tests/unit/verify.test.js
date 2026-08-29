@@ -12,10 +12,16 @@ const { makeKitchenSink } = require('../../lib/render/fixtures/kitchen-sink');
 const { getLatexType, LATEX_TYPE_MAP } = require('../../lib/latex-type-map');
 
 const BUILTIN = path.join(__dirname, '..', '..', 'layouts', 'awesome-cv');
-const okCompile = async () => ({ ok: true, pages: 2, log: 'Output written on x.pdf (2 pages, 1 bytes)' });
+const okCompile = async () => ({
+  ok: true,
+  pages: 2,
+  log: 'Output written on x.pdf (2 pages, 1 bytes)',
+});
 
 let tmp;
-beforeEach(() => { tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-test-')); });
+beforeEach(() => {
+  tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-test-'));
+});
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 function writeBundle(files) {
@@ -29,8 +35,12 @@ function writeBundle(files) {
 }
 
 const MINIMAL_MANIFEST = {
-  id: 'test-layout', name: 'Test', engine: 'nunjucks', contextVersion: 1,
-  kinds: ['cv'], entry: { document: 'templates/document.tex.njk' },
+  id: 'test-layout',
+  name: 'Test',
+  engine: 'nunjucks',
+  contextVersion: 1,
+  kinds: ['cv'],
+  entry: { document: 'templates/document.tex.njk' },
 };
 
 describe('builtin awesome-cv passes the gate', () => {
@@ -47,26 +57,33 @@ describe('builtin awesome-cv passes the gate', () => {
 
 describe('security scan', () => {
   it('flags \\write18 and absolute/.. path file ops', () => {
-    const v = securityScan(writeBundle({
-      'layout.json': JSON.stringify(MINIMAL_MANIFEST),
-      'templates/document.tex.njk': '\\write18{rm -rf /}\n\\input{/etc/passwd}\n\\openin1=../../secret\n',
-    }));
+    const v = securityScan(
+      writeBundle({
+        'layout.json': JSON.stringify(MINIMAL_MANIFEST),
+        'templates/document.tex.njk':
+          '\\write18{rm -rf /}\n\\input{/etc/passwd}\n\\openin1=../../secret\n',
+      }),
+    );
     expect(v.join('\n')).toMatch(/write18/);
     expect(v.join('\n')).toMatch(/\/etc\/passwd/);
     expect(v.join('\n')).toMatch(/secret/);
   });
 
   it('does not flag legitimate relative file ops or \\directlua', () => {
-    const v = securityScan(writeBundle({
-      'class/x.sty': '\\openin\\@mainaux\n\\immediate\\write\\@auxout{}\n\\directlua{require("foo")}\n\\input{sub/part.tex}\n',
-    }));
+    const v = securityScan(
+      writeBundle({
+        'class/x.sty':
+          '\\openin\\@mainaux\n\\immediate\\write\\@auxout{}\n\\directlua{require("foo")}\n\\input{sub/part.tex}\n',
+      }),
+    );
     expect(v).toEqual([]);
   });
 
   it('rejects a bundle with a shell escape end to end', async () => {
     const dir = writeBundle({
       'layout.json': JSON.stringify(MINIMAL_MANIFEST),
-      'templates/document.tex.njk': '\\documentclass{article}\\begin{document}\\write18{id}\\end{document}',
+      'templates/document.tex.njk':
+        '\\documentclass{article}\\begin{document}\\write18{id}\\end{document}',
     });
     const report = await verifyLayout(dir, { compile: okCompile });
     expect(report.ok).toBe(false);
@@ -78,8 +95,12 @@ describe('security scan', () => {
 
 describe('static checks', () => {
   it('fails an invalid manifest (missing entry)', async () => {
-    const bad = { ...MINIMAL_MANIFEST }; delete bad.entry;
-    const dir = writeBundle({ 'layout.json': JSON.stringify(bad), 'templates/document.tex.njk': 'x' });
+    const bad = { ...MINIMAL_MANIFEST };
+    delete bad.entry;
+    const dir = writeBundle({
+      'layout.json': JSON.stringify(bad),
+      'templates/document.tex.njk': 'x',
+    });
     const report = await verifyLayout(dir, { compile: okCompile });
     expect(report.ok).toBe(false);
   });
@@ -104,15 +125,21 @@ describe('static checks', () => {
 
 describe('dynamic check', () => {
   it('fails when xelatex fails', async () => {
-    const report = await verifyLayout(BUILTIN, { compile: async () => ({ ok: false, pages: 0, log: '! something' }) });
+    const report = await verifyLayout(BUILTIN, {
+      compile: async () => ({ ok: false, pages: 0, log: '! something' }),
+    });
     expect(report.ok).toBe(false);
     expect(report.checks.some((c) => c.name.startsWith('compile:fixture') && !c.ok)).toBe(true);
   });
 
   it('fails on 0 pages or undefined control sequence', async () => {
-    const r0 = await verifyLayout(BUILTIN, { compile: async () => ({ ok: true, pages: 0, log: '' }) });
+    const r0 = await verifyLayout(BUILTIN, {
+      compile: async () => ({ ok: true, pages: 0, log: '' }),
+    });
     expect(r0.ok).toBe(false);
-    const rU = await verifyLayout(BUILTIN, { compile: async () => ({ ok: true, pages: 1, log: '! Undefined control sequence' }) });
+    const rU = await verifyLayout(BUILTIN, {
+      compile: async () => ({ ok: true, pages: 1, log: '! Undefined control sequence' }),
+    });
     expect(rU.ok).toBe(false);
   });
 });
@@ -122,11 +149,15 @@ describe('untrusted-render isolation', () => {
     const dir = writeBundle({
       'layout.json': JSON.stringify({ ...MINIMAL_MANIFEST, id: 'spin' }),
       // nested loops → ~1e10 iterations, tiny memory: spins past the timeout
-      'templates/document.tex.njk': '<% for i in range(100000) %><% for j in range(100000) %><% endfor %><% endfor %>done',
+      'templates/document.tex.njk':
+        '<% for i in range(100000) %><% for j in range(100000) %><% endfor %><% endfor %>done',
     });
     const buildDir = fs.mkdtempSync(path.join(tmp, 'b-'));
     await expect(
-      renderVariantIsolated(makeKitchenSink({ variant: 'cv' }), buildDir, { layoutDir: dir, timeoutMs: 500 })
+      renderVariantIsolated(makeKitchenSink({ variant: 'cv' }), buildDir, {
+        layoutDir: dir,
+        timeoutMs: 500,
+      }),
     ).rejects.toThrow(/timed out/);
   }, 10000);
 });

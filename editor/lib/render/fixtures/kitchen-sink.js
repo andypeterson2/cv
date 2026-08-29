@@ -49,10 +49,17 @@ function basePersonal() {
 function baseSections() {
   return [
     {
-      id: 'experience', type: 'experience', title: 'Experience & Work',
+      id: 'experience',
+      type: 'experience',
+      title: 'Experience & Work',
       entries: [
         {
-          fields: { position: 'Lead Engineer ' + SPECIALS, organization: 'Babbage Ltd', location: 'London', date: '1843–1845' },
+          fields: {
+            position: 'Lead Engineer ' + SPECIALS,
+            organization: 'Babbage Ltd',
+            location: 'London',
+            date: '1843–1845',
+          },
           items: [
             { content: 'Wrote the first algorithm; improved throughput by 50% & more' },
             { content: 'Edge-case specials: a_b, c^d, $cost, #rank, 100%, ~approx' },
@@ -61,47 +68,91 @@ function baseSections() {
         },
         // entry with NO items → cventry {} branch
         {
-          fields: { position: 'Advisor', organization: 'Royal Society', location: '', date: '1846' },
+          fields: {
+            position: 'Advisor',
+            organization: 'Royal Society',
+            location: '',
+            date: '1846',
+          },
           items: [],
         },
       ],
     },
     {
-      id: 'education', type: 'education', title: 'Education',
+      id: 'education',
+      type: 'education',
+      title: 'Education',
       entries: [
         // program + major combine → position
-        { fields: { program: 'BSc', major: 'Mathematics', organization: 'University of London', location: 'UK', date: '1830' } },
+        {
+          fields: {
+            program: 'BSc',
+            major: 'Mathematics',
+            organization: 'University of London',
+            location: 'UK',
+            date: '1830',
+          },
+        },
       ],
     },
     {
-      id: 'skills', type: 'skills', title: 'Skills',
+      id: 'skills',
+      type: 'skills',
+      title: 'Skills',
       entries: [
         { fields: { category: 'Languages', skills: 'Note G, Assembly & more' } },
         { fields: { category: 'Tools', skills: 'Difference Engine' } },
       ],
     },
     {
-      id: 'honors', type: 'honors', title: 'Honors',
+      id: 'honors',
+      type: 'honors',
+      title: 'Honors',
       entries: [
-        { fields: { award: 'First Programmer', issuer: 'History', location: 'Worldwide', date: '1843' } },
+        {
+          fields: {
+            award: 'First Programmer',
+            issuer: 'History',
+            location: 'Worldwide',
+            date: '1843',
+          },
+        },
       ],
     },
     {
-      id: 'certifications', type: 'certifications', title: 'Certifications',
+      id: 'certifications',
+      type: 'certifications',
+      title: 'Certifications',
       entries: [
-        { fields: { award: 'Certified Analyst', issuer: 'Guild & Co', location: 'ID #7', date: '1840' } },
+        {
+          fields: {
+            award: 'Certified Analyst',
+            issuer: 'Guild & Co',
+            location: 'ID #7',
+            date: '1840',
+          },
+        },
       ],
     },
     {
-      id: 'summary', type: 'summary', title: 'Summary',
-      entries: [
-        { fields: { text: 'Visionary of computing. ' + SPECIALS } },
-      ],
+      id: 'summary',
+      type: 'summary',
+      title: 'Summary',
+      entries: [{ fields: { text: 'Visionary of computing. ' + SPECIALS } }],
     },
     {
-      id: 'references', type: 'references', title: 'References',
+      id: 'references',
+      type: 'references',
+      title: 'References',
       entries: [
-        { fields: { name: 'Charles Babbage', relation: 'Collaborator', phone: '+44 000', email: 'charles@example.com' } },
+        {
+          fields: {
+            name: 'Charles Babbage',
+            relation: 'Collaborator',
+            phone: '+44 000',
+            email: 'charles@example.com',
+          },
+        },
       ],
     },
   ];
@@ -133,8 +184,10 @@ function makeKitchenSink(overrides = {}) {
   return {
     variant,
     personal: overrides.personal || basePersonal(),
-    sections: isLetter ? [] : (overrides.sections || baseSections()),
-    coverletter: isLetter ? (overrides.coverletter || baseCoverletter()) : (overrides.coverletter || null),
+    sections: isLetter ? [] : overrides.sections || baseSections(),
+    coverletter: isLetter
+      ? overrides.coverletter || baseCoverletter()
+      : overrides.coverletter || null,
     style: overrides.style || {},
     spacing: overrides.spacing || {},
     fonts: overrides.fonts || {},

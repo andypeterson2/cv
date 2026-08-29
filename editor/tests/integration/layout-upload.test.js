@@ -15,7 +15,11 @@ const CvDatabase = require('../../lib/db');
 const { seedBuiltinLayouts } = require('../../lib/render/seed');
 
 let hasZip = true;
-try { execFileSync('zip', ['-v'], { stdio: 'ignore' }); } catch { hasZip = false; }
+try {
+  execFileSync('zip', ['-v'], { stdio: 'ignore' });
+} catch {
+  hasZip = false;
+}
 
 let server, port, db, tmp;
 
@@ -33,23 +37,43 @@ function makeZip(name, files) {
 
 async function uploadZip(zipPath) {
   const form = new FormData();
-  if (zipPath) form.append('bundle', new Blob([fs.readFileSync(zipPath)], { type: 'application/zip' }), path.basename(zipPath));
-  const res = await fetch(`http://localhost:${port}/api/layouts`, { method: 'POST', body: zipPath ? form : undefined });
+  if (zipPath)
+    form.append(
+      'bundle',
+      new Blob([fs.readFileSync(zipPath)], { type: 'application/zip' }),
+      path.basename(zipPath),
+    );
+  const res = await fetch(`http://localhost:${port}/api/layouts`, {
+    method: 'POST',
+    body: zipPath ? form : undefined,
+  });
   return { status: res.status, body: await res.json().catch(() => null) };
 }
 
 function del(id) {
   return new Promise((resolve) => {
-    http.request({ hostname: 'localhost', port, path: `/api/layouts/${id}`, method: 'DELETE' }, (res) => {
-      res.on('data', () => {}); res.on('end', () => resolve(res.statusCode));
-    }).end();
+    http
+      .request(
+        { hostname: 'localhost', port, path: `/api/layouts/${id}`, method: 'DELETE' },
+        (res) => {
+          res.on('data', () => {});
+          res.on('end', () => resolve(res.statusCode));
+        },
+      )
+      .end();
   });
 }
 
-const MANIFEST = (over = {}) => JSON.stringify({
-  id: 'cand', name: 'Cand', engine: 'nunjucks', contextVersion: 1,
-  kinds: ['cv'], entry: { document: 'templates/document.tex.njk' }, ...over,
-});
+const MANIFEST = (over = {}) =>
+  JSON.stringify({
+    id: 'cand',
+    name: 'Cand',
+    engine: 'nunjucks',
+    contextVersion: 1,
+    kinds: ['cv'],
+    entry: { document: 'templates/document.tex.njk' },
+    ...over,
+  });
 
 beforeAll(async () => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'upl-'));
@@ -58,7 +82,12 @@ beforeAll(async () => {
   db.clearAllContent();
   seedBuiltinLayouts(db);
   app.setDb(db);
-  await new Promise((r) => { server = app.listen(0, () => { port = server.address().port; r(); }); });
+  await new Promise((r) => {
+    server = app.listen(0, () => {
+      port = server.address().port;
+      r();
+    });
+  });
 });
 
 afterAll(async () => {
@@ -81,7 +110,8 @@ describe('POST /api/layouts (rejection paths)', () => {
   it.skipIf(!hasZip)('422 + security report for a \\write18 bundle', async () => {
     const zip = makeZip('sec.zip', {
       'layout.json': MANIFEST(),
-      'templates/document.tex.njk': '\\documentclass{article}\\begin{document}\\write18{id}\\end{document}',
+      'templates/document.tex.njk':
+        '\\documentclass{article}\\begin{document}\\write18{id}\\end{document}',
     });
     const { status, body } = await uploadZip(zip);
     expect(status).toBe(422);
@@ -90,8 +120,12 @@ describe('POST /api/layouts (rejection paths)', () => {
   });
 
   it.skipIf(!hasZip)('422 for an invalid manifest (missing entry)', async () => {
-    const bad = JSON.parse(MANIFEST()); delete bad.entry;
-    const zip = makeZip('badman.zip', { 'layout.json': JSON.stringify(bad), 'templates/document.tex.njk': 'x' });
+    const bad = JSON.parse(MANIFEST());
+    delete bad.entry;
+    const zip = makeZip('badman.zip', {
+      'layout.json': JSON.stringify(bad),
+      'templates/document.tex.njk': 'x',
+    });
     const { status } = await uploadZip(zip);
     expect(status).toBe(422);
   });
@@ -109,7 +143,7 @@ describe('POST /api/layouts (rejection paths)', () => {
     const res = await fetch(`http://localhost:${port}/api/layouts`);
     const { layouts } = await res.json();
     expect(layouts.filter((l) => l.source === 'upload')).toEqual([]); // nothing got installed
-    expect(layouts.some((l) => l.id === 'awesome-cv')).toBe(true);    // builtins intact
+    expect(layouts.some((l) => l.id === 'awesome-cv')).toBe(true); // builtins intact
   });
 });
 

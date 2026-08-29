@@ -35,14 +35,20 @@ function scheduleRestart(file) {
     console.log(`[dev-watch] ${path.relative(EDITOR, file)} changed — restarting server.js`);
     const prev = child;
     child = null;
-    if (prev) { prev.once('exit', start); prev.kill('SIGTERM'); }
-    else start();
+    if (prev) {
+      prev.once('exit', start);
+      prev.kill('SIGTERM');
+    } else start();
   }, 150);
 }
 
 function collect(dir, acc) {
   let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return acc; }
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return acc;
+  }
   for (const e of entries) {
     if (e.name.startsWith('.') || IGNORE_DIRS.has(e.name)) continue;
     const full = path.join(dir, e.name);
@@ -60,8 +66,13 @@ for (const f of files) {
   });
 }
 for (const sig of ['SIGTERM', 'SIGINT']) {
-  process.on(sig, () => { if (child) child.kill(sig); process.exit(0); });
+  process.on(sig, () => {
+    if (child) child.kill(sig);
+    process.exit(0);
+  });
 }
 
-console.log(`[dev-watch] polling ${files.length} files every ${INTERVAL}ms (inotify-free hot reload for Docker-on-macOS)`);
+console.log(
+  `[dev-watch] polling ${files.length} files every ${INTERVAL}ms (inotify-free hot reload for Docker-on-macOS)`,
+);
 start();
