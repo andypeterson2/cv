@@ -3,6 +3,7 @@
 !.dashboard.yaml
 !.dockerignore
 !.nvmrc
+!.npmrc
 
 # LaTeX build artifacts
 *.aux
