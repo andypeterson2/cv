@@ -42,13 +42,23 @@ class CvDatabase {
     const p = (sql) => this.db.prepare(sql);
     this._stmts = {
       // Global settings (style/spacing/fonts)
-      getSettings: p("SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || '%'"),
-      upsertSetting: p('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
-      upsertSettingUnit: p('INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit'),
+      getSettings: p(
+        "SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || '%'",
+      ),
+      upsertSetting: p(
+        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      ),
+      upsertSettingUnit: p(
+        'INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit',
+      ),
 
       // Person settings (personal.* / coverletter.*)
-      getPersonSettings: p("SELECT key, value, value_num, value_unit FROM person_settings WHERE person_id = ? AND key LIKE ? || '%'"),
-      upsertPersonSetting: p('INSERT INTO person_settings (person_id, key, value) VALUES (?, ?, ?) ON CONFLICT(person_id, key) DO UPDATE SET value = excluded.value'),
+      getPersonSettings: p(
+        "SELECT key, value, value_num, value_unit FROM person_settings WHERE person_id = ? AND key LIKE ? || '%'",
+      ),
+      upsertPersonSetting: p(
+        'INSERT INTO person_settings (person_id, key, value) VALUES (?, ?, ?) ON CONFLICT(person_id, key) DO UPDATE SET value = excluded.value',
+      ),
       deletePersonSetting: p('DELETE FROM person_settings WHERE person_id = ? AND key = ?'),
 
       // Persons
@@ -60,14 +70,22 @@ class CvDatabase {
       countPersons: p('SELECT COUNT(*) AS cnt FROM persons'),
       // --- multi-tenancy (migration 018): ownership + per-user scoping ---
       personUserId: p('SELECT user_id FROM persons WHERE id = ?'),
-      getPersonsForUser: p('SELECT id, name, created_at FROM persons WHERE user_id = ? ORDER BY id'),
+      getPersonsForUser: p(
+        'SELECT id, name, created_at FROM persons WHERE user_id = ? ORDER BY id',
+      ),
       getPersonForUser: p('SELECT id, name, created_at FROM persons WHERE id = ? AND user_id = ?'),
       renamePersonForUser: p('UPDATE persons SET name = ? WHERE id = ? AND user_id = ?'),
       deletePersonForUser: p('DELETE FROM persons WHERE id = ? AND user_id = ?'),
       insertUser: p('INSERT INTO users (google_sub, email, name, role) VALUES (?, ?, ?, ?)'),
-      getUserById: p('SELECT id, google_sub, email, name, role, created_at FROM users WHERE id = ?'),
-      getUserBySub: p('SELECT id, google_sub, email, name, role, created_at FROM users WHERE google_sub = ?'),
-      getUserByEmail: p('SELECT id, google_sub, email, name, role, created_at FROM users WHERE email = ?'),
+      getUserById: p(
+        'SELECT id, google_sub, email, name, role, created_at FROM users WHERE id = ?',
+      ),
+      getUserBySub: p(
+        'SELECT id, google_sub, email, name, role, created_at FROM users WHERE google_sub = ?',
+      ),
+      getUserByEmail: p(
+        'SELECT id, google_sub, email, name, role, created_at FROM users WHERE email = ?',
+      ),
       updateUserProfile: p('UPDATE users SET email = ?, name = ? WHERE id = ?'),
       userIdByRole: p('SELECT id FROM users WHERE role = ? ORDER BY id LIMIT 1'),
       adoptUser: p('UPDATE users SET google_sub = ?, email = ?, name = ? WHERE id = ?'),
@@ -80,21 +98,35 @@ class CvDatabase {
       ),
 
       // Versions (ADR-006) + the per-person content reset restore uses
-      insertVersion: p('INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)'),
-      versionsByPerson: p('SELECT id, label, created_at, branch, tag, parent_id FROM versions WHERE person_id = ? ORDER BY id DESC'),
+      insertVersion: p(
+        'INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ),
+      versionsByPerson: p(
+        'SELECT id, label, created_at, branch, tag, parent_id FROM versions WHERE person_id = ? ORDER BY id DESC',
+      ),
       versionDoc: p('SELECT doc FROM versions WHERE id = ? AND person_id = ?'),
-      versionFull: p('SELECT id, label, created_at, branch, tag, parent_id, doc FROM versions WHERE id = ? AND person_id = ?'),
+      versionFull: p(
+        'SELECT id, label, created_at, branch, tag, parent_id, doc FROM versions WHERE id = ? AND person_id = ?',
+      ),
       setVersionTag: p('UPDATE versions SET tag = ? WHERE id = ? AND person_id = ?'),
 
       // LinkedIn/Indeed/Handshake sync (015): one synced fingerprint per experience entry.
-      linkedinSyncByPerson: p('SELECT entry_id, fingerprint, synced_at FROM linkedin_sync WHERE person_id = ?'),
-      upsertLinkedinSync: p('INSERT INTO linkedin_sync (person_id, entry_id, fingerprint, synced_at) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, entry_id) DO UPDATE SET fingerprint = excluded.fingerprint, synced_at = excluded.synced_at'),
+      linkedinSyncByPerson: p(
+        'SELECT entry_id, fingerprint, synced_at FROM linkedin_sync WHERE person_id = ?',
+      ),
+      upsertLinkedinSync: p(
+        'INSERT INTO linkedin_sync (person_id, entry_id, fingerprint, synced_at) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, entry_id) DO UPDATE SET fingerprint = excluded.fingerprint, synced_at = excluded.synced_at',
+      ),
 
       // Owner-person resolution for auth gating — id-addressed resources → their person.
       ownerOfVariant: p('SELECT person_id AS pid FROM variants WHERE id = ?'),
       ownerOfSection: p('SELECT person_id AS pid FROM sections WHERE id = ?'),
-      ownerOfEntry: p('SELECT s.person_id AS pid FROM entries e JOIN sections s ON s.id = e.section_id WHERE e.id = ?'),
-      ownerOfItem: p('SELECT s.person_id AS pid FROM items i JOIN entries e ON e.id = i.entry_id JOIN sections s ON s.id = e.section_id WHERE i.id = ?'),
+      ownerOfEntry: p(
+        'SELECT s.person_id AS pid FROM entries e JOIN sections s ON s.id = e.section_id WHERE e.id = ?',
+      ),
+      ownerOfItem: p(
+        'SELECT s.person_id AS pid FROM items i JOIN entries e ON e.id = i.entry_id JOIN sections s ON s.id = e.section_id WHERE i.id = ?',
+      ),
       clearSections: p('DELETE FROM sections WHERE person_id = ?'),
       clearVariants: p('DELETE FROM variants WHERE person_id = ?'),
       clearPersonSettings: p('DELETE FROM person_settings WHERE person_id = ?'),
@@ -102,33 +134,49 @@ class CvDatabase {
       clearTagCatalog: p('DELETE FROM tag_catalog WHERE person_id = ?'),
 
       // Sections
-      getSectionsByPerson: p('SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE person_id = ? ORDER BY sort_order, id'),
-      getSection: p('SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE id = ?'),
-      insertSection: p('INSERT INTO sections (person_id, slug, type, title, sort_order) VALUES (?, ?, ?, ?, ?)'),
+      getSectionsByPerson: p(
+        'SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE person_id = ? ORDER BY sort_order, id',
+      ),
+      getSection: p(
+        'SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE id = ?',
+      ),
+      insertSection: p(
+        'INSERT INTO sections (person_id, slug, type, title, sort_order) VALUES (?, ?, ?, ?, ?)',
+      ),
       updateSectionTitle: p('UPDATE sections SET title = ? WHERE id = ?'),
       updateSectionSlugType: p('UPDATE sections SET slug = ?, type = ?, title = ? WHERE id = ?'),
       updateSectionSortOrder: p('UPDATE sections SET sort_order = ? WHERE id = ?'),
       deleteSection: p('DELETE FROM sections WHERE id = ?'),
-      maxSectionSortOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM sections WHERE person_id = ?'),
+      maxSectionSortOrder: p(
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM sections WHERE person_id = ?',
+      ),
 
       // Entries
-      getEntries: p('SELECT id, section_id, sort_order, fields FROM entries WHERE section_id = ? ORDER BY sort_order, id'),
+      getEntries: p(
+        'SELECT id, section_id, sort_order, fields FROM entries WHERE section_id = ? ORDER BY sort_order, id',
+      ),
       getEntry: p('SELECT id, section_id, sort_order, fields FROM entries WHERE id = ?'),
       insertEntry: p('INSERT INTO entries (section_id, sort_order, fields) VALUES (?, ?, ?)'),
       updateEntryFields: p('UPDATE entries SET fields = ? WHERE id = ?'),
       updateEntrySortOrder: p('UPDATE entries SET sort_order = ? WHERE id = ?'),
       deleteEntry: p('DELETE FROM entries WHERE id = ?'),
-      maxEntrySortOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM entries WHERE section_id = ?'),
+      maxEntrySortOrder: p(
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM entries WHERE section_id = ?',
+      ),
 
       // Items
-      getItems: p('SELECT id, entry_id, sort_order, content, title FROM items WHERE entry_id = ? ORDER BY sort_order, id'),
+      getItems: p(
+        'SELECT id, entry_id, sort_order, content, title FROM items WHERE entry_id = ? ORDER BY sort_order, id',
+      ),
       getItem: p('SELECT id, entry_id, sort_order, content, title FROM items WHERE id = ?'),
       insertItem: p('INSERT INTO items (entry_id, sort_order, content, title) VALUES (?, ?, ?, ?)'),
       updateItemContent: p('UPDATE items SET content = ? WHERE id = ?'),
       updateItemTitle: p('UPDATE items SET title = ? WHERE id = ?'),
       updateItemSortOrder: p('UPDATE items SET sort_order = ? WHERE id = ?'),
       deleteItem: p('DELETE FROM items WHERE id = ?'),
-      maxItemSortOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM items WHERE entry_id = ?'),
+      maxItemSortOrder: p(
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM items WHERE entry_id = ?',
+      ),
 
       // Tags
       getEntryTags: p('SELECT tag FROM entry_tags WHERE entry_id = ? ORDER BY tag'),
@@ -137,36 +185,72 @@ class CvDatabase {
       getItemTags: p('SELECT tag FROM item_tags WHERE item_id = ? ORDER BY tag'),
       addItemTag: p('INSERT OR IGNORE INTO item_tags (item_id, tag) VALUES (?, ?)'),
       delItemTag: p('DELETE FROM item_tags WHERE item_id = ? AND tag = ?'),
-      listEntryTags: p('SELECT DISTINCT et.tag FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?'),
-      listItemTags: p('SELECT DISTINCT it.tag FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?'),
-      countEntryTags: p('SELECT et.tag AS tag, COUNT(*) AS cnt FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ? GROUP BY et.tag'),
-      countItemTags: p('SELECT it.tag AS tag, COUNT(*) AS cnt FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ? GROUP BY it.tag'),
-      personForEntry: p('SELECT s.person_id AS pid FROM entries e JOIN sections s ON e.section_id = s.id WHERE e.id = ?'),
-      personForItem: p('SELECT s.person_id AS pid FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE i.id = ?'),
+      listEntryTags: p(
+        'SELECT DISTINCT et.tag FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?',
+      ),
+      listItemTags: p(
+        'SELECT DISTINCT it.tag FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?',
+      ),
+      countEntryTags: p(
+        'SELECT et.tag AS tag, COUNT(*) AS cnt FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ? GROUP BY et.tag',
+      ),
+      countItemTags: p(
+        'SELECT it.tag AS tag, COUNT(*) AS cnt FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ? GROUP BY it.tag',
+      ),
+      personForEntry: p(
+        'SELECT s.person_id AS pid FROM entries e JOIN sections s ON e.section_id = s.id WHERE e.id = ?',
+      ),
+      personForItem: p(
+        'SELECT s.person_id AS pid FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE i.id = ?',
+      ),
 
       // Tag aliases (per-person alias → canonical)
-      getAliases: p('SELECT alias, canonical, source FROM tag_aliases WHERE person_id = ? ORDER BY alias'),
+      getAliases: p(
+        'SELECT alias, canonical, source FROM tag_aliases WHERE person_id = ? ORDER BY alias',
+      ),
       getAlias: p('SELECT canonical FROM tag_aliases WHERE person_id = ? AND alias = ?'),
-      upsertAlias: p('INSERT INTO tag_aliases (person_id, alias, canonical, source) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, alias) DO UPDATE SET canonical = excluded.canonical, source = excluded.source'),
+      upsertAlias: p(
+        'INSERT INTO tag_aliases (person_id, alias, canonical, source) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, alias) DO UPDATE SET canonical = excluded.canonical, source = excluded.source',
+      ),
       delAlias: p('DELETE FROM tag_aliases WHERE person_id = ? AND alias = ?'),
       // Retroactive alias application: fold an existing tag into its canonical,
       // person-scoped. UPDATE OR IGNORE moves rows that don't collide; the
       // paired DELETE clears any that did (the canonical already existed).
-      rewriteEntryTag: p('UPDATE OR IGNORE entry_tags SET tag = ? WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)'),
-      delEntryTagP: p('DELETE FROM entry_tags WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)'),
-      rewriteItemTag: p('UPDATE OR IGNORE item_tags SET tag = ? WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)'),
-      delItemTagP: p('DELETE FROM item_tags WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)'),
-      rewriteRuleTag: p('UPDATE OR IGNORE variant_rules SET tag = ? WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE person_id = ?)'),
-      delRuleTagP: p('DELETE FROM variant_rules WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE person_id = ?)'),
+      rewriteEntryTag: p(
+        'UPDATE OR IGNORE entry_tags SET tag = ? WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+      ),
+      delEntryTagP: p(
+        'DELETE FROM entry_tags WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+      ),
+      rewriteItemTag: p(
+        'UPDATE OR IGNORE item_tags SET tag = ? WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+      ),
+      delItemTagP: p(
+        'DELETE FROM item_tags WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+      ),
+      rewriteRuleTag: p(
+        'UPDATE OR IGNORE variant_rules SET tag = ? WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE person_id = ?)',
+      ),
+      delRuleTagP: p(
+        'DELETE FROM variant_rules WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE person_id = ?)',
+      ),
 
       // Tag catalog (per-person controlled vocabulary)
-      getCatalog: p('SELECT tag, description, category FROM tag_catalog WHERE person_id = ? ORDER BY tag'),
-      upsertCatalogTag: p('INSERT INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category'),
+      getCatalog: p(
+        'SELECT tag, description, category FROM tag_catalog WHERE person_id = ? ORDER BY tag',
+      ),
+      upsertCatalogTag: p(
+        'INSERT INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
+      ),
       delCatalogTag: p('DELETE FROM tag_catalog WHERE person_id = ? AND tag = ?'),
 
       // Variants
-      getVariants: p('SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE person_id = ? ORDER BY id'),
-      getVariant: p('SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE id = ?'),
+      getVariants: p(
+        'SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE person_id = ? ORDER BY id',
+      ),
+      getVariant: p(
+        'SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE id = ?',
+      ),
       insertVariant: p('INSERT INTO variants (person_id, name, kind) VALUES (?, ?, ?)'),
       updateVariantName: p('UPDATE variants SET name = ? WHERE id = ?'),
       setVariantLayout: p('UPDATE variants SET layout_id = ? WHERE id = ?'),
@@ -174,9 +258,14 @@ class CvDatabase {
       deleteVariant: p('DELETE FROM variants WHERE id = ?'),
 
       // Layouts (bundle metadata; files live on disk)
-      listLayouts: p('SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts ORDER BY (source = \'builtin\') DESC, id'),
-      getLayout: p('SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at FROM layouts WHERE id = ?'),
-      upsertLayout: p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at)
+      listLayouts: p(
+        "SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts ORDER BY (source = 'builtin') DESC, id",
+      ),
+      getLayout: p(
+        'SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at FROM layouts WHERE id = ?',
+      ),
+      upsertLayout:
+        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at)
         VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at)
         ON CONFLICT(id) DO UPDATE SET
           name=excluded.name, version=excluded.version, engine=excluded.engine, kinds=excluded.kinds,
@@ -187,32 +276,55 @@ class CvDatabase {
       // Variant rules
       getVariantRules: p('SELECT tag, mode FROM variant_rules WHERE variant_id = ?'),
       clearVariantRules: p('DELETE FROM variant_rules WHERE variant_id = ?'),
-      insertVariantRule: p('INSERT OR IGNORE INTO variant_rules (variant_id, tag, mode) VALUES (?, ?, ?)'),
+      insertVariantRule: p(
+        'INSERT OR IGNORE INTO variant_rules (variant_id, tag, mode) VALUES (?, ?, ?)',
+      ),
 
       // Variant sections
-      getVariantSections: p('SELECT section_id, enabled, sort_order FROM variant_sections WHERE variant_id = ? ORDER BY sort_order, section_id'),
+      getVariantSections: p(
+        'SELECT section_id, enabled, sort_order FROM variant_sections WHERE variant_id = ? ORDER BY sort_order, section_id',
+      ),
       clearVariantSections: p('DELETE FROM variant_sections WHERE variant_id = ?'),
-      insertVariantSection: p('INSERT OR IGNORE INTO variant_sections (variant_id, section_id, enabled, sort_order) VALUES (?, ?, ?, ?)'),
+      insertVariantSection: p(
+        'INSERT OR IGNORE INTO variant_sections (variant_id, section_id, enabled, sort_order) VALUES (?, ?, ?, ?)',
+      ),
 
       // Overrides
-      getEntryOverrides: p('SELECT entry_id, included, text_override, sort_override, fields_override FROM entry_overrides WHERE variant_id = ?'),
-      upsertEntryOverride: p('INSERT INTO entry_overrides (variant_id, entry_id, included, text_override, sort_override, fields_override) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(variant_id, entry_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override, fields_override = excluded.fields_override'),
+      getEntryOverrides: p(
+        'SELECT entry_id, included, text_override, sort_override, fields_override FROM entry_overrides WHERE variant_id = ?',
+      ),
+      upsertEntryOverride: p(
+        'INSERT INTO entry_overrides (variant_id, entry_id, included, text_override, sort_override, fields_override) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(variant_id, entry_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override, fields_override = excluded.fields_override',
+      ),
       deleteEntryOverride: p('DELETE FROM entry_overrides WHERE variant_id = ? AND entry_id = ?'),
-      getItemOverrides: p('SELECT item_id, included, text_override, sort_override FROM item_overrides WHERE variant_id = ?'),
-      upsertItemOverride: p('INSERT INTO item_overrides (variant_id, item_id, included, text_override, sort_override) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, item_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override'),
+      getItemOverrides: p(
+        'SELECT item_id, included, text_override, sort_override FROM item_overrides WHERE variant_id = ?',
+      ),
+      upsertItemOverride: p(
+        'INSERT INTO item_overrides (variant_id, item_id, included, text_override, sort_override) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, item_id) DO UPDATE SET included = excluded.included, text_override = excluded.text_override, sort_override = excluded.sort_override',
+      ),
       deleteItemOverride: p('DELETE FROM item_overrides WHERE variant_id = ? AND item_id = ?'),
 
       // Variant letter sections
-      getLetterSections: p('SELECT id, sort_order, title, body FROM variant_letter_sections WHERE variant_id = ? ORDER BY sort_order, id'),
-      insertLetterSection: p('INSERT INTO variant_letter_sections (variant_id, sort_order, title, body) VALUES (?, ?, ?, ?)'),
+      getLetterSections: p(
+        'SELECT id, sort_order, title, body FROM variant_letter_sections WHERE variant_id = ? ORDER BY sort_order, id',
+      ),
+      insertLetterSection: p(
+        'INSERT INTO variant_letter_sections (variant_id, sort_order, title, body) VALUES (?, ?, ?, ?)',
+      ),
       updateLetterSection: p('UPDATE variant_letter_sections SET title = ?, body = ? WHERE id = ?'),
       deleteLetterSection: p('DELETE FROM variant_letter_sections WHERE id = ?'),
       updateLetterSectionOrder: p('UPDATE variant_letter_sections SET sort_order = ? WHERE id = ?'),
-      maxLetterSectionOrder: p('SELECT COALESCE(MAX(sort_order), -1) AS m FROM variant_letter_sections WHERE variant_id = ?'),
+      maxLetterSectionOrder: p(
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM variant_letter_sections WHERE variant_id = ?',
+      ),
 
       // Variant letter header (per-variant cover-letter header — see migration 011)
-      getLetterHeader: p('SELECT recipient_name, recipient_address, opening, closing FROM variant_letter_header WHERE variant_id = ?'),
-      upsertLetterHeader: p(`INSERT INTO variant_letter_header (variant_id, recipient_name, recipient_address, opening, closing)
+      getLetterHeader: p(
+        'SELECT recipient_name, recipient_address, opening, closing FROM variant_letter_header WHERE variant_id = ?',
+      ),
+      upsertLetterHeader:
+        p(`INSERT INTO variant_letter_header (variant_id, recipient_name, recipient_address, opening, closing)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(variant_id) DO UPDATE SET recipient_name = excluded.recipient_name, recipient_address = excluded.recipient_address, opening = excluded.opening, closing = excluded.closing`),
     };
@@ -246,7 +358,11 @@ class CvDatabase {
    */
   upsertUser({ googleSub, email = null, name = null, role = 'user' }) {
     const ownerEmail = process.env.OWNER_EMAIL;
-    const isOwnerEmail = !!(email && ownerEmail && email.toLowerCase() === ownerEmail.toLowerCase());
+    const isOwnerEmail = !!(
+      email &&
+      ownerEmail &&
+      email.toLowerCase() === ownerEmail.toLowerCase()
+    );
     const existing = this.getUserByGoogleSub(googleSub);
     if (existing) {
       // Late adoption: the owner may have signed in BEFORE OWNER_EMAIL was configured,
@@ -399,7 +515,8 @@ class CvDatabase {
 
   createSection(personId, slug, type, title = '') {
     const order = this._stmts.maxSectionSortOrder.get(personId).m + 1;
-    return this._stmts.insertSection.run(personId, slug, normalizeType(type), title, order).lastInsertRowid;
+    return this._stmts.insertSection.run(personId, slug, normalizeType(type), title, order)
+      .lastInsertRowid;
   }
 
   updateSection(id, { slug, type, title }) {
@@ -410,7 +527,7 @@ class CvDatabase {
         slug ?? cur.slug,
         type !== undefined ? normalizeType(type) : cur.type,
         title ?? cur.title,
-        id
+        id,
       );
     } else if (title !== undefined) {
       this._stmts.updateSectionTitle.run(title, id);
@@ -442,7 +559,11 @@ class CvDatabase {
       fields: JSON.parse(e.fields),
       tags: this._stmts.getEntryTags.all(e.id).map((r) => r.tag),
       items: this._stmts.getItems.all(e.id).map((i) => ({
-        id: i.id, entryId: i.entry_id, sortOrder: i.sort_order, content: i.content, title: i.title,
+        id: i.id,
+        entryId: i.entry_id,
+        sortOrder: i.sort_order,
+        content: i.content,
+        title: i.title,
         tags: this._stmts.getItemTags.all(i.id).map((r) => r.tag),
       })),
     };
@@ -450,7 +571,8 @@ class CvDatabase {
 
   createEntry(sectionId, fields) {
     const order = this._stmts.maxEntrySortOrder.get(sectionId).m + 1;
-    return this._stmts.insertEntry.run(sectionId, order, JSON.stringify(fields || {})).lastInsertRowid;
+    return this._stmts.insertEntry.run(sectionId, order, JSON.stringify(fields || {}))
+      .lastInsertRowid;
   }
 
   updateEntry(id, { fields }) {

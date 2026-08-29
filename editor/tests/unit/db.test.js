@@ -70,7 +70,10 @@ describe('Sections / entries / items', () => {
     const section = db.getSection(exp);
     expect(section.entries).toHaveLength(2);
     expect(section.entries[0].fields.position).toBe('Engineer');
-    expect(section.entries[0].items.map((i) => i.content)).toEqual(['Built frontend', 'Built backend']);
+    expect(section.entries[0].items.map((i) => i.content)).toEqual([
+      'Built frontend',
+      'Built backend',
+    ]);
     expect(section.entries[0].tags.sort()).toEqual(['core', 'frontend']);
   });
 
@@ -105,7 +108,7 @@ describe('Tag catalog + suggestion', () => {
   test('catalog upsert normalizes + alias-folds the tag and dedupes on PK', () => {
     db.setTagAlias(pid, 'fe', 'frontend');
     db.setCatalogTag(pid, 'Front End', { category: 'skill' }); // → front-end (normalized)
-    db.setCatalogTag(pid, 'fe', { description: 'aliased' });     // → frontend (alias-folded)
+    db.setCatalogTag(pid, 'fe', { description: 'aliased' }); // → frontend (alias-folded)
     db.setCatalogTag(pid, 'frontend', { description: 'updated' }); // upsert same PK
     const cat = db.getTagCatalog(pid);
     const tags = cat.map((c) => c.tag).sort();
@@ -124,8 +127,8 @@ describe('Tag catalog + suggestion', () => {
 
   test('suggestTags unions catalog + usage and never invents a tag', async () => {
     const { e1 } = buildMain();
-    db.addEntryTags(e1, ['frontend']);            // usage vocab
-    db.setCatalogTag(pid, 'react');               // catalog-only (count 0)
+    db.addEntryTags(e1, ['frontend']); // usage vocab
+    db.setCatalogTag(pid, 'react'); // catalog-only (count 0)
     const { results } = await db.suggestTags(pid, 'Built the React frontend', { minScore: 0.35 });
     const tags = results.map((r) => r.tag);
     expect(tags).toContain('react');
@@ -142,7 +145,12 @@ describe('Tag catalog + suggestion', () => {
     db.addItemTags(i1, ['python']);
     const { added } = db.seedCatalogFromUsage(pid);
     expect(added).toBe(3);
-    expect(db.getTagCatalog(pid).map((c) => c.tag).sort()).toEqual(['core', 'frontend', 'python']);
+    expect(
+      db
+        .getTagCatalog(pid)
+        .map((c) => c.tag)
+        .sort(),
+    ).toEqual(['core', 'frontend', 'python']);
     // idempotent: seeding again adds nothing
     expect(db.seedCatalogFromUsage(pid).added).toBe(0);
   });
@@ -185,7 +193,11 @@ describe('resolveVariant', () => {
   function texts(resolved) {
     return resolved.sections.map((s) => ({
       slug: s.id,
-      entries: s.entries.map((e) => ({ pos: e.fields.position, text: e.fields.text, items: e.items.map((i) => i.content) })),
+      entries: s.entries.map((e) => ({
+        pos: e.fields.position,
+        text: e.fields.text,
+        items: e.items.map((i) => i.content),
+      })),
     }));
   }
 
@@ -226,7 +238,7 @@ describe('resolveVariant', () => {
     db.setVariantRules(v, { include: ['frontend'], exclude: ['draft'] });
     // Without overrides: e1 in (frontend, no draft), e2 out (has draft).
     db.setEntryOverride(v, e1, { included: false }); // force e1 OUT
-    db.setEntryOverride(v, e2, { included: true });  // force e2 IN despite draft
+    db.setEntryOverride(v, e2, { included: true }); // force e2 IN despite draft
     const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
     expect(exp.entries.map((e) => e.fields.position)).toEqual(['Intern']);
   });
@@ -280,7 +292,9 @@ describe('resolveVariant', () => {
     db.setItemOverride(v, m.i1, { textOverride: 'Rephrased bullet' });
     const r = db.resolveVariant(v);
     expect(r.sections.find((s) => s.id === 'summary').entries[0].fields.text).toBe('Short summary');
-    expect(r.sections.find((s) => s.id === 'experience').entries[0].items[0].content).toBe('Rephrased bullet');
+    expect(r.sections.find((s) => s.id === 'experience').entries[0].items[0].content).toBe(
+      'Rephrased bullet',
+    );
   });
 
   test('sort_override reorders entries deterministically (row 10)', () => {
@@ -417,13 +431,18 @@ describe('per-variant cover-letter header', () => {
 
     const blob = db.getPersonExport(pid);
     expect(blob.coverletter).toBeUndefined(); // no person-level header in the export
-    expect(blob.variants.find((v) => v.name === 'To Acme').header).toMatchObject({ recipientName: 'Acme' });
+    expect(blob.variants.find((v) => v.name === 'To Acme').header).toMatchObject({
+      recipientName: 'Acme',
+    });
 
     const pid2 = db.createPerson('Reimport');
     db.importPersonData(pid2, blob);
     const vs = db.getVariants(pid2);
     const id = (name) => vs.find((v) => v.name === name).id;
-    expect(db.getLetterHeader(id('To Acme'))).toMatchObject({ recipientName: 'Acme', opening: 'Dear Acme,' });
+    expect(db.getLetterHeader(id('To Acme'))).toMatchObject({
+      recipientName: 'Acme',
+      opening: 'Dear Acme,',
+    });
     expect(db.getLetterHeader(id('To Globex')).recipientName).toBe('Globex');
   });
 });
@@ -436,13 +455,26 @@ describe('importLegacyData + seeding', () => {
   const legacy = {
     personal: { firstName: 'Leg', lastName: 'Acy' },
     sections: [
-      { id: 'summary', type: 'summary', title: 'Summary', entries: [{ id: 1, resumeIncluded: true, fields: { text: 'Long summary' }, items: [] }] },
       {
-        id: 'experience', type: 'experience', title: 'Experience', entries: [
-          { id: 2, resumeIncluded: true, fields: { position: 'Eng' }, items: [
-            { id: 10, content: 'Kept bullet', resumeIncluded: true },
-            { id: 11, content: 'Dropped bullet', resumeIncluded: false },
-          ] },
+        id: 'summary',
+        type: 'summary',
+        title: 'Summary',
+        entries: [{ id: 1, resumeIncluded: true, fields: { text: 'Long summary' }, items: [] }],
+      },
+      {
+        id: 'experience',
+        type: 'experience',
+        title: 'Experience',
+        entries: [
+          {
+            id: 2,
+            resumeIncluded: true,
+            fields: { position: 'Eng' },
+            items: [
+              { id: 10, content: 'Kept bullet', resumeIncluded: true },
+              { id: 11, content: 'Dropped bullet', resumeIncluded: false },
+            ],
+          },
           { id: 3, resumeIncluded: false, fields: { position: 'Old role' }, items: [] },
         ],
       },
@@ -466,7 +498,11 @@ describe('importLegacyData + seeding', () => {
 
     expect(db.getPersonal(id).firstName).toBe('Leg');
     const variants = db.getVariants(id);
-    expect(variants.map((v) => `${v.name}:${v.kind}`)).toEqual(['CV:cv', 'Resume:resume', 'Cover Letter:coverletter']);
+    expect(variants.map((v) => `${v.name}:${v.kind}`)).toEqual([
+      'CV:cv',
+      'Resume:resume',
+      'Cover Letter:coverletter',
+    ]);
 
     // CV = everything
     const cv = db.resolveVariant(variants.find((v) => v.kind === 'cv').id);
@@ -475,7 +511,9 @@ describe('importLegacyData + seeding', () => {
 
     // Resume = excluded entry/item dropped + paragraph override applied
     const resume = db.resolveVariant(variants.find((v) => v.kind === 'resume').id);
-    expect(resume.sections.find((s) => s.id === 'summary').entries[0].fields.text).toBe('Short summary');
+    expect(resume.sections.find((s) => s.id === 'summary').entries[0].fields.text).toBe(
+      'Short summary',
+    );
     const resExp = resume.sections.find((s) => s.id === 'experience');
     expect(resExp.entries.map((e) => e.fields.position)).toEqual(['Eng']); // 'Old role' excluded
     expect(resExp.entries[0].items.map((i) => i.content)).toEqual(['Kept bullet']); // dropped bullet gone

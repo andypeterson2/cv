@@ -66,7 +66,8 @@ beforeEach(async () => {
 });
 
 const addSection = async (slug) =>
-  (await request('POST', `/api/persons/${pid}/sections`, { slug, type: slug, title: slug })).body.id;
+  (await request('POST', `/api/persons/${pid}/sections`, { slug, type: slug, title: slug })).body
+    .id;
 
 describe('Version endpoints', () => {
   test('snapshot → list → restore round-trips over HTTP', async () => {

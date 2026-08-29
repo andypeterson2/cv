@@ -47,7 +47,7 @@ function getLatexType(semanticType) {
  */
 function normalizeType(type) {
   if (LATEX_TYPE_MAP[type]) return type; // already semantic
-  return LEGACY_TYPE_MAP[type] || type;  // convert legacy, or pass through
+  return LEGACY_TYPE_MAP[type] || type; // convert legacy, or pass through
 }
 
 /**
@@ -60,4 +60,11 @@ const SECTION_TYPE_MAP = {
   },
 };
 
-module.exports = { LATEX_TYPE_MAP, LEGACY_TYPE_MAP, SECTION_TYPE_MAP, VALID_SEMANTIC_TYPES, getLatexType, normalizeType };
+module.exports = {
+  LATEX_TYPE_MAP,
+  LEGACY_TYPE_MAP,
+  SECTION_TYPE_MAP,
+  VALID_SEMANTIC_TYPES,
+  getLatexType,
+  normalizeType,
+};

@@ -54,8 +54,10 @@ class TagStore {
   /** Tag vocabulary with usage counts (entries + items): [{tag, count}], desc. */
   listTagsWithCounts(personId) {
     const counts = new Map();
-    for (const r of this._stmts.countEntryTags.all(personId)) counts.set(r.tag, (counts.get(r.tag) || 0) + r.cnt);
-    for (const r of this._stmts.countItemTags.all(personId)) counts.set(r.tag, (counts.get(r.tag) || 0) + r.cnt);
+    for (const r of this._stmts.countEntryTags.all(personId))
+      counts.set(r.tag, (counts.get(r.tag) || 0) + r.cnt);
+    for (const r of this._stmts.countItemTags.all(personId))
+      counts.set(r.tag, (counts.get(r.tag) || 0) + r.cnt);
     return [...counts.entries()]
       .map(([tag, count]) => ({ tag, count }))
       .sort((a, b) => b.count - a.count || (a.tag < b.tag ? -1 : 1));
@@ -123,10 +125,22 @@ class TagStore {
   setTagAlias(personId, alias, canonical, source = 'manual') {
     const a = normTag(alias);
     const c = normTag(canonical);
-    if (!a || !c) { const e = new Error('alias and canonical must be non-empty after normalization'); e.status = 400; throw e; }
-    if (a === c) { const e = new Error('alias and canonical cannot be the same tag'); e.status = 409; throw e; }
+    if (!a || !c) {
+      const e = new Error('alias and canonical must be non-empty after normalization');
+      e.status = 400;
+      throw e;
+    }
+    if (a === c) {
+      const e = new Error('alias and canonical cannot be the same tag');
+      e.status = 409;
+      throw e;
+    }
     // Reject cycles: canonical must not resolve back to alias.
-    if (this._resolveAlias(personId, c) === a) { const e = new Error(`alias "${a}" → "${c}" would create a cycle`); e.status = 409; throw e; }
+    if (this._resolveAlias(personId, c) === a) {
+      const e = new Error(`alias "${a}" → "${c}" would create a cycle`);
+      e.status = 409;
+      throw e;
+    }
 
     const tx = this.db.transaction(() => {
       this._stmts.upsertAlias.run(personId, a, c, source);
@@ -159,7 +173,11 @@ class TagStore {
    */
   setCatalogTag(personId, tag, { description = null, category = null } = {}) {
     const t = this._canonicalTag(personId, tag);
-    if (!t) { const e = new Error('tag must be non-empty after normalization'); e.status = 400; throw e; }
+    if (!t) {
+      const e = new Error('tag must be non-empty after normalization');
+      e.status = 400;
+      throw e;
+    }
     this._stmts.upsertCatalogTag.run(personId, t, description, category);
     return { tag: t };
   }
@@ -187,7 +205,12 @@ class TagStore {
   _suggestCandidates(personId) {
     const byTag = new Map();
     for (const c of this._stmts.getCatalog.all(personId)) {
-      byTag.set(c.tag, { tag: c.tag, count: 0, inCatalog: true, description: c.description || undefined });
+      byTag.set(c.tag, {
+        tag: c.tag,
+        count: 0,
+        inCatalog: true,
+        description: c.description || undefined,
+      });
     }
     for (const { tag, count } of this.listTagsWithCounts(personId)) {
       const cur = byTag.get(tag);
@@ -205,7 +228,11 @@ class TagStore {
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
    */
   async suggestTags(personId, text, { limit = 8, minScore = 0.35, scorer } = {}) {
-    const results = await suggest.suggestTags(text, this._suggestCandidates(personId), { limit, minScore, scorer });
+    const results = await suggest.suggestTags(text, this._suggestCandidates(personId), {
+      limit,
+      minScore,
+      scorer,
+    });
     return { query: String(text), results };
   }
 
@@ -224,12 +251,28 @@ class TagStore {
       for (const e of full.entries) {
         const eText = entryText(e.fields);
         if (eText) {
-          out.push({ target: 'entry', id: e.id, text: eText, current: e.tags, suggestions: await suggest.suggestTags(eText, candidates, { limit, minScore, scorer }) });
+          out.push({
+            target: 'entry',
+            id: e.id,
+            text: eText,
+            current: e.tags,
+            suggestions: await suggest.suggestTags(eText, candidates, { limit, minScore, scorer }),
+          });
         }
         for (const it of e.items) {
           const iText = (it.content || '').trim();
           if (iText) {
-            out.push({ target: 'item', id: it.id, text: iText, current: it.tags, suggestions: await suggest.suggestTags(iText, candidates, { limit, minScore, scorer }) });
+            out.push({
+              target: 'item',
+              id: it.id,
+              text: iText,
+              current: it.tags,
+              suggestions: await suggest.suggestTags(iText, candidates, {
+                limit,
+                minScore,
+                scorer,
+              }),
+            });
           }
         }
       }

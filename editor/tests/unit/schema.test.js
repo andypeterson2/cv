@@ -3,7 +3,9 @@ const { validators, validate, isValidKind } = require('../../lib/schema');
 describe('settings schema', () => {
   const v = validators.settings;
   it('accepts string + {num,unit} values', () => {
-    expect(v({ 'style.accentColor': 'emerald', 'spacing.marginTop': { num: 1.5, unit: 'cm' } })).toBe(true);
+    expect(
+      v({ 'style.accentColor': 'emerald', 'spacing.marginTop': { num: 1.5, unit: 'cm' } }),
+    ).toBe(true);
   });
   it('rejects empty object', () => expect(v({})).toBe(false));
 });
@@ -25,8 +27,10 @@ describe('createSection schema', () => {
   it('accepts slug + valid type + title', () => {
     expect(v({ slug: 'experience', type: 'experience', title: 'Experience' })).toBe(true);
   });
-  it('rejects invalid type', () => expect(v({ slug: 'x', type: 'invalid', title: 'X' })).toBe(false));
-  it('rejects slug with spaces', () => expect(v({ slug: 'has space', type: 'experience', title: 'X' })).toBe(false));
+  it('rejects invalid type', () =>
+    expect(v({ slug: 'x', type: 'invalid', title: 'X' })).toBe(false));
+  it('rejects slug with spaces', () =>
+    expect(v({ slug: 'has space', type: 'experience', title: 'X' })).toBe(false));
   it('rejects missing slug', () => expect(v({ type: 'experience', title: 'X' })).toBe(false));
 });
 
@@ -107,8 +111,12 @@ describe('variant schemas', () => {
     expect(validators.variantSections({ sections: [{ enabled: true }] })).toBe(false);
   });
   it('variantOverride requires targetType + targetId; included may be null', () => {
-    expect(validators.variantOverride({ targetType: 'entry', targetId: 5, included: null })).toBe(true);
-    expect(validators.variantOverride({ targetType: 'item', targetId: 5, textOverride: 'x' })).toBe(true);
+    expect(validators.variantOverride({ targetType: 'entry', targetId: 5, included: null })).toBe(
+      true,
+    );
+    expect(validators.variantOverride({ targetType: 'item', targetId: 5, textOverride: 'x' })).toBe(
+      true,
+    );
     expect(validators.variantOverride({ targetType: 'bogus', targetId: 5 })).toBe(false);
     expect(validators.variantOverride({ targetType: 'entry' })).toBe(false);
   });

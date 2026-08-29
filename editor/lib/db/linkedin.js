@@ -35,7 +35,13 @@ class Linkedin {
     return positions.map((p) => {
       const s = stored.get(p.entryId);
       const state = !s ? 'new' : s.fingerprint === p.fingerprint ? 'synced' : 'drifted';
-      return { entryId: p.entryId, title: p.title, company: p.company, state, syncedAt: s ? s.syncedAt : null };
+      return {
+        entryId: p.entryId,
+        title: p.title,
+        company: p.company,
+        state,
+        syncedAt: s ? s.syncedAt : null,
+      };
     });
   }
 

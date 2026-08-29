@@ -36,7 +36,8 @@ function attachUser(
     const headerUser = readHeader(req, 'X-User-Id');
     if (headerUser) {
       const fromFrontDoor =
-        originSecrets.length === 0 || matchesOriginSecret(readHeader(req, 'X-Origin-Secret'), originSecrets);
+        originSecrets.length === 0 ||
+        matchesOriginSecret(readHeader(req, 'X-Origin-Secret'), originSecrets);
       const uid = parseInt(headerUser, 10);
       if (fromFrontDoor && Number.isFinite(uid)) {
         req.userId = uid;

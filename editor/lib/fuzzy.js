@@ -73,7 +73,10 @@ function searchTags(query, vocab, { limit = 10, minScore = 0.3 } = {}) {
     const s = scoreTag(query, tag);
     if (s && s.score >= minScore) out.push({ tag, score: s.score, count: count || 0, via: s.via });
   }
-  out.sort((a, b) => b.score - a.score || b.count - a.count || (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
+  out.sort(
+    (a, b) =>
+      b.score - a.score || b.count - a.count || (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0),
+  );
   return limit > 0 ? out.slice(0, limit) : out;
 }
 

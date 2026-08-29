@@ -43,7 +43,9 @@ module.exports = function migrate(db) {
 
       const violations = db.pragma('foreign_key_check');
       if (violations.length) {
-        throw new Error(`FK violations after persons rebuild: ${JSON.stringify(violations).slice(0, 200)}`);
+        throw new Error(
+          `FK violations after persons rebuild: ${JSON.stringify(violations).slice(0, 200)}`,
+        );
       }
     })();
   } finally {

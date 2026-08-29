@@ -13,17 +13,28 @@ let pid;
 function request(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     const payload = body !== undefined ? JSON.stringify(body) : null;
-    const req = http.request({
-      hostname: 'localhost', port, path: urlPath, method,
-      headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {},
-    }, (res) => {
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
-      });
-    });
+    const req = http.request(
+      {
+        hostname: 'localhost',
+        port,
+        path: urlPath,
+        method,
+        headers: payload
+          ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+          : {},
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => {
+          try {
+            resolve({ status: res.statusCode, body: JSON.parse(data) });
+          } catch {
+            resolve({ status: res.statusCode, body: data });
+          }
+        });
+      },
+    );
     req.on('error', reject);
     if (payload) req.write(payload);
     req.end();
@@ -37,10 +48,17 @@ beforeAll(async () => {
   seedBuiltinLayouts(db);
   app.setDb(db);
   pid = db.createPerson('Test');
-  await new Promise((resolve) => { server = app.listen(0, () => { port = server.address().port; resolve(); }); });
+  await new Promise((resolve) => {
+    server = app.listen(0, () => {
+      port = server.address().port;
+      resolve();
+    });
+  });
 });
 
-afterAll(async () => { if (server) await new Promise((r) => server.close(r)); });
+afterAll(async () => {
+  if (server) await new Promise((r) => server.close(r));
+});
 
 describe('GET /api/layouts', () => {
   it('lists installed layouts and the current default', async () => {
@@ -71,7 +89,9 @@ describe('global default selection', () => {
 
 describe('PUT /api/variants/:id/layout', () => {
   let vid;
-  beforeAll(() => { vid = db.createVariant(pid, 'CV', 'cv'); });
+  beforeAll(() => {
+    vid = db.createVariant(pid, 'CV', 'cv');
+  });
 
   it('sets a variant layout to an installed layout', async () => {
     const res = await request('PUT', `/api/variants/${vid}/layout`, { layout_id: 'awesome-cv' });
