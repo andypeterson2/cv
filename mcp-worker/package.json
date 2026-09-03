@@ -16,10 +16,10 @@
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
-    "@cloudflare/workers-oauth-provider": "^0.8.1",
+    "@cloudflare/workers-oauth-provider": "^0.10.3",
     "@cv/constants": "file:../shared",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "agents": "^0.17.3"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "agents": "^0.22.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
@@ -30,8 +30,8 @@
     "globals": "^16.5.0",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "~8.62.0",
-    "vitest": "^4.1.9",
+    "typescript-eslint": "~8.68.0",
+    "vitest": "^4.1.11",
     "wrangler": "^4.128.0"
   },
   "prettier": {
