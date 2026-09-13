@@ -7,18 +7,18 @@
  *   - tag_catalog (this) — the curated target set a person INTENDS to use
  *
  * It's a SOFT guide: nothing rejects a tag for being absent from the catalog.
- * The suggest scorer (lib/suggest.js) simply ranks catalog members ahead of
+ * The suggest scorer simply ranks catalog members ahead of
  * incidental usage tags, steering the author toward a consistent vocabulary.
  * `tag` is stored canonical (normTag-normalized) so it can never disagree with
  * a stored tag's canonical form.
  *
- * Mirrors 008_fuzzy_tags.js: own frozen normTag snapshot (migrations must not
- * import evolving app code), wrapped in db.transaction, auto-registered by the
- * filename-sorted migration runner.
+ * Keeps its own frozen normTag snapshot (migrations must not import evolving app
+ * code), runs in db.transaction, and is auto-registered by the filename-sorted
+ * migration runner.
  */
 
-// Frozen snapshot of lib/db.js normTag (as of 008/009). Never edit in place —
-// add a later migration if the normalizer changes.
+// Frozen snapshot of the app's normTag. Never edit in place — add a later
+// migration if the normalizer changes.
 function normTag(t) {
   return String(t)
     .normalize('NFKD')
@@ -26,8 +26,8 @@ function normTag(t) {
     .trim()
     .toLowerCase()
     .replace(/[\s_]+/g, '-') // unify whitespace / underscores → hyphen
-    .replace(/-+/g, '-') // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 const DDL = `
@@ -48,5 +48,5 @@ module.exports = function migrate(db) {
   tx();
 };
 
-// Exported only so a test could assert the snapshot matches lib/db.js normTag.
+// Exported only so a test can assert the snapshot matches the app's normTag.
 module.exports._normTag = normTag;

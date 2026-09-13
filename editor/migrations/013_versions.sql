@@ -1,5 +1,4 @@
--- 013: version history (ADR-006 increment 1).
---
+-- 013: version history.
 -- A checkpoint stores the person's full authoritative export blob (the same
 -- import-compatible tree GET /persons/:id/export returns); restore re-imports it
 -- over the cleared person. `created_at` is epoch milliseconds, set by the app, so

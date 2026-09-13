@@ -54,9 +54,11 @@ function prepare(compileData, layoutDir) {
 // eslint-disable-next-line max-params -- mirrors the render-callback surface; grandfathered
 function finish(buildDir, manifest, kind, tex, layoutDir, assetsDir) {
   fs.mkdirSync(buildDir, { recursive: true });
-  copyDirFlat(path.join(layoutDir, 'class'), buildDir); // .cls/.sty/fonts/.fd → root
-  copyAssets(path.join(layoutDir, 'assets'), buildDir); // layout-bundled images, then
-  copyAssets(assetsDir, buildDir); // project assets (project wins on clash)
+  // Class files go to the build root; project assets copy after the layout's own,
+  // so the project wins on a name clash.
+  copyDirFlat(path.join(layoutDir, 'class'), buildDir);
+  copyAssets(path.join(layoutDir, 'assets'), buildDir);
+  copyAssets(assetsDir, buildDir);
   const mainPath = path.join(buildDir, mainTexName(manifest, kind));
   fs.writeFileSync(mainPath, tex.endsWith('\n') ? tex : tex + '\n', 'utf-8');
   return mainPath;

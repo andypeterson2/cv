@@ -9,7 +9,7 @@
  * Run in the Docker `deps` stage AFTER `npm ci` (which wipes node_modules, so the
  * model must be re-fetched here). The cache lives inside node_modules and is
  * therefore carried into the deploy image by `COPY --from=deps node_modules`.
- * At runtime, embed-scorer.js (with CV_EMBED_OFFLINE=1) reads this baked cache.
+ * At runtime the embedding scorer (with CV_EMBED_OFFLINE=1) reads this baked cache.
  */
 (async () => {
   const { pipeline, env } = require('@xenova/transformers');

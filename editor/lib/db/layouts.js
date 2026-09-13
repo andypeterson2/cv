@@ -1,7 +1,7 @@
 /**
  * Layout subsystem for CvDatabase: bundle-metadata CRUD + per-variant / global
  * layout selection. Bundle FILES live on disk; this stores only metadata and the
- * last verification report. Mixed onto the prototype (applyMixin in db.js).
+ * last verification report. Mixed onto the CvDatabase prototype.
  *
  * The global default lives in the `settings` table under `layout.default`,
  * reusing the existing settings get/set (no new schema surface).

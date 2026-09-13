@@ -1,8 +1,8 @@
 /**
  * Tag subsystem for CvDatabase: tags, per-person aliases, the controlled-vocab
- * catalog, and suggestion. Mixed onto the prototype (see db.js / applyMixin), so
- * methods run with `this` === the CvDatabase instance (its prepared statements,
- * db handle, and cross-cluster reads like this.getSections/getSection).
+ * catalog, and suggestion. Mixed onto the CvDatabase prototype, so methods run
+ * with `this` === the CvDatabase instance (its prepared statements, db handle,
+ * and cross-cluster reads like this.getSections/getSection).
  */
 const { normTag, entryText } = require('./helpers');
 const fuzzy = require('../fuzzy');
@@ -74,9 +74,8 @@ class TagStore {
     const vocab = this.listTagsWithCounts(personId);
     let results = fuzzy.searchTags(q, vocab, { limit, minScore });
 
-    // If `q` is an alias, its canonical is an exact intent match — surface it
-    // first as via:'alias' (score 1), replacing any coincidental string match
-    // for the same tag (e.g. q="kube" also prefixes "kubernetes").
+    // An alias's canonical is an exact intent match: surface it first (via:'alias',
+    // score 1), replacing any coincidental string match for the same tag.
     const canonical = this._resolveAlias(personId, q);
     if (canonical !== q) {
       const hit = vocab.find((v) => v.tag === canonical);
@@ -223,7 +222,7 @@ class TagStore {
   /**
    * Suggest existing tags for a piece of text. Ranks the union of the catalog
    * (preferred) and the usage vocabulary; NEVER invents a tag. Approximate —
-   * discovery/authoring only (lib/suggest.js). `scorer` (optional) swaps in an
+   * discovery/authoring only. `scorer` (optional) swaps in an
    * alternate ranker (e.g. embeddings) without changing this method's shape.
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
    */

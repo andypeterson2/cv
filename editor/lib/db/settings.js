@@ -1,7 +1,7 @@
 /**
- * Settings methods for CvDatabase, mixed onto the prototype (Object.assign in
- * db.js). Global style/spacing/fonts live in `settings`; personal info and the
- * cover-letter header are per-person in `person_settings`. Methods run with
+ * Settings methods for CvDatabase, mixed onto the prototype. Global
+ * style/spacing/fonts live in `settings`; personal info is per-person in
+ * `person_settings`; the cover-letter header is per-variant. Methods run with
  * `this` === the CvDatabase instance, so they use its prepared statements + db.
  */
 const { rowsToSettings, stripPrefix } = require('./helpers');
@@ -51,6 +51,4 @@ module.exports = {
     for (const [k, v] of Object.entries(fields)) map['personal.' + k] = v;
     this.setPersonSettings(personId, map);
   },
-  // The cover-letter header is per-variant now (variant_letter_header, design #14),
-  // no longer a `coverletter.*` person setting — see db/variants.js.
 };

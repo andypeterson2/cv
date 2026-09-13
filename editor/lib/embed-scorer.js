@@ -1,17 +1,16 @@
 /**
  * OPTIONAL local embedding scorer for tag suggestion — an alternate ranker that
- * plugs into db.suggestTags' `scorer` seam (see lib/suggest.js). Pure-Node, NO
- * Python: uses @huggingface/transformers (transformers.js v3, the maintained
- * successor of @xenova/transformers) running all-MiniLM-L6-v2
- * (~80 MB ONNX). Catches conceptual matches the lexical scorer misses (e.g.
- * "orchestrated containers" → `kubernetes`).
+ * plugs into db.suggestTags' `scorer` seam. Pure-Node, NO Python: uses
+ * @huggingface/transformers (v3, the maintained successor of @xenova/transformers)
+ * running all-MiniLM-L6-v2 (~80 MB ONNX). Catches conceptual matches the lexical
+ * scorer misses (e.g. "orchestrated containers" → `kubernetes`).
  *
  * Design guarantees:
  *  - LAZY: the model loads on first scorer() call, never at require time, so the
  *    default lexical path never pays for it.
  *  - GRACEFUL ABSENCE: if @huggingface/transformers isn't installed, requiring this
- *    module throws (the require.resolve below), and routes/persons.js
- *    resolveScorer turns that into a clean 501 — the lexical path is unaffected.
+ *    module throws (the require.resolve below), and the suggest route turns
+ *    that into a clean 501 — the lexical path is unaffected.
  *  - SUGGEST-NOT-APPLY: returns candidates only; never writes a tag, never
  *    touches variant resolution.
  */
@@ -27,10 +26,8 @@ function getPipe() {
   if (!_pipePromise) {
     _pipePromise = (async () => {
       const { pipeline, env } = require('@huggingface/transformers');
-      // Offline guarantee for baked-model deploys: never reach out to the HF CDN
-      // at runtime. Set CV_EMBED_OFFLINE=1 where the model is pre-baked (the
-      // Docker dev/deploy stages). Left unset on host dev so a fresh checkout can
-      // still download the model on first use.
+      // Where the model is pre-baked (Docker sets CV_EMBED_OFFLINE=1), never hit the
+      // HF CDN at runtime; unset on host dev so a fresh checkout can download it.
       if (process.env.CV_EMBED_OFFLINE === '1') env.allowRemoteModels = false;
       return pipeline('feature-extraction', MODEL);
     })();
@@ -53,8 +50,8 @@ function candidateText(c) {
 }
 
 /**
- * scorer(text, candidates) — the shape db.suggestTags/suggest.js expects.
- * Embeds the input + each candidate (cached), ranks by cosine. suggest.js then
+ * scorer(text, candidates) — the shape db.suggestTags expects.
+ * Embeds the input + each candidate (cached), ranks by cosine. The caller then
  * re-applies the catalog-first tie-break and minScore filter, and tags via:'embedding'.
  * @returns {Promise<Array<{tag, score}>>}
  */

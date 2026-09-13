@@ -32,9 +32,9 @@ type CvEnv = {
   GOOGLE_CLIENT_SECRET?: string;
 };
 
-/** Resolve the cv-editor base URL + Authorization header from the Worker env.
- *  Requires CV_EDITOR_URL (set in wrangler.jsonc to the Railway cv) — no localhost
- *  default, so a misconfiguration fails loudly instead of silently hitting localhost. */
+/** Resolve the cv-editor base URL + front-door headers from the Worker env.
+ *  Requires CV_EDITOR_URL (the Railway cv) — no localhost default, so a
+ *  misconfiguration fails loudly instead of silently hitting localhost. */
 function cvConfig(): {
   base: string;
   originSecret?: string;
@@ -44,9 +44,9 @@ function cvConfig(): {
   if (!e.CV_EDITOR_URL) throw new Error('CV_EDITOR_URL is not configured on this Worker.');
   const base = e.CV_EDITOR_URL.replace(/\/$/, '');
   // This Worker is one of cv's two front doors; the origin rejects callers that don't
-  // present this secret (cv editor/lib/origin-guard.js). It ALSO authorizes the
-  // per-caller X-User-Id we inject below — cv trusts X-User-Id only behind this secret.
-  // CF Access service-token in front of cv's tunnel host (Stage 6) — omitted until set.
+  // present this secret. It ALSO authorizes the per-caller X-User-Id we inject below —
+  // cv trusts X-User-Id only behind this secret. The CF Access service-token for cv's
+  // tunnel host is omitted until set.
   const accessHeaders: Record<string, string> =
     e.CF_ACCESS_CLIENT_ID && e.CF_ACCESS_CLIENT_SECRET
       ? {
@@ -68,9 +68,8 @@ export async function api(
   { expectBinary = false }: ApiOpts = {},
 ): Promise<any> {
   const { base, originSecret, accessHeaders } = cvConfig();
-  // WHO this call runs as, set at the dispatch boundary (mcp.ts CallTool / servePdf).
-  // Required: cv is scoped per-user by X-User-Id now, so a missing context is a bug —
-  // fail loudly rather than silently falling through to the owner/demo account.
+  // WHO this call runs as (set at dispatch). cv scopes per-user by X-User-Id, so a missing
+  // context is a bug: fail loudly rather than fall through to the owner/demo account.
   const cvUserId = cvCtx.getStore()?.cvUserId;
   if (cvUserId == null) throw new Error('No authenticated cv user in context for this MCP call.');
   let res: Response;
@@ -114,7 +113,7 @@ export async function api(
 }
 
 /** Fetch a variant's compiled PDF bytes from the cv backend (admin-authed). Used by the
- *  signed /pdf/<token> download route (index.ts); cv_get_pdf just hands out the link. */
+ *  signed /pdf/<token> download route; cv_get_pdf just hands out the link. */
 export async function fetchVariantPdf(variantId: number | string): Promise<ArrayBuffer> {
   return (await api('GET', `/api/variants/${enc(variantId)}/pdf`, undefined, {
     expectBinary: true,
@@ -1191,9 +1190,8 @@ export const tools = toolDefs.map(({ handler, ...spec }) => spec);
 const toolMap = new Map(toolDefs.map((t) => [t.name, t]));
 export const TOOL_COUNT = toolDefs.length;
 
-// Argument validation. The low-level MCP Server advertises schemas but does not
-// enforce them, so we validate here — with @cfworker/json-schema (a zero-eval
-// interpreter) because the Workers runtime forbids ajv's `new Function` codegen.
+// The low-level MCP Server advertises schemas but doesn't enforce them. Validate here with
+// @cfworker/json-schema (zero-eval): Workers forbid ajv's `new Function` codegen.
 const validators = new Map(toolDefs.map((t) => [t.name, new Validator(t.inputSchema as any, '7')]));
 
 function formatErrors(

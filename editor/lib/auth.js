@@ -27,7 +27,7 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  // Accepted front-door secrets (a SET, for zero-downtime rotation — see origin-secret.js).
+  // Accepted front-door secrets (a SET, for zero-downtime rotation).
   const originSecrets = parseOriginSecrets(originSecret);
 
   // The owning person of an id-addressed resource, or null (unknown / no db).

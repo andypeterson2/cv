@@ -1,6 +1,6 @@
 # Self-contained DEPLOY composition — host-ambiguous (laptop or remote).
 # Run:  CV_DOMAIN=cv.example.com CV_USER=me CV_PASS_HASH='<bcrypt>' \
-#         docker compose -f docker-compose.deploy.yml up -d --build
+#         docker compose -f <this file> up -d --build
 #
 # Caddy terminates TLS + Basic-Auth and is the ONLY published service. cv-editor
 # (unauthenticated full-CRUD + per-request xelatex) is NOT published to the host
