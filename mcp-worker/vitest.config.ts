@@ -10,9 +10,8 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
-      // Tests never talk to real Cloudflare resources: don't honor the
-      // `remote: true` on OAUTH_KV (dev-session convenience only) — CI has no
-      // Cloudflare token, and tests must not touch the production namespace.
+      // Tests never touch real Cloudflare resources: ignore OAUTH_KV's `remote: true`
+      // (a dev-session convenience) — CI has no token and prod must stay untouched.
       remoteBindings: false,
       miniflare: {
         bindings: {

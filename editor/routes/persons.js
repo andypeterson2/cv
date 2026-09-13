@@ -13,9 +13,9 @@ function intParam(value, label = 'id') {
 
 /**
  * Map a `scorer` request param to a scorer function for db.suggestTags.
- * 'lexical' (or absent) → undefined (the default lexical scorer in suggest.js).
- * 'embedding' → the optional Phase-B module, lazy-required so it (and its model)
- * never load unless explicitly requested.
+ * 'lexical' (or absent) → undefined (the default lexical scorer).
+ * 'embedding' → the optional embedding module, lazy-required so it (and its
+ * model) never load unless explicitly requested.
  */
 function resolveScorer(name) {
   if (name !== 'embedding') return undefined;
@@ -148,10 +148,10 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Version history (ADR-006 increment 1) ----
+  // ---- Version history ----
   // Reads of a public person's list stay open; snapshot + restore are writes, so
-  // tokenAuth gates them to the owner (see server.js). A checkpoint snapshots the
-  // person's authoritative state server-side; restore re-imports it over the person.
+  // tokenAuth gates them to the owner. A checkpoint snapshots the person's
+  // authoritative state server-side; restore re-imports it over the person.
 
   router.get(
     '/:pid/versions',
@@ -198,7 +198,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // Tag a checkpoint with a frozen provenance name (ADR-006 inc 3).
+  // Tag a checkpoint with a frozen provenance name.
   router.post(
     '/:pid/versions/:vid/tag',
     validate('tagVersion'),

@@ -1,10 +1,10 @@
 /**
  * LinkedIn / Indeed / Handshake export — a pure, downstream consumer of a resolved
- * variant (see db.resolveVariant). None of those sites expose an individual write
- * API, so the CV stays the source of truth and this produces paste-ready work-history
- * blocks plus a per-entry fingerprint. The fingerprint is the point: it lets
- * cv_linkedin_status say exactly which positions have drifted since you last pasted
- * (see db/linkedin.js), so mirroring edits by hand is never guesswork.
+ * variant. None of those sites expose an individual write API, so the CV stays the
+ * source of truth and this produces paste-ready work-history blocks plus a per-entry
+ * fingerprint. The fingerprint is the point: it lets cv_linkedin_status say exactly
+ * which positions have drifted since you last pasted, so mirroring edits by hand is
+ * never guesswork.
  *
  * No DB or network here — feed it resolved JSON, get blocks back. Kept pure so the
  * fragile bits (LaTeX cleanup, date parsing) are unit-testable against real data.
@@ -15,9 +15,8 @@ const { createHash } = require('crypto');
 // we surface `overLimit` rather than let a paste lose its tail.
 const LIMITS = { description: 2000, headline: 220, about: 2600 };
 
-// Bullet glyph per consumer: LinkedIn renders "•", Indeed/Handshake textareas want
-// none, markdown wants "-". One exporter, three presentations — the fingerprint is
-// computed glyph-free so switching format never reads as drift.
+// Bullet glyph per consumer. The fingerprint is computed glyph-free so switching
+// format never reads as drift.
 const BULLETS = { linkedin: '• ', plaintext: '', markdown: '- ' };
 
 const MONTHS = {
@@ -38,20 +37,20 @@ const MONTHS = {
 /**
  * Strip stored XeLaTeX source down to plain text a form field can take: unescape
  * LaTeX specials, turn `\textrightarrow{}` into an arrow, drop any other control
- * word, normalise `--`/`---` dashes and `~`, then collapse the whitespace that
- * removals leave behind.
+ * word, normalise `--`/`---` dashes, `~` and `\\` line breaks, then collapse the
+ * whitespace that removals leave behind.
  */
 function clean(s) {
   return String(s ?? '')
-    .replace(/\\([&%$#_{}])/g, '$1') // \& \% \$ \# \_ \{ \} → literal
-    .replace(/\\textrightarrow\s*\{\}/g, ' → ') // the one arrow macro in the data
-    .replace(/\\[a-zA-Z]+\s*\{\}/g, '') // any other empty-argument control word
-    .replace(/\\[a-zA-Z]+/g, '') // …and any bare control word
-    .replace(/---/g, '—') // LaTeX em-dash
-    .replace(/--/g, '–') // LaTeX en-dash
-    .replace(/~/g, ' ') // non-breaking space
-    .replace(/\\\\/g, ' ') // explicit line break
-    .replace(/\s+/g, ' ') // collapse the gaps removals opened
+    .replace(/\\([&%$#_{}])/g, '$1')
+    .replace(/\\textrightarrow\s*\{\}/g, ' → ')
+    .replace(/\\[a-zA-Z]+\s*\{\}/g, '')
+    .replace(/\\[a-zA-Z]+/g, '')
+    .replace(/---/g, '—')
+    .replace(/--/g, '–')
+    .replace(/~/g, ' ')
+    .replace(/\\\\/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 

@@ -1,7 +1,7 @@
 /**
  * Copy a mixin class's prototype methods onto a target class's prototype, so
- * db.js can compose CvDatabase from focused method modules (lib/db/*.js) written
- * as plain classes. Methods move verbatim (no object-literal commas) and run with
+ * CvDatabase can be composed from focused method modules written as plain
+ * classes. Methods move verbatim (no object-literal commas) and run with
  * `this` === the CvDatabase instance, so they share its prepared statements + db.
  */
 function applyMixin(TargetClass, MixinClass) {

@@ -3,9 +3,8 @@
  *
  * This is security- and contract-critical, so it lives in the render host (not
  * in any uploaded layout bundle) and is exposed to templates as the `tex`
- * filter (see ./filters.js). It MUST stay byte-for-byte identical to the
- * escaper that lib/serializer.js `sanitizeLatex` wired into the legacy
- * generator, or the builtin layout's golden-equivalence test breaks.
+ * filter. It MUST stay byte-for-byte identical to the legacy generator's
+ * `sanitizeLatex`, or the builtin layout's golden-equivalence test breaks.
  *
  * Behaviour (matched to the legacy wired path):
  *   - escapes the bare specials  # $ % & _ ^  by backslash-prefixing them

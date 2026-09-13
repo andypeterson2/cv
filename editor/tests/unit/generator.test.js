@@ -312,9 +312,7 @@ describe('generateAll', () => {
     buildDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-test-build-'));
     templatesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-test-templates-'));
     assetsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-test-assets-'));
-    // Create a fake awesome-cv.cls
     fs.writeFileSync(path.join(templatesDir, 'awesome-cv.cls'), '% fake cls', 'utf-8');
-    // Create a fake asset
     fs.writeFileSync(path.join(assetsDir, 'profile.jpg'), 'fakejpg', 'utf-8');
   });
 

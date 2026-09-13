@@ -9,8 +9,8 @@
  * works over the bind mount because it reads metadata instead of waiting for
  * filesystem events.
  *
- * Wired via package.json "dev": "node dev-watch.cjs". Outside Docker (native
- * dev), `node --watch server.js` is fine; this is only needed for the container.
+ * Outside Docker (native dev), plain `node --watch` is fine; this polling
+ * watcher is only needed for the container.
  */
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');

@@ -1,8 +1,6 @@
 /**
- * Pure row/shape/text helpers for the SQLite access layer. Extracted from db.js
- * (no `this`, no SQL) so the data layer can be split into focused method modules
- * (see db/settings.js, and the documented follow-up for tags/variants/import)
- * that all share one helper source.
+ * Pure row/shape/text helpers for the SQLite access layer (no `this`, no SQL),
+ * shared by CvDatabase and all of its method modules.
  */
 
 function rowsToSettings(rows) {
@@ -74,7 +72,8 @@ function mapDocToVariantSections(docRows, sectionIdBySlug) {
  * are folded so "Front End", "front_end", and "front-end" converge — but
  * distinct words are never stemmed or merged ("java" ≠ "javascript"). Anything
  * looser (typos, true synonyms) is handled by fuzzy search + the alias map, not
- * here. Mirrored by the frozen snapshot in migrations/008_fuzzy_tags.js.
+ * here. Stored tags were normalized by a frozen copy of this function, so a
+ * change here needs a new migration to re-normalize existing rows.
  */
 function normTag(t) {
   return String(t)
@@ -83,8 +82,8 @@ function normTag(t) {
     .trim()
     .toLowerCase()
     .replace(/[\s_]+/g, '-') // unify whitespace / underscores → hyphen
-    .replace(/-+/g, '-') // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 /** Flatten an entry's string field values into one text blob for suggestion. */

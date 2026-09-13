@@ -3,7 +3,7 @@
  * candidate tags drawn from a target vocabulary. Powers the /tags/suggest
  * endpoint and the cv_suggest_tags MCP tool.
  *
- * IMPORTANT — same invariant as lib/fuzzy.js: this is DISCOVERY/AUTHORING only.
+ * IMPORTANT — like fuzzy tag search, this is DISCOVERY/AUTHORING only.
  * It returns CANDIDATES; it never writes a tag and never invents one outside
  * the supplied vocabulary. Whatever an author/LLM then chooses is written
  * through db.addEntryTags/addItemTags → normTag + alias fold, and variant

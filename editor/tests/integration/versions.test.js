@@ -1,5 +1,5 @@
 /**
- * Integration tests for the version-history endpoints (ADR-006 increment 1):
+ * Integration tests for the version-history endpoints:
  * POST/GET /persons/:pid/versions and POST /persons/:pid/versions/:vid/restore.
  * In-memory DB; tokenAuth is disabled (no CV_EDITOR_TOKEN) so these cover routing,
  * validation, and the snapshot→restore round-trip over HTTP — the auth gating is

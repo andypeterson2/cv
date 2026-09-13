@@ -1,7 +1,7 @@
 /**
- * Verification / contract harness (P2). The dynamic xelatex step is injected as
- * a stub so static + security + orchestration are tested without a TeX install;
- * real-compile coverage runs in the container / P3 upload path.
+ * Verification / contract harness. The dynamic xelatex step is injected as a
+ * stub so static + security + orchestration are tested without a TeX install;
+ * real-compile coverage runs in the container / upload path.
  */
 const fs = require('fs');
 const os = require('os');

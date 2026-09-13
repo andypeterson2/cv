@@ -49,9 +49,8 @@ function isAllowedPath(pathname: string): boolean {
   return false;
 }
 
-// The OAuth endpoints a single source might hammer (brute-force / DoS). `/mcp` is
-// token-gated and legit sessions are chatty, and `/.well-known/*` is cheap discovery
-// Claude must reach — so neither is rate-limited.
+// OAuth endpoints a single source might hammer. `/mcp` (token-gated, chatty) and
+// `/.well-known/*` (cheap discovery clients must reach) are deliberately not limited.
 const RATE_LIMITED_PATHS = new Set(['/authorize', '/callback', '/token', '/register']);
 
 const PDF_LINK_TTL_MS = 5 * 60 * 1000;

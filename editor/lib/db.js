@@ -97,7 +97,7 @@ class CvDatabase {
         'INSERT INTO compile_usage (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1',
       ),
 
-      // Versions (ADR-006) + the per-person content reset restore uses
+      // Versions + the per-person content reset restore uses
       insertVersion: p(
         'INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ),
@@ -330,7 +330,7 @@ class CvDatabase {
     };
   }
 
-  // Settings methods (global + per-person) are mixed in from ./db/settings.js.
+  // Settings methods (global + per-person) are mixed in at the bottom of this file.
 
   // ---------------------------------------------------------------------------
   // Persons
@@ -618,10 +618,10 @@ class CvDatabase {
     tx();
   }
 
-  // Tag subsystem (tags / aliases / catalog / suggestion) lives in ./db/tags.js.
+  // Tag subsystem (tags / aliases / catalog / suggestion) is a mixin.
 
   // Variant subsystem (CRUD / rules / sections / overrides / letters / resolution)
-  // lives in ./db/variants.js.
+  // is a mixin.
 
   // ---------------------------------------------------------------------------
   // Aggregate read for MCP / UI — full main + variant summaries
@@ -652,7 +652,7 @@ class CvDatabase {
   /**
    * The person that owns an id-addressed resource, or null if it doesn't exist.
    * `kind` ∈ variant | section | entry | item. Used by the auth gate to decide
-   * whether a read exposes a non-public person's data (see lib/auth.js).
+   * whether a read exposes a non-public person's data.
    */
   ownerPersonId(kind, id) {
     const stmt = {
@@ -666,7 +666,7 @@ class CvDatabase {
     return row ? row.pid : null;
   }
 
-  // Export / import / seeding lives in ./db/import-export.js.
+  // Export / import / seeding is a mixin.
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -678,14 +678,11 @@ class CvDatabase {
 }
 
 // ---------------------------------------------------------------------------
-// Row / shape helpers
+// Method mixins
 // ---------------------------------------------------------------------------
 
-// Row / shape / text helpers now live in ./db/helpers.js (imported at the top).
-
-// Method clusters live in lib/db/ and are mixed onto the prototype here so the
-// public surface (and getDb()) is unchanged. Settings is extracted; the larger
-// clusters (tags, variants, import/export) follow this same pattern.
+// Each method cluster is its own module, mixed onto the prototype so the public
+// surface (and getDb()) stays a single CvDatabase class.
 Object.assign(CvDatabase.prototype, require('./db/settings'));
 applyMixin(CvDatabase, require('./db/tags'));
 applyMixin(CvDatabase, require('./db/variants'));
