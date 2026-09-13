@@ -1,9 +1,9 @@
 /**
- * Golden equivalence — the keystone P0 test.
+ * Golden equivalence — the keystone render test.
  *
- * The new render host (lib/render/host.renderVariant) driving the builtin
- * awesome-cv Nunjucks bundle must produce LaTeX equivalent to the legacy
- * lib/generator.generateAll(). The legacy generator is the ORACLE.
+ * The render host's renderVariant() driving the builtin awesome-cv Nunjucks
+ * bundle must produce LaTeX equivalent to the legacy generator's generateAll().
+ * The legacy generator is the ORACLE.
  *
  * The legacy path writes a multi-file document (\input{data.tex} + per-section
  * files); the new path renders one self-contained .tex. We compare by inlining

@@ -12,21 +12,19 @@
  *                         ├─ variant_sections          (section presence/order)
  *                         └─ variant_letter_sections   (cover-letter body)
  *
- * Backfill is per-person from each persons.data blob (the standalone
- * scripts/pre-007-snapshot.cjs must have flushed the active person's working
- * tables into its blob FIRST, so every blob is authoritative here).
+ * Backfill is per-person from each persons.data blob (the standalone pre-007
+ * snapshot script must have flushed the active person's working tables into
+ * its blob FIRST, so every blob is authoritative here).
  *
- * The old content tables are RENAMEd to *_old and kept — a later 008 drops
- * them once the new app is confirmed. persons.data is also left in place
- * (dead on arrival) until 008.
+ * The old content tables are RENAMEd to *_old and kept for a later migration
+ * to drop. persons.data is also left in place (dead on arrival).
  *
- * Pattern mirrors 005_split_units.js (rename → create → copy → drop), minus
- * the drop. FK enforcement is toggled OFF for the rewrite (you cannot rename
- * cross-referencing tables safely with it on) and a manual foreign_key_check
- * gates the commit.
+ * Pattern: rename → create → copy, with no drop. FK enforcement is toggled OFF
+ * for the rewrite (you cannot rename cross-referencing tables safely with it on)
+ * and a manual foreign_key_check gates the commit.
  */
 
-// Self-contained legacy→semantic type map (do NOT import lib/latex-type-map —
+// Self-contained legacy→semantic type map (do NOT import the app's type map —
 // migrations must be frozen and independent of evolving app code). Mirrors
 // LEGACY_TYPE_MAP at the time of writing; identity for already-semantic types.
 const LEGACY_TYPE = {
@@ -227,9 +225,8 @@ module.exports = function migrate(db) {
         }
       }
 
-      // 4. Drop now-duplicated personal/coverletter rows from the global settings
-      //    table (they live in person_settings now). Keep style/spacing/fonts and
-      //    _active_person_id.
+      // 4. Personal/coverletter rows belong in person_settings: drop them from the
+      //    global settings table (style/spacing/fonts and _active_person_id stay).
       db.exec("DELETE FROM settings WHERE key LIKE 'personal.%' OR key LIKE 'coverletter.%'");
 
       // 5. Validate before commit.

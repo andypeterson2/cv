@@ -1,11 +1,11 @@
 /**
- * Version history for CvDatabase (ADR-006 increment 1). A checkpoint captures the
- * person's authoritative export blob; restore clears the person's content and
+ * Version history for CvDatabase. A checkpoint captures the person's
+ * authoritative export blob; restore clears the person's content and
  * re-imports the blob — keeping the person row (and its version history) intact.
  * Deleting the person instead would cascade its versions away, so restore never
  * touches the persons/versions rows, only content.
  *
- * Mixed onto the prototype (see db.js / applyMixin); methods run with
+ * Mixed onto the CvDatabase prototype; methods run with
  * `this` === the CvDatabase instance, sharing its prepared statements + db handle.
  */
 const { createHash } = require('crypto');
@@ -13,7 +13,7 @@ const { createHash } = require('crypto');
 class Versions {
   /**
    * Snapshot the person's current content as a checkpoint on `branch`, descending
-   * from `parent`. Returns the new id, or null. (ADR-006 inc 3 adds branch/parent.)
+   * from `parent`. Returns the new id, or null.
    */
   createVersion(personId, label = '', branch = 'main', parent = null) {
     const doc = this.getPersonExport(personId);
@@ -95,8 +95,8 @@ class Versions {
    * per-person tables are cleared directly. persons + versions are untouched.
    */
   _resetPersonContent(personId) {
-    this._stmts.clearSections.run(personId); // → entries → items → *_tags, *_overrides, variant_sections
-    this._stmts.clearVariants.run(personId); // → rules, sections, overrides, letter sections + header
+    this._stmts.clearSections.run(personId);
+    this._stmts.clearVariants.run(personId);
     this._stmts.clearPersonSettings.run(personId); // personal.* + coverletter.*
     this._stmts.clearTagAliases.run(personId);
     this._stmts.clearTagCatalog.run(personId);

@@ -1,10 +1,10 @@
 /**
  * Load + structurally validate a layout bundle from disk.
  *
- * A bundle is a directory containing layout.json (manifest), templates/, and
- * class/ (the .cls/.sty/fonts copied into each compile). Deep manifest
- * validation + the security scan live in ./verify.js (P2); this module just
- * reads the manifest, sanity-checks the load-bearing fields, and provides
+ * A bundle is a directory containing a JSON manifest, templates/, and class/
+ * (the .cls/.sty/fonts copied into each compile). Deep manifest validation +
+ * the security scan belong to the verification gate; this module just reads
+ * the manifest, sanity-checks the load-bearing fields, and provides
  * bundle-jailed path resolution so a manifest can never point outside its own
  * directory.
  */

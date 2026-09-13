@@ -1,12 +1,12 @@
 /**
- * LinkedIn sync tracking for CvDatabase (migration 015). The pure exporter
- * (lib/linkedin.js) turns a resolved variant into work-history blocks, each with a
- * fingerprint; this stores the fingerprint that was last pasted, per experience
- * entry, and reports drift. The comparison is the point — after any edit, status
- * names exactly which positions are now stale on LinkedIn.
+ * LinkedIn sync tracking for CvDatabase. The pure LinkedIn exporter turns a
+ * resolved variant into work-history blocks, each with a fingerprint; this stores
+ * the fingerprint that was last pasted, per experience entry, and reports drift.
+ * The comparison is the point — after any edit, status names exactly which
+ * positions are now stale on LinkedIn.
  *
- * Mixed onto the prototype (see db.js / applyMixin); `this` === the CvDatabase
- * instance, sharing its prepared statements + db handle.
+ * Mixed onto the CvDatabase prototype; `this` === the CvDatabase instance,
+ * sharing its prepared statements + db handle.
  */
 class Linkedin {
   /** The person that owns a variant, or null — lets a variant-scoped tool key the

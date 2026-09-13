@@ -1,10 +1,10 @@
 /**
- * Boot seed: register the builtin layout bundles (editor/layouts/<id>) as DB
- * rows so they're listable, selectable, and FK-referenceable, and set the
- * global default if none is set. Idempotent — safe to run on every startup.
+ * Boot seed: register the builtin layout bundles as DB rows so they're
+ * listable, selectable, and FK-referenceable, and set the global default if
+ * none is set. Idempotent — safe to run on every startup.
  *
  * Builtin bundle FILES stay read-only under BUILTIN_LAYOUTS_DIR; only metadata
- * is written to the DB. (Uploaded bundles, P3, live under CV_LAYOUTS_DIR.)
+ * is written to the DB. (Uploaded bundles live under CV_LAYOUTS_DIR.)
  */
 const fs = require('fs');
 const path = require('path');

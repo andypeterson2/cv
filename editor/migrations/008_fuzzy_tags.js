@@ -12,13 +12,12 @@
  *      "machine_learning" must collapse to "front-end" / "machine-learning" to
  *      match newly-written tags. Collisions are de-duplicated.
  *
- * The normalizer here is a FROZEN SNAPSHOT of lib/db.js normTag at the time of
- * writing — migrations must not import evolving app code (mirrors 007's note on
- * latex-type-map).
+ * The normalizer here is a FROZEN SNAPSHOT of the app's normTag at the time of
+ * writing — migrations must not import evolving app code.
  */
 
-// Frozen snapshot of lib/db.js normTag (008). Keep in sync only by adding a
-// LATER migration, never by editing this one.
+// Frozen snapshot of the app's normTag. Keep in sync only by adding a LATER
+// migration, never by editing this one.
 function normTag(t) {
   return String(t)
     .normalize('NFKD')
@@ -26,8 +25,8 @@ function normTag(t) {
     .trim()
     .toLowerCase()
     .replace(/[\s_]+/g, '-') // unify whitespace / underscores → hyphen
-    .replace(/-+/g, '-') // collapse repeated hyphens
-    .replace(/^-+|-+$/g, ''); // trim leading/trailing hyphens
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 const DDL = `

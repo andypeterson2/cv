@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS sections (
   title TEXT NOT NULL DEFAULT ''
 );
 
--- Entries: ordered items within a section.
--- Fields stored as JSON — section type determines expected keys.
+-- Entries: ordered items within a section; JSON fields keyed by section type.
 --   cventries:    { "position", "organization", "location", "date" }
 --   cvskills:     { "category", "skills" }
 --   cvhonors:     { "award", "issuer", "location", "date" }

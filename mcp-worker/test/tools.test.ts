@@ -49,13 +49,14 @@ describe('cv tool catalog (moved into the Worker)', () => {
     expect(validate('cv_health', { x: 1 }).valid).toBe(false); // additionalProperties:false
     expect(validate('cv_get_main', { person_id: 'x' }).valid).toBe(false); // non-integer id
     expect(validate('cv_get_main', {}).valid).toBe(false); // missing required
+    // Bad enums, an empty name (minLength), and a missing person_id.
     expect(validate('cv_create_variant', { person_id: 1, name: 'X', kind: 'bad' }).valid).toBe(
       false,
-    ); // bad enum
-    expect(validate('cv_tag', { target: 'section', id: 1, tags: ['x'] }).valid).toBe(false); // bad enum
-    expect(validate('cv_create_person', { name: '' }).valid).toBe(false); // minLength
-    expect(validate('cv_export_linkedin', {}).valid).toBe(false); // person_id required
-    expect(validate('cv_export_linkedin', { person_id: 5, format: 'bad' }).valid).toBe(false); // bad enum
+    );
+    expect(validate('cv_tag', { target: 'section', id: 1, tags: ['x'] }).valid).toBe(false);
+    expect(validate('cv_create_person', { name: '' }).valid).toBe(false);
+    expect(validate('cv_export_linkedin', {}).valid).toBe(false);
+    expect(validate('cv_export_linkedin', { person_id: 5, format: 'bad' }).valid).toBe(false);
   });
 
   it('accepts well-formed args', () => {

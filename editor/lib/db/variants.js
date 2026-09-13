@@ -1,8 +1,8 @@
 /**
  * Variant subsystem for CvDatabase: variant CRUD, tag rules (+ author-time fuzzy
  * expansion), section lists, per-entry/item overrides, cover-letter paragraphs,
- * and resolution (variant → compile-ready data for lib/generator). Mixed onto the
- * prototype (see db.js / applyMixin); methods run with `this` === the instance.
+ * and resolution (variant → compile-ready data for the LaTeX generator). Mixed
+ * onto the CvDatabase prototype; methods run with `this` === the instance.
  */
 const { rowToVariant, stripPrefix, combineUnits, sortKey, bySort } = require('./helpers');
 const { VARIANT_KINDS: KINDS } = require('@cv/constants');

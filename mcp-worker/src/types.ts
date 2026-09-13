@@ -22,10 +22,10 @@ export interface Env {
 
   // cv-editor (Railway) REST base.
   CV_EDITOR_URL: string;
-  // Shared front-door secret cv's origin-guard checks (secret). Also the proof that
-  // lets this Worker inject a verified per-caller X-User-Id (see cv lib/current-user.js).
+  // Shared front-door secret cv's origin guard checks. Also the proof that lets this
+  // Worker inject a verified per-caller X-User-Id.
   CV_ORIGIN_SECRET?: string;
-  // CF Access service-token (Stage 6, tech-debt #12): presented to cv's tunnel host
+  // CF Access service-token: presented to cv's tunnel host
   // when both are set, so its Access policy admits only this front door.
   CF_ACCESS_CLIENT_ID?: string;
   CF_ACCESS_CLIENT_SECRET?: string;
@@ -46,8 +46,7 @@ export interface Env {
 export type CvProps = {
   email: string;
   name?: string;
-  // The cv user id this Google identity resolves to (POST /api/auth/upsert-user). Every
-  // cv call is scoped to it via X-User-Id — no shared owner token. (Admin-only for now,
-  // so in practice this is the owner mapped to @owner; the plumbing is fully per-user.)
+  // The cv user id this Google identity resolves to; every cv call is scoped to it via
+  // X-User-Id. Admin-only for now, so in practice it is the owner mapped to @owner.
   cvUserId: number;
 };

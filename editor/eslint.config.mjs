@@ -1,7 +1,5 @@
-// Flat config ON PURPOSE (not .eslintrc.*): this repo's .gitignore leads with
-// `.*`, so a dotfile-named config would silently never be committed.
-// Scope: this package only — ../shared/constants.js sits outside the flat
-// config's base path (it is exercised by this package's tests instead).
+// Flat config on purpose: the repo gitignore leads with `.*`, so a dotfile-named
+// config would never be committed. Shared code outside this package is unlinted.
 import js from '@eslint/js';
 import globals from 'globals';
 import sonarjs from 'eslint-plugin-sonarjs';
@@ -37,7 +35,7 @@ export default [
   },
   {
     // Vitest suites are ESM, run in happy-dom, and use vitest's global API
-    // (vitest.config.js sets globals: true).
+    // (globals: true).
     files: ['tests/**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
