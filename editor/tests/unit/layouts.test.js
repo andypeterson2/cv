@@ -1,5 +1,5 @@
 /**
- * Layout persistence + selection (P1).
+ * Layout persistence + selection.
  */
 const CvDatabase = require('../../lib/db');
 const { seedBuiltinLayouts } = require('../../lib/render/seed');

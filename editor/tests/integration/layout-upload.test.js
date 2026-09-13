@@ -1,5 +1,5 @@
 /**
- * Upload + management API (P3). Covers the rejection paths that fail at the
+ * Upload + management API. Covers the rejection paths that fail at the
  * static/security gate BEFORE the dynamic xelatex step, so they run without a
  * TeX install. The happy path (which compiles) is covered by the verify unit
  * tests (stubbed compile) + the in-container smoke.

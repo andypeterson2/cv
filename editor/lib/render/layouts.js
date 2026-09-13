@@ -1,14 +1,10 @@
 /**
- * Layout bundle location resolver.
- *
- * P0 only knows the read-only builtin bundles baked next to the app
- * (editor/layouts/<id>). P1/P3 extend this with a writable store
- * (CV_LAYOUTS_DIR) seeded from the builtins, plus DB-backed selection.
+ * Layout bundle location resolver: read-only builtin bundles baked next to the
+ * app, plus a writable store (CV_LAYOUTS_DIR) for uploaded bundles.
  */
 const path = require('path');
 
-// editor/layouts — read-only builtin bundles, shipped with the image via the
-// `COPY editor/` layer.
+// Read-only builtin bundles, shipped inside the image with the editor source.
 const BUILTIN_LAYOUTS_DIR = path.join(__dirname, '..', '..', 'layouts');
 
 // Writable store for uploaded bundles. Deploy sets CV_LAYOUTS_DIR=/data/layouts

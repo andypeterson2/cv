@@ -1,8 +1,7 @@
 /**
- * Pure cosine-similarity ranking. Dependency-free so it's unit-testable without
- * loading any embedding model. Used by lib/embed-scorer.js (the optional Phase-B
- * semantic scorer); kept separate precisely so tests can exercise the ranking
- * math with fixed fixtures.
+ * Pure cosine-similarity ranking for the optional semantic tag scorer.
+ * Dependency-free so tests can exercise the ranking math with fixed fixtures
+ * without loading any embedding model.
  */
 
 function dot(a, b) {

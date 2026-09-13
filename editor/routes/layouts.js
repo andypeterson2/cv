@@ -13,7 +13,7 @@ const { loadLayout } = require('../lib/render/loader');
 const { bundleChecksum } = require('../lib/render/seed');
 const { uploadedLayoutDir, layoutDirForRow, DEFAULT_LAYOUT_ID } = require('../lib/render/layouts');
 
-// A bundle root is a dir containing layout.json — either the zip root, or a
+// A bundle root is the dir holding the manifest — either the zip root, or a
 // single top-level folder inside it (the common "zip of a folder" shape).
 function findBundleRoot(dir) {
   if (fs.existsSync(path.join(dir, 'layout.json'))) return dir;
@@ -47,8 +47,8 @@ function upsertFromManifest(db, manifest, { status, source, checksum, report }) 
 }
 
 /**
- * Layouts API. P3: upload (gated by the verification harness), on-demand
- * re-verify, and delete, plus the P1 list / get / global-default selection.
+ * Layouts API: upload (gated by the verification harness), on-demand re-verify,
+ * and delete, plus list / get / global-default selection.
  */
 module.exports = function createLayoutsRouter(getDb, projectRoot) {
   const router = express.Router();

@@ -9,10 +9,10 @@
  * data explicitly with `| tex`. The verification gate compiles a specials-heavy
  * fixture, so a layout that forgets to escape fails the contract.
  *
- * P0 renders synchronously in-process. Uploaded templates are untrusted code
- * (a runaway loop would block the event loop); P3 swaps the body of
- * renderTemplate() for a worker-thread render with a hard timeout + output cap.
- * The signature stays stable so nothing downstream changes.
+ * renderTemplate() renders synchronously in-process, for installed layouts that
+ * passed verification. Candidate templates are untrusted code (a runaway loop
+ * would block the event loop), so the verification gate renders them through
+ * renderInWorker(): a worker thread with a hard timeout + output cap.
  */
 const path = require('path');
 const { Worker } = require('worker_threads');
@@ -38,11 +38,8 @@ function makeEnv(layoutDir) {
   const env = new nunjucks.Environment(loader, {
     autoescape: false,
     throwOnUndefined: false,
-    // A standalone block tag (\n<% ... %>\n) must not leave a blank line:
-    // a blank line is a \par, and LaTeX's non-\long argument macros (e.g.
-    // awesome-cv's \cventry) abort with "Paragraph ended before … complete"
-    // if a \par lands inside their arguments. trimBlocks+lstripBlocks make
-    // own-line control flow whitespace-transparent.
+    // Own-line block tags must not leave a blank line: that \par aborts non-\long
+    // macros such as \cventry when it lands in their arguments.
     trimBlocks: true,
     lstripBlocks: true,
     tags: TAGS,

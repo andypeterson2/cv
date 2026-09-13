@@ -6,7 +6,7 @@
  * few precomputed booleans) — never LaTeX strings. All LaTeX emission and
  * escaping happens in the templates (via the host `tex` filter).
  *
- * It centralises the prep that used to be scattered through generator.js:
+ * It centralises this prep:
  *   - photo:        photoEnabled/photoFile → { enabled, file } | null
  *   - socials:      SOCIAL_CATALOG-driven flattening into an ordered array
  *   - education:    program + major → position (the SECTION_TYPE_MAP combine)
@@ -38,9 +38,8 @@ function buildPersonal(personalIn) {
   delete p.photoEnabled;
   delete p.photoFile;
 
-  // Socials: flatten the catalog into an ordered list of { key, values:[...] }.
-  // 2-arg socials emit both args (possibly empty) when EITHER is set; 1-arg
-  // socials emit only when set — matching the legacy serializeData loop.
+  // Socials: an ordered list of { key, values:[...] }. 2-arg socials emit both args
+  // (possibly empty) when EITHER is set; 1-arg socials emit only when set.
   const socials = [];
   for (const cat of SOCIAL_CATALOG) {
     if (cat.args === 2) {
@@ -64,9 +63,8 @@ function buildSection(section) {
   const out = { id: section.id, type: section.type, latexType, title: section.title };
 
   if (latexType === 'cvparagraph') {
-    // A paragraph section may hold several entries — each is its own paragraph.
-    // `texts` is the full ordered list; `text` stays as the first entry for
-    // backward compatibility with layouts authored against contextVersion 1.
+    // Each entry is its own paragraph. `text` (the first) stays for layouts
+    // authored against contextVersion 1.
     out.texts = (section.entries || []).map((e) => e.fields.text || '').filter((t) => t !== '');
     out.text = out.texts[0] || '';
     return out;
@@ -88,10 +86,8 @@ function buildSection(section) {
     if (latexType === 'cventries') {
       entry.items = (e.items || []).map((i) => i.content);
     } else if (latexType === 'cvskills' && e.items && e.items.length) {
-      // Skills are item rows (migration 016) — join the resolved items into the
-      // template's `skills` arg, so per-skill tag/omit/reorder (applied upstream
-      // in resolveVariant) flows through. Falls back to the legacy fields.skills
-      // string for any un-split entry.
+      // Join resolved skill items so per-skill tag/omit/reorder flows through;
+      // an un-split entry keeps its fields.skills string.
       entry.skills = e.items.map((i) => i.content).join(', ');
     }
     return entry;
