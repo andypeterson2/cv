@@ -58,10 +58,11 @@ describe('multi-tenancy — per-user isolation', () => {
     expect(db.renamePersonForUser(pb, 'renamed', b)).toBe(true);
     expect(db.getPersonForUser(pb, b).name).toBe('renamed');
 
-    expect(db.deletePersonForUser(pb, a)).toBe(false); // stranger can't delete
-    expect(db.getPersonForUser(pb, b)).toBeTruthy(); // still there
-    expect(db.deletePersonForUser(pb, b)).toBe(true); // owner can
-    expect(db.getPersonForUser(pb, b)).toBeNull(); // gone
+    // A stranger's delete no-ops; the owner's removes the person.
+    expect(db.deletePersonForUser(pb, a)).toBe(false);
+    expect(db.getPersonForUser(pb, b)).toBeTruthy();
+    expect(db.deletePersonForUser(pb, b)).toBe(true);
+    expect(db.getPersonForUser(pb, b)).toBeNull();
   });
 
   test('upsertUser creates a row, then updates the profile for the same google_sub', () => {
@@ -198,7 +199,7 @@ describe('multi-tenancy — owner adoption (phase 2)', () => {
     const mine = db.getPersonsForUser(ownerId).map((p) => p.id);
     expect(mine).toContain(pre); // the pre-existing owner résumé
     expect(mine).toContain(theirs); // and anything made under the stray account
-    expect(db.ownerUserId()).toBe(ownerId); // role-based lookup still resolves
+    expect(db.ownerUserId()).toBe(ownerId);
   });
 });
 
@@ -219,9 +220,10 @@ describe('per-user compile quota (migration 019)', () => {
     const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com', name: 'B' });
     db.bumpCompileQuota(a, 2, '2026-08-18');
     db.bumpCompileQuota(a, 2, '2026-08-18');
-    expect(db.bumpCompileQuota(a, 2, '2026-08-18').ok).toBe(false); // A exhausted for the day
-    expect(db.bumpCompileQuota(b, 2, '2026-08-18').ok).toBe(true); // B is independent
-    expect(db.bumpCompileQuota(a, 2, '2026-08-19').ok).toBe(true); // A resets the next day
+    // A is exhausted for the day, B is independent, and A resets the next day.
+    expect(db.bumpCompileQuota(a, 2, '2026-08-18').ok).toBe(false);
+    expect(db.bumpCompileQuota(b, 2, '2026-08-18').ok).toBe(true);
+    expect(db.bumpCompileQuota(a, 2, '2026-08-19').ok).toBe(true);
   });
 });
 

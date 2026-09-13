@@ -1,5 +1,5 @@
 /**
- * Integration tests for the layouts API + per-variant layout selection (P1).
+ * Integration tests for the layouts API + per-variant layout selection.
  */
 const http = require('http');
 const CvDatabase = require('../../lib/db');

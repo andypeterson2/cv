@@ -26,8 +26,8 @@
 const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
 
 function originGuard(secret, { enforce = false, log = console.warn } = {}) {
-  // A SET (comma-separated) so the secret rotates without an outage window — see
-  // lib/origin-secret.js. A single value behaves as a plain equality check.
+  // A SET (comma-separated) so the secret rotates without an outage window.
+  // A single value behaves as a plain equality check.
   const secrets = parseOriginSecrets(secret);
   return function (req, res, next) {
     if (secrets.length === 0) return next(); // disabled → open (local dev / tests)

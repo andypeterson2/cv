@@ -1,6 +1,6 @@
 /**
  * Canonical Jane Doe seed/demo data.
- * Used by both the backend (db.js seedJaneDoe) and frontend (demo mode).
+ * Used by both the backend (seedJaneDoe) and frontend (demo mode).
  */
 
 const JANE_DOE_DATA = {

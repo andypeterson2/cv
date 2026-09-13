@@ -28,7 +28,6 @@ const GOOGLE_FETCH_TIMEOUT_MS = 8000;
 
 // Where an OAuth authorization code may be redirected. DCR is public, so this — not the
 // client's self-declared redirect_uri — is the real backstop against code interception.
-// Add a host here if a new legitimate client (a different Claude domain) ever needs it.
 const ALLOWED_REDIRECT_HOSTS = new Set(['claude.ai', 'claude.com', 'localhost', '127.0.0.1']);
 
 interface GoogleTokens {
@@ -60,8 +59,8 @@ function adminEmails(env: Env): string[] {
 /**
  * Resolve (create-or-adopt) the cv user for a Google identity, returning its id — the
  * same POST /api/auth/upsert-user the gateway uses, keyed on the stable Google `sub`.
- * Every subsequent cv call is scoped to this id via X-User-Id, so the MCP no longer
- * leans on the shared owner token. Returns null if cv is unreachable/misconfigured.
+ * Every subsequent cv call is scoped to this id via X-User-Id, so the MCP never
+ * relies on a shared owner token. Returns null if cv is unreachable/misconfigured.
  */
 async function upsertCvUser(
   env: Env,
@@ -106,9 +105,8 @@ function securityHeaders(): Headers {
   const csp = [
     "default-src 'none'",
     "style-src 'self' 'unsafe-inline'",
-    // MUST allow Google: the consent POST redirects (302) to accounts.google.com, and
-    // modern browsers enforce form-action against the REDIRECT target — 'self' alone
-    // silently blocks the hop to Google (the "Continue with Google click does nothing" bug).
+    // MUST allow Google: browsers enforce form-action against the consent POST's 302
+    // target, so 'self' alone silently blocks the hop to accounts.google.com.
     "form-action 'self' https://accounts.google.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
@@ -164,10 +162,8 @@ export const GoogleAuthHandler = {
     if (url.pathname === '/authorize') {
       // GET → show consent, embedding the parsed auth request in a signed token.
       if (request.method === 'GET') {
-        // parseAuthRequest THROWS on a malformed/incomplete request (no client_id, bad
-        // response_type — or just a scanner poking /authorize). Unhandled, that's an
-        // uncaught Worker exception: the caller gets an opaque Cloudflare 1101 and the
-        // noise buries real errors. A bad request is a 400.
+        // parseAuthRequest THROWS on a malformed request (or a scanner poking /authorize);
+        // uncaught, that is an opaque Cloudflare 1101. A bad request is a 400.
         let oauthReq;
         try {
           oauthReq = await provider.parseAuthRequest(request);
@@ -274,9 +270,8 @@ export const GoogleAuthHandler = {
       const sub = String(profile.sub || '');
       if (!sub) return new Response('Google did not return a stable subject id', { status: 502 });
 
-      // Resolve this identity to its OWN cv account (create-or-adopt). cv then scopes
-      // every call to it via X-User-Id — no shared owner token. Still admin-gated above,
-      // so today this is the owner mapping to @owner; the plumbing is per-user.
+      // Resolve this identity to its OWN cv account (create-or-adopt); cv scopes every call
+      // to it via X-User-Id. Admin-gated above, so in practice this maps the owner to @owner.
       const cvUserId = await upsertCvUser(env, { googleSub: sub, email, name: profile.name });
       if (cvUserId == null)
         return new Response('Could not provision your cv account — try again shortly.', {

@@ -2,8 +2,8 @@
  * Export / import / seeding for CvDatabase. Per-person export uses the normalized
  * "new" shape (overrides addressed by position so backups survive re-import);
  * import dispatches between the new shape and the legacy {documents} shape, and
- * seeding materializes Jane Doe on an empty DB. Mixed onto the prototype (see
- * db.js / applyMixin); methods run with `this` === the CvDatabase instance.
+ * seeding materializes Jane Doe on an empty DB. Mixed onto the CvDatabase
+ * prototype; methods run with `this` === the CvDatabase instance.
  */
 const { normTag, mapDocToVariantSections } = require('./helpers');
 const { getLatexType, normalizeType } = require('../latex-type-map');

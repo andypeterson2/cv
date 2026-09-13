@@ -49,16 +49,17 @@ app.getDb = function () {
 // Explicit (prefix, router) mount table. GET /api discovery reports fully-qualified
 // paths from this table instead of reverse-engineering Express's internal mount
 // regexps — those changed in Express 5 (path-to-regexp v8) and broke the old
-// hand-rolled router-stack walk. Order matters: the catch-all '/api' router is last.
+// hand-rolled router-stack walk. Order matters: the catch-all '/api' router
+// (catalog + health) is last.
 const API_ROUTERS = [
-  ['/api/settings', createSettingsRouter(getDb)], // global style/spacing/fonts
-  ['/api/persons', createPersonsRouter(getDb)], // persons + personal + sections/variants/tags scope
-  ['/api/sections', createSectionsRouter(getDb)], // section by id + its entries
-  ['/api/entries', createEntriesRouter(getDb)], // entry by id + its items + tags
-  ['/api/items', createItemsRouter(getDb)], // item by id + tags
-  ['/api/variants', createVariantsRouter(getDb, PROJECT_ROOT)], // variant by id + rules/sections/overrides/resolve/pdf
-  ['/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)], // layout list/get/upload/verify/delete + default
-  ['/api', createDataRouter(getDb)], // catalog + health
+  ['/api/settings', createSettingsRouter(getDb)],
+  ['/api/persons', createPersonsRouter(getDb)],
+  ['/api/sections', createSectionsRouter(getDb)],
+  ['/api/entries', createEntriesRouter(getDb)],
+  ['/api/items', createItemsRouter(getDb)],
+  ['/api/variants', createVariantsRouter(getDb, PROJECT_ROOT)],
+  ['/api/layouts', createLayoutsRouter(getDb, PROJECT_ROOT)],
+  ['/api', createDataRouter(getDb)],
 ];
 
 // HTTP status -> stable machine code for the error envelope.
@@ -147,9 +148,8 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 // API-only: the editor frontend is owned and served by the portal — no static serving.
 
-// Front-door user provisioning (multi-tenancy phase 2) — mounted BEFORE tokenAuth
-// because it carries no user token; it IS what establishes the user. Gated by the
-// shared front-door secret (X-Origin-Secret) inside the router.
+// Front-door user provisioning, mounted BEFORE tokenAuth: it carries no user token
+// because it establishes the user. Gated by X-Origin-Secret inside the router.
 app.use('/api/auth', createAuthRouter(getDb));
 
 // ---------------------------------------------------------------------------
@@ -187,9 +187,8 @@ app.use(
   }),
 );
 
-// Resolve the request → a user id (multi-tenancy phase 1). Runs after the token
-// gate, so only already-allowed requests reach it; every route reads `req.userId`
-// and the person layer scopes by it. Phase 2 swaps the resolution for a real session.
+// Resolve the request → `req.userId`, after the token gate so only allowed requests
+// reach it; every route reads it and the person layer scopes by it.
 app.use('/api', attachUser(getDb));
 
 // ---------------------------------------------------------------------------
@@ -222,13 +221,10 @@ app.use((err, req, res, _next) => {
 // ---------------------------------------------------------------------------
 
 if (require.main === module) {
-  // Eager DB init: build the database and run migrations at boot, BEFORE we listen.
-  // getDb() is otherwise lazy (first data request), and /health is DB-free — so a
-  // migration that crashes would leave the deploy health-check green while every data
-  // request 500s on a half-applied schema. Running it here turns that into a clean
-  // failed deploy: a non-zero exit before the port ever opens. Tests import `app`
-  // (require.main !== module) and inject their own DB via setDb, so this runs only
-  // for the real server process.
+  // Eager DB init: run migrations at boot, BEFORE listening. getDb() is otherwise lazy
+  // and /health is DB-free, so a crashing migration would pass the health check while
+  // data requests 500 on a half-applied schema; here it exits non-zero instead. Tests
+  // import `app` and inject their own DB via setDb, so this runs only for the server.
   try {
     getDb();
     console.log('Database initialized (migrations applied).');

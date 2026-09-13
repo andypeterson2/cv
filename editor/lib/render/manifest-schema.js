@@ -1,5 +1,5 @@
 /**
- * AJV schema for a layout bundle manifest (layout.json). Reused by the
+ * AJV schema for a layout bundle's JSON manifest. Reused by the
  * verification harness (static checks). `ajv` is already an app dependency.
  */
 const Ajv = require('ajv');

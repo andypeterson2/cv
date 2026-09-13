@@ -4,18 +4,14 @@
  * It exercises every semantic section type (→ all 5 LaTeX types), the
  * education program+major combine, bullets, empty fields, long values, every
  * arity of social link, LaTeX specials (& % $ # _ ^ ~ \) and unicode, plus a
- * cover letter. Both the P0 golden-equivalence test and the P2 verification
- * gate render it; a coverage guard test asserts it still covers every type in
- * latex-type-map.
+ * cover letter. Both the golden-equivalence test and the verification gate
+ * render it; a coverage guard test asserts it covers every mapped LaTeX type.
  *
  * Shape matches db.resolveVariant() output (what the render host consumes).
  */
 
-// Nasty-but-realistic CV text: every special the contract escaper handles
-// (& % $ # _ ^ ~), accented unicode, and an em-dash. NOT a bare backslash — the
-// wired escaper passes `\` through (to preserve intentional commands), so a
-// stray `\word` is an undefined control sequence in ANY layout, not a layout
-// defect. Intentional-command pass-through is exercised separately below.
+// Every special the escaper handles, accented unicode, and an em-dash. No bare
+// backslash: the escaper passes `\` through, so a stray `\word` breaks ANY layout.
 const SPECIALS = 'R&D: 100% of $5M, #1 a_b c^d ~approx — café résumé naïve';
 
 function basePersonal() {

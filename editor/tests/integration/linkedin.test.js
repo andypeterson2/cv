@@ -3,7 +3,7 @@
  * GET /persons/:pid/linkedin(/status) and POST /persons/:pid/linkedin/mark-synced.
  * In-memory DB, tokenAuth disabled (no CV_EDITOR_TOKEN) — covers routing, the
  * default-variant pick, format selection, and the export→mark→drift round-trip over
- * HTTP. The auth gating for these person-scoped routes is covered by auth.test.js.
+ * HTTP. The auth gating for these person-scoped routes is covered by the auth tests.
  */
 const http = require('http');
 const CvDatabase = require('../../lib/db');
