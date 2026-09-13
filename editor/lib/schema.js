@@ -65,9 +65,8 @@ const personalSchema = {
 // (the per-person `coverletter` schema was retired with its route — the header
 // is now per-variant, validated by `letterHeader`)
 
-// Import is intentionally permissive: accepts both the new export shape
-// ({personal, sections, variants, ...}) and the legacy shape ({personal,
-// sections, documents, coverletter}).
+// Import is intentionally permissive: the export shape ({personal, sections, variants,
+// ...}) and the legacy shape ({personal, sections, documents, coverletter}) both pass.
 const importSchema = { type: 'object', minProperties: 1 };
 
 // ---------------------------------------------------------------------------
@@ -300,7 +299,7 @@ const letterHeaderSchema = {
 };
 
 // ---------------------------------------------------------------------------
-// Versions (ADR-006)
+// Versions
 // ---------------------------------------------------------------------------
 
 // Only `label` is accepted; the checkpoint's content is snapshotted server-side

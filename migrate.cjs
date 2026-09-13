@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * One-time migration script: parse existing .tex files + data.json + resume-config.json
- * into the new SQLite database.
+ * One-time migration script: parse the existing .tex files plus the JSON
+ * personal data and resume config into the SQLite database.
  *
- * Usage: node migrate.js [--db <path>] [--dry-run]
+ * Usage: node <this script> [--db <path>] [--dry-run]
  */
 
 const path = require('path');
@@ -33,7 +33,7 @@ function migrate() {
   console.log(`Migrating to: ${dbPath}`);
   if (dryRun) console.log('(dry run — no DB will be written)\n');
 
-  // 1. Parse data.json
+  // 1. Parse personal data and metrics
   console.log('1. Parsing data.json...');
   const dataJson = JSON.parse(readFile('data.json'));
   const personal = dataJson.personal;
@@ -65,7 +65,7 @@ function migrate() {
     console.log(`   ${sectionId}: ${parsed.type}, ${entryCount} entries`);
   }
 
-  // 4. Parse resume-config.json
+  // 4. Parse the resume config
   console.log('\n4. Parsing resume-config.json...');
   let resumeConfig = { sectionOrder: [], sections: {} };
   if (fileExists('resume-config.json')) {

@@ -7,10 +7,8 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      // Gate the whole server surface (lib + routes), including currently-thin
-      // spots (embed-scorer's optional model path, the xelatex compile route) so
-      // they stay visible. Floors sit a few points below today's numbers
-      // (~84/72/80/86) — a regression ratchet, not a stretch goal. Raise over time.
+      // Gate all of lib + routes, thin spots included. Floors sit a few points
+      // below measured coverage: a regression ratchet, not a stretch goal.
       include: ['lib/**/*.js', 'routes/**/*.js'],
       thresholds: { statements: 75, branches: 60, functions: 72, lines: 78 },
     },

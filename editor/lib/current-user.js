@@ -24,15 +24,13 @@ function attachUser(
   getDb,
   { token = process.env.CV_EDITOR_TOKEN, originSecret = process.env.CV_ORIGIN_SECRET } = {},
 ) {
-  // Accepted front-door secrets (a SET, for zero-downtime rotation — see origin-secret.js).
+  // Accepted front-door secrets (a SET, for zero-downtime rotation).
   const originSecrets = parseOriginSecrets(originSecret);
   return function (req, _res, next) {
     const db = getDb();
 
-    // Phase 2: the gateway verifies the visitor's Google session and tells us WHICH
-    // user via X-User-Id. Trust it only from the front door — a matching
-    // X-Origin-Secret (the same proof cv's origin-guard checks) — so a direct caller
-    // can't spoof a user. Unset secret (local dev / tests) ⇒ the header is trusted.
+    // The gateway names the signed-in user via X-User-Id. Trust it only with a matching
+    // X-Origin-Secret so direct callers can't spoof a user; no secret set ⇒ trusted.
     const headerUser = readHeader(req, 'X-User-Id');
     if (headerUser) {
       const fromFrontDoor =

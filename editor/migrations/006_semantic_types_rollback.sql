@@ -1,5 +1,6 @@
 -- Manual rollback: semantic types → LaTeX types
--- Run only if you need to revert migration 006
+-- Run only if you need to revert migration 006, then clear its _migrations row.
+-- (The name below is a row value, not a file reference.)  windbag: ignore[CROSS_FILE_REF]
 -- DELETE FROM _migrations WHERE name = '006_semantic_types.js';
 
 UPDATE sections SET type = 'cventries' WHERE type IN ('experience', 'education', 'projects', 'presentations', 'leadership', 'volunteer', 'committees', 'extracurricular', 'writing');

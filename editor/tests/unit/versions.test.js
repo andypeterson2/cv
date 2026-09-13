@@ -1,5 +1,5 @@
 /**
- * Version history (ADR-006 increment 1): snapshot → list → restore round-trips the
+ * Version history: snapshot → list → restore round-trips the
  * whole person, and restore REPLACES (never appends) content while keeping the
  * person row and its history. :memory: DB, migrations auto-run — no file I/O.
  */

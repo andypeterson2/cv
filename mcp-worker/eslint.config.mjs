@@ -1,6 +1,5 @@
-// Flat config ON PURPOSE (not .eslintrc.*): this repo's .gitignore leads with
-// `.*`, so a dotfile-named config would silently never be committed.
-// Syntactic rules only — `npm run typecheck` (tsc strict) owns the type tier.
+// Flat config on purpose: the repo gitignore leads with `.*`, so a dotfile-named
+// config would never be committed. Syntactic rules only; tsc strict owns types.
 import tseslint from 'typescript-eslint';
 import sonarjs from 'eslint-plugin-sonarjs';
 
@@ -22,9 +21,8 @@ export default [
     plugins: { sonarjs },
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      // WARN, not error: the MCP tool payloads and OAuth responses are untyped
-      // JSON at the boundary (~31 sites). Typing that wire layer is a tracked
-      // refactor; tsc strict still checks everything the types do cover.
+      // WARN, not error: MCP tool payloads and OAuth responses are untyped JSON at
+      // the boundary; tsc strict still checks everything the types do cover.
       '@typescript-eslint/no-explicit-any': 'warn',
       ...complexityBudgets,
     },

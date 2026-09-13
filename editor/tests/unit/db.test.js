@@ -107,9 +107,10 @@ describe('Tags', () => {
 describe('Tag catalog + suggestion', () => {
   test('catalog upsert normalizes + alias-folds the tag and dedupes on PK', () => {
     db.setTagAlias(pid, 'fe', 'frontend');
-    db.setCatalogTag(pid, 'Front End', { category: 'skill' }); // → front-end (normalized)
-    db.setCatalogTag(pid, 'fe', { description: 'aliased' }); // → frontend (alias-folded)
-    db.setCatalogTag(pid, 'frontend', { description: 'updated' }); // upsert same PK
+    // Stored as front-end (normalized) and frontend (alias-folded); the last call upserts.
+    db.setCatalogTag(pid, 'Front End', { category: 'skill' });
+    db.setCatalogTag(pid, 'fe', { description: 'aliased' });
+    db.setCatalogTag(pid, 'frontend', { description: 'updated' });
     const cat = db.getTagCatalog(pid);
     const tags = cat.map((c) => c.tag).sort();
     expect(tags).toEqual(['front-end', 'frontend']);
@@ -236,9 +237,9 @@ describe('resolveVariant', () => {
     db.addEntryTags(e2, ['frontend', 'draft']);
     const v = db.createVariant(pid, 'V', 'resume');
     db.setVariantRules(v, { include: ['frontend'], exclude: ['draft'] });
-    // Without overrides: e1 in (frontend, no draft), e2 out (has draft).
-    db.setEntryOverride(v, e1, { included: false }); // force e1 OUT
-    db.setEntryOverride(v, e2, { included: true }); // force e2 IN despite draft
+    // Without overrides e1 is in and e2 (draft) is out; the overrides flip both.
+    db.setEntryOverride(v, e1, { included: false });
+    db.setEntryOverride(v, e2, { included: true });
     const exp = db.resolveVariant(v).sections.find((s) => s.id === 'experience');
     expect(exp.entries.map((e) => e.fields.position)).toEqual(['Intern']);
   });

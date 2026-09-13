@@ -1,9 +1,9 @@
 /**
- * Server boot — eager DB init (tech-debt: fail-fast on a broken migration).
+ * Server boot — eager DB init fails fast on a broken migration.
  *
  * getDb() is lazy and /health is DB-free, so a migration that crashes would leave
  * the deploy health-check GREEN while every data request 500s on a half-applied
- * schema. server.js now initializes the DB (runs migrations) at boot, before it
+ * schema. The server initializes the DB (runs migrations) at boot, before it
  * listens, and exits non-zero on failure — turning that into a clean failed deploy.
  * These spawn the real server process to prove both halves of that guard.
  */
@@ -14,7 +14,7 @@ const fs = require('fs');
 
 const SERVER = path.join(__dirname, '..', '..', 'server.js');
 
-/** Boot server.js as its own process (so `require.main === module` runs). */
+/** Boot the server as its own process (so `require.main === module` runs). */
 function boot(env, { killOnListen = false } = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [SERVER], {

@@ -4,7 +4,7 @@ services:
   # and are held in the cv_node_modules volume so the host's (macOS) node_modules
   # never shadow the container's (linux) ones.
   #
-  # NOTE: after changing editor/package.json deps, recreate the volume so the
+  # NOTE: after changing the editor's npm deps, recreate the volume so the
   # newly-baked node_modules are re-seeded:
   #   docker compose up -d --build --force-recreate --renew-anon-volumes cv-editor
   # (or `docker compose down -v` first).

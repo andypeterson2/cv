@@ -1,7 +1,7 @@
 /**
  * Generic HMAC-SHA256 signing for stateless, tamper-proof, TTL-bounded tokens.
- * Shared by the OAuth state flow (oauth-google.ts) and the signed PDF download links
- * (tools.ts mints them, index.ts verifies them). Cookie-free / KV-free — the payload
+ * Shared by the OAuth state flow and the signed PDF download links (cv_get_pdf mints
+ * them, the download route verifies them). Cookie-free / KV-free — the payload
  * travels inside the token; only this Worker (with the secret) can mint or verify one.
  */
 const enc = new TextEncoder();
