@@ -172,10 +172,6 @@ npm run test:dom         # DOM tests — UI interactions via happy-dom
 
 ## Documents
 
-Pre-compiled PDFs:
+Résumé content lives only in the deployed database; this repository holds the editor, not anyone's documents. PDFs are compiled on demand by the running service (the compile routes above, or the MCP server's `cv_get_pdf`).
 
-- [CV (pdf)](cv.pdf)
-- [Resume (pdf)](resume.pdf)
-- [Cover Letter (pdf)](coverletter.pdf)
-
-Required fonts: [Roboto](https://fonts.google.com/specimen/Roboto) and [Source Sans 3](https://fonts.google.com/specimen/Source+Sans+3)
+Required fonts for compilation: [Roboto](https://fonts.google.com/specimen/Roboto) and [Source Sans 3](https://fonts.google.com/specimen/Source+Sans+3)
