@@ -9,7 +9,7 @@ const {
 const fs = require('fs');
 const path = require('path');
 
-const FIXTURES = path.resolve(__dirname, '..', '..', '..'); // project root
+const FIXTURES = path.resolve(__dirname, '..', 'fixtures', 'sample'); // a made-up person
 
 // Helper to read fixture files
 function readFixture(relPath) {
@@ -80,10 +80,10 @@ describe('parseSection - cventries (experience)', () => {
 
   test('parses first entry fields correctly', () => {
     const entry = parsed.entries[0];
-    expect(entry.position).toBe('Quantum Software Engineering Lead (Intern)');
-    expect(entry.organization).toBe('Qualcomm Institute');
-    expect(entry.location).toBe('La Jolla, California');
-    expect(entry.date).toBe('Jul. 2022 - Dec. 2024');
+    expect(entry.position).toBe('Software Engineering Intern');
+    expect(entry.organization).toBe('Example Institute');
+    expect(entry.location).toBe('Springfield, Illinois');
+    expect(entry.date).toBe('Jun. 2022 - Dec. 2024');
   });
 
   test('parses bullet points', () => {
@@ -94,12 +94,12 @@ describe('parseSection - cventries (experience)', () => {
 
   test('bullet content includes inlined values', () => {
     const firstBullet = parsed.entries[0].items[0];
-    expect(firstBullet).toContain('8 qubits');
+    expect(firstBullet).toContain('3 research teams');
   });
 
-  test('parses Mathnasium entry correctly', () => {
+  test('parses the last entry correctly', () => {
     const entry = parsed.entries[2];
-    expect(entry.organization).toBe('Mathnasium');
+    expect(entry.organization).toBe('Example Tutoring');
     expect(entry.position).toContain('Instructor');
   });
 });
@@ -161,9 +161,9 @@ describe('parseSection - cvhonors (certifications)', () => {
 
   test('parses honor fields', () => {
     const first = parsed.entries[0];
-    expect(first.award).toBe('Azure Data Fundamentals');
-    expect(first.issuer).toBe('Microsoft');
-    expect(first.date).toBe('2025');
+    expect(first.award).toBe('Example Cloud Fundamentals');
+    expect(first.issuer).toBe('Example Vendor');
+    expect(first.date).toBe('2024');
   });
 
   test('handles empty location field', () => {
@@ -259,21 +259,21 @@ describe('parseData', () => {
 
   test('parses personal info', () => {
     expect(data.personal.firstName).toBe('Jane');
-    expect(data.personal.lastName).toBe('Peterson');
+    expect(data.personal.lastName).toBe('Doe');
   });
 
   test('parses position', () => {
-    expect(data.personal.position).toContain('Quantum Researcher');
+    expect(data.personal.position).toContain('Software Engineer');
   });
 
   test('parses contact info', () => {
-    expect(data.personal.mobile).toBeFalsy(); // phone intentionally removed (privacy); reachable via email
-    expect(data.personal.email).toBe('acpeters@ucsd.edu');
-    expect(data.personal.github).toBe('andypeterson2');
-    expect(data.personal.linkedin).toBe('i-am-andy-peterson');
+    expect(data.personal.mobile).toBeFalsy(); // the sample carries no phone number
+    expect(data.personal.email).toBe('jane.doe@example.com');
+    expect(data.personal.github).toBe('janedoe');
+    expect(data.personal.linkedin).toBe('jane-doe-example');
   });
 
-  test('metrics array is empty after removal', () => {
+  test('a file without metrics parses to an empty list', () => {
     expect(Array.isArray(data.metrics)).toBe(true);
     expect(data.metrics.length).toBe(0);
   });

@@ -58,26 +58,3 @@ jobs:
           cd "$GITHUB_WORKSPACE"
           curl --retry 40 --retry-delay 1 --retry-connrefused -sf http://127.0.0.1:3001/health
           CV_EDITOR_URL=http://127.0.0.1:3001 python -m pytest tests/contract/ -v
-
-  build-pdf:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: xu-cheng/latex-action@v4
-        with:
-          root_file: |
-            cv.tex
-            resume.tex
-            coverletter.tex
-          latexmk_use_lualatex: true
-          pre_compile: |
-            apk add --no-cache curl unzip fontconfig
-            mkdir -p /usr/share/fonts/source-sans /usr/share/fonts/roboto
-            curl -fsSL -o /tmp/source-sans.zip "https://github.com/adobe-fonts/source-sans/releases/download/3.052R/OTF-source-sans-3.052R.zip"
-            unzip -o /tmp/source-sans.zip -d /tmp/source-sans
-            find /tmp/source-sans -name '*.otf' -exec cp {} /usr/share/fonts/source-sans/ \;
-            curl -fsSL -o /tmp/roboto.zip "https://github.com/googlefonts/roboto/releases/download/v2.138/roboto-android.zip"
-            unzip -o /tmp/roboto.zip -d /tmp/roboto
-            find /tmp/roboto -name '*.ttf' -exec cp {} /usr/share/fonts/roboto/ \;
-            fc-cache -f
-            rm -rf /tmp/source-sans.zip /tmp/source-sans /tmp/roboto.zip /tmp/roboto

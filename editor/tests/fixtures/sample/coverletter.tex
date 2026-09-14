@@ -1,0 +1,40 @@
+%-------------------------------------------------------------------------------
+% A sample Awesome-CV cover letter for the parser tests: made-up person, real structure.
+%-------------------------------------------------------------------------------
+\documentclass[11pt, a4paper]{awesome-cv}
+
+\input{data.tex}
+
+\recipient
+  {Company Recruitment Team}
+  {Company Name \\ City, State}
+\letterdate{\today}
+\lettertitle{}
+\letteropening{Dear Hiring Manager,}
+\letterclosing{Sincerely,}
+\letterenclosure[Attached]{Curriculum Vitae}
+
+\begin{document}
+
+\makecvheader[R]
+
+\makecvfooter
+  {\today}
+  {Jane Doe~~~·~~~Cover Letter}
+  {}
+
+\makelettertitle
+
+\begin{cvletter}
+
+\lettersection{About Me}
+I am a software engineer who builds data tools and the services that run them, from ingestion pipelines to the on-call runbooks behind them.
+
+\lettersection{Why Me?}
+I turn a method from a paper into a tested, deployable system, and I write down how it works so the next person can run it.
+
+\end{cvletter}
+
+\makeletterclosing
+
+\end{document}
