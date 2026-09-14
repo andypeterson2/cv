@@ -21,7 +21,7 @@ function preDb() {
 describe('migration 011 — per-variant letter header backfill', () => {
   test('copies the shared person header into every coverletter variant; ignores cv variants', () => {
     const db = preDb();
-    db.prepare('INSERT INTO persons (id, name) VALUES (1, ?)').run('Andrew');
+    db.prepare('INSERT INTO persons (id, name) VALUES (1, ?)').run('Jane');
     db.prepare("INSERT INTO variants VALUES (10, 1, 'To Acme', 'coverletter')").run();
     db.prepare("INSERT INTO variants VALUES (11, 1, 'To Globex', 'coverletter')").run();
     db.prepare("INSERT INTO variants VALUES (12, 1, 'My CV', 'cv')").run();

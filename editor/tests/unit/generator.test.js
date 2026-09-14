@@ -16,25 +16,25 @@ const os = require('os');
 describe('generateDataTex', () => {
   it('generates personal info commands', () => {
     const personal = {
-      firstName: 'Andrew',
-      lastName: 'Peterson',
+      firstName: 'Jane',
+      lastName: 'Doe',
       position: 'Software Engineer',
       address: 'San Diego, CA',
       mobile: '555-1234',
       email: 'test@example.com',
-      github: 'andrewp',
-      linkedin: 'andrewp',
+      github: 'janedoe',
+      linkedin: 'janedoe',
       homepage: 'example.com',
       quote: 'Hello world',
     };
     const tex = generateDataTex(personal);
-    expect(tex).toContain('\\name{Andrew}{Peterson}');
+    expect(tex).toContain('\\name{Jane}{Doe}');
     expect(tex).toContain('\\position{Software Engineer}');
     expect(tex).toContain('\\address{San Diego, CA}');
     expect(tex).toContain('\\mobile{555-1234}');
     expect(tex).toContain('\\email{test@example.com}');
-    expect(tex).toContain('\\github{andrewp}');
-    expect(tex).toContain('\\linkedin{andrewp}');
+    expect(tex).toContain('\\github{janedoe}');
+    expect(tex).toContain('\\linkedin{janedoe}');
     expect(tex).toContain('\\homepage{example.com}');
     // Serializer wraps quotes in LaTeX smart quotes
     expect(tex).toContain('Hello world');
@@ -221,7 +221,7 @@ describe('generateDocumentTex', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateCoverletterTex', () => {
-  const personal = { firstName: 'Andrew', lastName: 'Peterson' };
+  const personal = { firstName: 'Jane', lastName: 'Doe' };
   const coverletter = {
     recipientName: 'Hiring Team',
     recipientAddress: '123 Main St',
@@ -257,7 +257,7 @@ describe('generateCoverletterTex', () => {
 
   it('includes personal name in footer', () => {
     const tex = generateCoverletterTex(personal, coverletter);
-    expect(tex).toContain('Andrew Peterson');
+    expect(tex).toContain('Jane Doe');
     expect(tex).toContain('Cover Letter');
   });
 
@@ -323,7 +323,7 @@ describe('generateAll', () => {
   });
 
   const baseCompileData = {
-    personal: { firstName: 'Andrew', lastName: 'Peterson' },
+    personal: { firstName: 'Jane', lastName: 'Doe' },
     sections: [
       {
         id: 'experience',
@@ -351,7 +351,7 @@ describe('generateAll', () => {
     generateAll(baseCompileData, buildDir, templatesDir, assetsDir);
     expect(fs.existsSync(path.join(buildDir, 'data.tex'))).toBe(true);
     const content = fs.readFileSync(path.join(buildDir, 'data.tex'), 'utf-8');
-    expect(content).toContain('\\name{Andrew}{Peterson}');
+    expect(content).toContain('\\name{Jane}{Doe}');
   });
 
   it('writes section .tex files', () => {
@@ -381,7 +381,7 @@ describe('generateAll', () => {
 
   it('generates coverletter variant', () => {
     const clData = {
-      personal: { firstName: 'Andrew', lastName: 'Peterson' },
+      personal: { firstName: 'Jane', lastName: 'Doe' },
       sections: [],
       coverletter: {
         recipientName: 'HR',
