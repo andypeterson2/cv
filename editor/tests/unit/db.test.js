@@ -168,6 +168,17 @@ describe('Tag catalog + suggestion', () => {
     expect(db.listTags(pid)).toEqual(before);
     expect(db.getEntry(e1).items.find((i) => i.id === i1).tags).toEqual([]);
   });
+  test('suggestBulk with an injected scorer returns the top `limit` for every item', async () => {
+    buildMain();
+    db.setCatalogTag(pid, 'frontend');
+    db.setCatalogTag(pid, 'python');
+    db.setCatalogTag(pid, 'core');
+    const scorer = async (text, cands) =>
+      cands.map((c, i) => ({ tag: c.tag, score: 0.1 - i / 100 }));
+    const bulk = await db.suggestBulk(pid, { limit: 2, scorer });
+    expect(bulk.count).toBeGreaterThan(0);
+    expect(bulk.items.every((x) => x.suggestions.length === 2)).toBe(true);
+  });
 });
 
 describe('Variants CRUD', () => {

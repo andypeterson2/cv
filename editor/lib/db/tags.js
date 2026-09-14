@@ -226,7 +226,7 @@ class TagStore {
    * alternate ranker (e.g. embeddings) without changing this method's shape.
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
    */
-  async suggestTags(personId, text, { limit = 8, minScore = 0.35, scorer } = {}) {
+  async suggestTags(personId, text, { limit = 8, minScore, scorer } = {}) {
     const results = await suggest.suggestTags(text, this._suggestCandidates(personId), {
       limit,
       minScore,
@@ -242,8 +242,10 @@ class TagStore {
    * (an MCP client or the UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
    * once and reused across items.
    */
-  async suggestBulk(personId, { limit = 5, minScore = 0.4, scorer } = {}) {
+  async suggestBulk(personId, { limit = 5, minScore, scorer } = {}) {
     const candidates = this._suggestCandidates(personId);
+    // Bulk runs are reviewed in one pass, so the lexical floor is stricter than a single suggest.
+    const floor = minScore ?? (scorer ? undefined : 0.4);
     const out = [];
     for (const s of this.getSections(personId)) {
       const full = this.getSection(s.id);
@@ -255,7 +257,11 @@ class TagStore {
             id: e.id,
             text: eText,
             current: e.tags,
-            suggestions: await suggest.suggestTags(eText, candidates, { limit, minScore, scorer }),
+            suggestions: await suggest.suggestTags(eText, candidates, {
+              limit,
+              minScore: floor,
+              scorer,
+            }),
           });
         }
         for (const it of e.items) {
@@ -268,7 +274,7 @@ class TagStore {
               current: it.tags,
               suggestions: await suggest.suggestTags(iText, candidates, {
                 limit,
-                minScore,
+                minScore: floor,
                 scorer,
               }),
             });

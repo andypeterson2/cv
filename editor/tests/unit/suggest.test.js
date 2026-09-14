@@ -3,7 +3,7 @@
  * Pure functions — no DB, no I/O. suggestTags is async.
  */
 
-const { suggestTags, tokenize, CATALOG_BOOST } = require('../../lib/suggest');
+const { suggestTags, tokenize, CATALOG_BOOST, LEXICAL_MIN_SCORE } = require('../../lib/suggest');
 
 describe('tokenize', () => {
   test('drops stopwords and <2-char tokens', () => {
@@ -98,6 +98,37 @@ describe('suggestTags (pluggable scorer — Phase B seam)', () => {
     const out = await suggestTags('anything', candidates, { minScore: 0, scorer });
     expect(out.map((r) => r.tag)).toEqual(['b', 'a']);
     expect(out.every((r) => r.via === 'embedding')).toBe(true);
+  });
+
+  test('an injected scorer ranks by position: low scores still fill the limit', async () => {
+    const candidates = ['a', 'b', 'c'].map((tag) => ({ tag, count: 0, inCatalog: true }));
+    const scores = { a: 0.21, b: 0.12, c: -0.05 };
+    const scorer = async (text, cands) => cands.map((c) => ({ tag: c.tag, score: scores[c.tag] }));
+    const out = await suggestTags('anything', candidates, { limit: 2, scorer });
+    expect(out.map((r) => r.tag)).toEqual(['a', 'b']);
+    const all = await suggestTags('anything', candidates, { limit: 0, scorer });
+    expect(all.map((r) => r.tag)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('an explicit minScore still applies to an injected scorer', async () => {
+    const candidates = ['a', 'b'].map((tag) => ({ tag, count: 0, inCatalog: true }));
+    const scorer = async () => [
+      { tag: 'a', score: 0.21 },
+      { tag: 'b', score: 0.12 },
+    ];
+    const out = await suggestTags('anything', candidates, { minScore: 0.15, scorer });
+    expect(out.map((r) => r.tag)).toEqual(['a']);
+  });
+
+  test('the lexical path keeps its default floor', async () => {
+    // 'backend' matches 'end' weakly (about 0.22), below the floor.
+    const candidates = ['frontend', 'backend'].map((tag) => ({ tag, count: 0, inCatalog: false }));
+    const text = 'Built the front end of the app';
+    const unfloored = await suggestTags(text, candidates, { limit: 0, minScore: 0 });
+    expect(unfloored.map((r) => r.tag)).toContain('backend');
+    const byDefault = await suggestTags(text, candidates, { limit: 0 });
+    expect(byDefault.map((r) => r.tag)).toEqual(['frontend']);
+    expect(LEXICAL_MIN_SCORE).toBe(0.35);
   });
 
   test('ignores scorer results for tags not in the candidate set', async () => {
