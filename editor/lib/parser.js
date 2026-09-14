@@ -203,7 +203,7 @@ function parseData(tex) {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    // Track group headings from comment blocks: % Qualcomm Institute — ...
+    // Track group headings from comment blocks: % Example Lab — ...
     // Pattern: a comment line between two %--- separator lines
     if (trimmed.startsWith('%') && !trimmed.startsWith('%---') && !trimmed.startsWith('%-')) {
       const heading = trimmed.replace(/^%\s*/, '');

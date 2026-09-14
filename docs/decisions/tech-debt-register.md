@@ -49,7 +49,7 @@ Cloudflare Workers, which can't reach Railway's private network — a Cloudflare
 ideal. This reduces item 1's blast radius: a leaked token alone no longer grants
 direct-origin access.
 
-**4 — Real-CV cruft (done).** person 5 ("Jane Doe (Clean)") had a skills entry
+**4 — Real-CV cruft (done).** person 5 (the main profile) had a skills entry
 `{category:"test", skills:"test"}` (id 269) — real data on a real CV that would render
 as a "test: test" row in an exported PDF. Deleted 2026-07-17 via `cv_delete_entry`.
 
