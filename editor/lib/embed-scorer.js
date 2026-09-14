@@ -2,7 +2,7 @@
  * OPTIONAL local embedding scorer for tag suggestion — an alternate ranker that
  * plugs into db.suggestTags' `scorer` seam. Pure-Node, NO Python: uses
  * @huggingface/transformers (v3, the maintained successor of @xenova/transformers)
- * running all-MiniLM-L6-v2 (~80 MB ONNX). Catches conceptual matches the lexical
+ * running all-MiniLM-L6-v2 (~23 MB quantized ONNX). Catches conceptual matches the lexical
  * scorer misses (e.g. "orchestrated containers" → `kubernetes`).
  *
  * Design guarantees:
@@ -19,6 +19,8 @@ require.resolve('@huggingface/transformers'); // throws if the optional dep is a
 const { cosineRank } = require('./cosine');
 
 const MODEL = 'Xenova/all-MiniLM-L6-v2';
+// Node defaults to fp32; q8 is the quantized file the Docker build bakes in.
+const DTYPE = 'q8';
 let _pipePromise = null;
 const _cache = new Map(); // text → number[] embedding (per-process; vocab is tiny)
 
@@ -29,7 +31,7 @@ function getPipe() {
       // Where the model is pre-baked (Docker sets CV_EMBED_OFFLINE=1), never hit the
       // HF CDN at runtime; unset on host dev so a fresh checkout can download it.
       if (process.env.CV_EMBED_OFFLINE === '1') env.allowRemoteModels = false;
-      return pipeline('feature-extraction', MODEL);
+      return pipeline('feature-extraction', MODEL, { dtype: DTYPE });
     })();
   }
   return _pipePromise;
