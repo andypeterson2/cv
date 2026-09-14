@@ -17,7 +17,7 @@ describe('generateDataTex', () => {
   it('generates personal info commands', () => {
     const personal = {
       firstName: 'Jane',
-      lastName: 'Peterson',
+      lastName: 'Doe',
       position: 'Software Engineer',
       address: 'San Diego, CA',
       mobile: '555-1234',
@@ -221,7 +221,7 @@ describe('generateDocumentTex', () => {
 // ---------------------------------------------------------------------------
 
 describe('generateCoverletterTex', () => {
-  const personal = { firstName: 'Jane', lastName: 'Peterson' };
+  const personal = { firstName: 'Jane', lastName: 'Doe' };
   const coverletter = {
     recipientName: 'Hiring Team',
     recipientAddress: '123 Main St',
@@ -323,7 +323,7 @@ describe('generateAll', () => {
   });
 
   const baseCompileData = {
-    personal: { firstName: 'Jane', lastName: 'Peterson' },
+    personal: { firstName: 'Jane', lastName: 'Doe' },
     sections: [
       {
         id: 'experience',
@@ -381,7 +381,7 @@ describe('generateAll', () => {
 
   it('generates coverletter variant', () => {
     const clData = {
-      personal: { firstName: 'Jane', lastName: 'Peterson' },
+      personal: { firstName: 'Jane', lastName: 'Doe' },
       sections: [],
       coverletter: {
         recipientName: 'HR',

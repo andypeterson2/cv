@@ -38,3 +38,6 @@ mcp-server/node_modules/
 
 # uploaded layout bundles (dev store; deploy uses /data/layouts volume)
 layouts-store/
+
+# Python bytecode
+__pycache__/
