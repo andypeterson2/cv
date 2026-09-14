@@ -1,21 +1,19 @@
 /**
- * LinkedIn exporter — proven against a faithful slice of real resolved data
- * (person 5 / variant 10), LaTeX artifacts included. The mapping here is the one
- * Step 0 corrected: role = fields.position, company = fields.organization.
+ * LinkedIn exporter against data shaped like a resolved variant, LaTeX artifacts
+ * included: role = fields.position, company = fields.organization.
  */
 const { exportLinkedin, clean, parseRange } = require('../../lib/linkedin');
 
-// A trimmed but verbatim slice of cv_resolve_variant(10): a non-experience section
-// first (must be skipped), then three real experience entries with real dates and
-// LaTeX (`---`, `\%`, no `title` field — org lives in `organization`).
+// A non-experience section first (must be skipped), then three experience entries
+// with dates and LaTeX (`---`, `\%`, no `title` field — the company lives in `organization`).
 const RESOLVED = {
-  personal: { firstName: 'Jane', lastName: 'Peterson' },
+  personal: { firstName: 'Jane', lastName: 'Doe' },
   sections: [
     {
       id: 'summary',
       type: 'summary',
       title: 'Summary',
-      entries: [{ id: 243, fields: { text: 'Ignore me.' }, items: [] }],
+      entries: [{ id: 1, fields: { text: 'Ignore me.' }, items: [] }],
     },
     {
       id: 'experience',
@@ -23,54 +21,53 @@ const RESOLVED = {
       title: 'Experience',
       entries: [
         {
-          id: 244,
+          id: 101,
           fields: {
             date: 'July 2022 -- December 2024',
-            location: 'San Diego, CA',
-            organization: 'Qualcomm Institute (CALIT2)',
-            position: 'Research Intern',
+            location: 'Springfield, IL',
+            organization: 'Example Research Lab',
+            position: 'Research Assistant',
           },
           items: [
             {
-              id: 454,
+              id: 11,
               content:
                 'Designed a signaling server (Python/Flask, Socket.IO) with cryptographic room assignment',
             },
             {
-              id: 456,
+              id: 12,
               content:
-                "Built parallel solver implementations --- classical brute-force and Grover's quantum search --- for systematic comparison",
+                'Built two solver implementations --- brute force and backtracking search --- for side-by-side comparison',
             },
           ],
         },
         {
-          id: 245,
+          id: 102,
           fields: {
             date: 'August 2020 -- May 2022',
             location: 'Remote',
-            organization: 'RIT Esports',
+            organization: 'Example Gaming Club',
             position: 'Web Developer',
           },
           items: [
             {
-              id: 462,
-              content:
-                'Maintained 99.9\\% uptime on DigitalOcean Droplets with Nginx reverse proxies',
+              id: 21,
+              content: 'Maintained 99.9\\% uptime on a web server behind an Nginx reverse proxy',
             },
           ],
         },
         {
-          id: 246,
+          id: 103,
           fields: {
             date: 'March 2020 -- September 2021',
-            location: 'Southern California',
-            organization: 'Mathnasium',
-            position: 'Tutor / IT Lead',
+            location: 'Springfield, IL',
+            organization: 'Example Tutoring Center',
+            position: 'Tutor',
           },
           items: [
             {
-              id: 463,
-              content: "Led the center's transition to remote operations during COVID-19",
+              id: 31,
+              content: "Led the center's transition to remote tutoring sessions",
             },
           ],
         },
@@ -84,13 +81,13 @@ describe('exportLinkedin — mapping + shape', () => {
 
   test('reads only the experience section, one block per entry', () => {
     expect(positions).toHaveLength(3);
-    expect(positions.map((p) => p.entryId)).toEqual([244, 245, 246]);
+    expect(positions.map((p) => p.entryId)).toEqual([101, 102, 103]);
   });
 
-  test('role ← fields.position, company ← fields.organization (the Step-0 correction)', () => {
-    expect(positions[0].title).toBe('Research Intern');
-    expect(positions[0].company).toBe('Qualcomm Institute (CALIT2)'); // NOT fields.title (absent → would be '')
-    expect(positions[0].location).toBe('San Diego, CA');
+  test('role ← fields.position, company ← fields.organization', () => {
+    expect(positions[0].title).toBe('Research Assistant');
+    expect(positions[0].company).toBe('Example Research Lab'); // NOT fields.title (absent → would be '')
+    expect(positions[0].location).toBe('Springfield, IL');
   });
 
   test('dates: full month names + LaTeX `--` → {month, year}', () => {
@@ -127,7 +124,7 @@ describe('exportLinkedin — fingerprint is drift, not noise', () => {
 describe('formats + parse edges', () => {
   test('plaintext drops the glyph, markdown uses "-"', () => {
     expect(exportLinkedin(RESOLVED, 'plaintext').positions[2].description).toBe(
-      "Led the center's transition to remote operations during COVID-19",
+      "Led the center's transition to remote tutoring sessions",
     );
     expect(exportLinkedin(RESOLVED, 'markdown').positions[2].description.startsWith('- ')).toBe(
       true,
