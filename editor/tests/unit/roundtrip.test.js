@@ -7,7 +7,7 @@ const { serializeSection, serializeData, serializeCoverletter } = require('../..
 const fs = require('fs');
 const path = require('path');
 
-const FIXTURES = path.resolve(__dirname, '..', '..', '..');
+const FIXTURES = path.resolve(__dirname, '..', 'fixtures', 'sample');
 
 function readFixture(relPath) {
   return fs.readFileSync(path.join(FIXTURES, relPath), 'utf-8');
