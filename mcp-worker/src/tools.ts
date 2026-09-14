@@ -501,7 +501,8 @@ const toolDefs: ToolDef[] = [
           type: 'number',
           minimum: 0,
           maximum: 1,
-          description: 'Score floor (default 0.35)',
+          description:
+            'Score floor (lexical default 0.35; embedding returns the top `limit` unless set)',
         },
         scorer: {
           type: 'string',
@@ -603,7 +604,8 @@ const toolDefs: ToolDef[] = [
           type: 'number',
           minimum: 0,
           maximum: 1,
-          description: 'Score floor (default 0.4)',
+          description:
+            'Score floor (lexical default 0.4; embedding returns the top `limit` unless set)',
         },
         scorer: { type: 'string', enum: shared.SCORER_METHODS },
       },

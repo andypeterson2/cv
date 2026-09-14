@@ -95,15 +95,19 @@ function lexicalScore(tokens, tag) {
 
 const CATALOG_BOOST = 0.05; // soft steer toward the controlled vocabulary
 
+// Lexical only: embedding cosines are uncalibrated, so injected scorers rank by position.
+const LEXICAL_MIN_SCORE = 0.35;
+
 /**
  * Rank `candidates` against `text`.
  * @param {string} text
  * @param {Array<{tag, count?, inCatalog?, description?}>} candidates  (unique tags)
  * @param {{limit?, minScore?, scorer?}} opts
+ *        minScore: floor on score; defaults to LEXICAL_MIN_SCORE, and to none with a scorer
  *        scorer: optional async (text, candidates) => [{tag, score}] (Phase-B seam)
  * @returns {Promise<Array<{tag, score, inCatalog, count, via}>>} deterministic order
  */
-async function suggestTags(text, candidates, { limit = 8, minScore = 0.35, scorer } = {}) {
+async function suggestTags(text, candidates, { limit = 8, minScore, scorer } = {}) {
   if (!text || !String(text).trim() || !candidates || !candidates.length) return [];
 
   let scored;
@@ -140,7 +144,8 @@ async function suggestTags(text, candidates, { limit = 8, minScore = 0.35, score
     }
   }
 
-  const out = scored.filter((r) => r.score >= minScore);
+  const floor = minScore ?? (typeof scorer === 'function' ? -Infinity : LEXICAL_MIN_SCORE);
+  const out = scored.filter((r) => r.score >= floor);
   // Total order → deterministic: score desc, catalog first, count desc, tag asc.
   out.sort(
     (a, b) =>
@@ -156,4 +161,4 @@ function round(n) {
   return Math.round(n * 1000) / 1000;
 }
 
-module.exports = { suggestTags, tokenize, STOPWORDS, CATALOG_BOOST };
+module.exports = { suggestTags, tokenize, STOPWORDS, CATALOG_BOOST, LEXICAL_MIN_SCORE };
