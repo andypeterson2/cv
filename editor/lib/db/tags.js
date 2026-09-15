@@ -246,6 +246,67 @@ class TagStore {
   }
 
   /**
+   * Record what a person did with tag suggestions. Each event names an entry or
+   * item of theirs; `rank`, `score` and `scorer` describe the suggestion when
+   * the tag came from one. Returns {recorded}.
+   * @throws Error with .status 404 when a target is not the person's.
+   */
+  recordTagEvents(personId, events) {
+    const owner = { entry: this._stmts.personForEntry, item: this._stmts.personForItem };
+    const tx = this.db.transaction(() => {
+      for (const e of events) {
+        if (owner[e.target].get(e.id)?.pid !== personId) {
+          const err = new Error(`${e.target} ${e.id} not found`);
+          err.status = 404;
+          throw err;
+        }
+        const tag = this._canonicalTag(personId, e.tag);
+        this._stmts.insertTagEvent.run(
+          personId,
+          e.target,
+          e.id,
+          tag,
+          e.action,
+          e.rank ?? null,
+          e.score ?? null,
+          e.scorer ?? null,
+        );
+      }
+    });
+    tx();
+    return { recorded: events.length };
+  }
+
+  /**
+   * How suggestions are faring: accept and dismiss counts by rank, how often a
+   * tag was typed by hand instead, and how many hand-typed tags had been shown.
+   */
+  tagEventStats(personId) {
+    const byRank = new Map();
+    const totals = { accept: 0, dismiss: 0, manual: 0, remove: 0 };
+    let manualShown = 0;
+    for (const { action, rank, n } of this._stmts.tagEventCounts.all(personId)) {
+      totals[action] += n;
+      if (action === 'manual' && rank != null) manualShown += n;
+      if ((action === 'accept' || action === 'dismiss') && rank != null) {
+        const row = byRank.get(rank) || { rank, accept: 0, dismiss: 0 };
+        row[action] += n;
+        byRank.set(rank, row);
+      }
+    }
+    const rate = (a, b) => (a + b > 0 ? a / (a + b) : null);
+    return {
+      totals,
+      byRank: [...byRank.values()]
+        .sort((a, b) => a.rank - b.rank)
+        .map((r) => ({ ...r, acceptRate: rate(r.accept, r.dismiss) })),
+      acceptRate: rate(totals.accept, totals.dismiss),
+      manualShare: rate(totals.manual, totals.accept),
+      manualShownShare: totals.manual > 0 ? manualShown / totals.manual : null,
+    };
+  }
+
+  /**
    * Suggest existing tags for a piece of text. Ranks the union of the catalog
    * (preferred) and the usage vocabulary; NEVER invents a tag. Approximate —
    * discovery/authoring only. `scorer` (optional) swaps in an

@@ -523,6 +523,21 @@ const toolDefs: ToolDef[] = [
     },
   },
   {
+    name: 'cv_tag_suggestion_stats',
+    description:
+      'How tag suggestions are faring for a person, from what they did with them in the editor: ' +
+      '{totals:{accept,dismiss,manual,remove}, byRank:[{rank,accept,dismiss,acceptRate}], acceptRate, ' +
+      'manualShare (hand-typed tags per accepted suggestion), manualShownShare (hand-typed tags that had been ' +
+      'suggested)}. Read-only.',
+    inputSchema: {
+      type: 'object',
+      properties: { person_id: personId },
+      required: ['person_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/tags/events/stats`),
+  },
+  {
     name: 'cv_list_tag_catalog',
     description:
       "List the person's tag catalog — the curated controlled vocabulary: [{tag, description, category}]. This is " +

@@ -364,6 +364,24 @@ describe('Tag catalog + suggestion', () => {
     expect(i1row.suggestions.map((s) => s.tag)).toContain('frontend');
   });
 
+  test('tag events: recorded, summarised, and validated', async () => {
+    const { i1 } = await buildMain();
+    const ok = await request('POST', `/api/persons/${pid}/tags/events`, {
+      events: [{ target: 'item', id: i1, tag: 'backend', action: 'accept', rank: 0 }],
+    });
+    expect(ok.body).toMatchObject({ success: true, recorded: 1 });
+    const stats = (await request('GET', `/api/persons/${pid}/tags/events/stats`)).body;
+    expect(stats.totals.accept).toBe(1);
+    const bad = await request('POST', `/api/persons/${pid}/tags/events`, {
+      events: [{ target: 'item', id: i1, tag: 'backend', action: 'like' }],
+    });
+    expect(bad.status).toBe(400);
+    const foreign = await request('POST', `/api/persons/${pid}/tags/events`, {
+      events: [{ target: 'item', id: 999999, tag: 'backend', action: 'accept' }],
+    });
+    expect(foreign.status).toBe(404);
+  });
+
   test('400s: suggest without text, catalog without tag', async () => {
     expect((await request('POST', `/api/persons/${pid}/tags/suggest`, {})).status).toBe(400);
     expect(
