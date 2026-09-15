@@ -49,12 +49,15 @@
 	"ratelimits": [
 		{ "name": "OAUTH_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }
 	]
-	// SECRETS (set with `wrangler secret put <NAME>`; never commit):
-	//   CV_EDITOR_TOKEN       — the cv admin bearer token (gates writes/compile/real-CV reads)
-	//   GOOGLE_CLIENT_ID      — Google OAuth client id
-	//   GOOGLE_CLIENT_SECRET  — Google OAuth client secret
-	//   COOKIE_SECRET         — HMAC key that signs the OAuth state tokens (else falls back to GOOGLE_CLIENT_SECRET)
-	//   ADMIN_EMAILS          — allowlisted Google address(es), comma-separated (a SECRET so the email stays out of this public repo)
+	// SECRETS (set with `wrangler secret put <NAME>`; never commit). A deploy keeps them,
+	// but replaces every var with the values above.
+	//   CV_ORIGIN_SECRET        — front-door secret cv's origin guard checks (X-Origin-Secret)
+	//   CF_ACCESS_CLIENT_ID     — Cloudflare Access service token for cv's tunnel host
+	//   CF_ACCESS_CLIENT_SECRET — (sent only when both halves are set)
+	//   GOOGLE_CLIENT_ID        — Google OAuth client id
+	//   GOOGLE_CLIENT_SECRET    — Google OAuth client secret
+	//   COOKIE_SECRET           — HMAC key that signs the OAuth state tokens (else falls back to GOOGLE_CLIENT_SECRET)
+	//   ADMIN_EMAILS            — allowlisted Google address(es), comma-separated (a SECRET so the email stays out of this public repo)
 	//
 	// ROUTE: bind mcp.andypeterson.dev to this Worker (custom domain / route) at deploy.
 }
