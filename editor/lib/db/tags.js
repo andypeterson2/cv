@@ -8,6 +8,7 @@ const { normTag, entryText } = require('./helpers');
 const fuzzy = require('../fuzzy');
 const suggest = require('../suggest');
 const { SEED_TAGS, seedTag } = require('../seed-tags');
+const { withNeighbours } = require('../neighbour-scorer');
 
 // Below this many distinct tags of their own, a person's suggestions also draw
 // on the starter vocabulary.
@@ -313,13 +314,35 @@ class TagStore {
    * alternate ranker (e.g. embeddings) without changing this method's shape.
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
    */
-  async suggestTags(personId, text, { limit = 8, minScore, scorer } = {}) {
+  async suggestTags(personId, text, { limit = 8, minScore, scorer, embed } = {}) {
     const results = await suggest.suggestTags(text, this._suggestCandidates(personId), {
       limit,
       minScore,
-      scorer,
+      scorer: this._personalScorer(personId, scorer, embed),
     });
     return { query: String(text), results };
+  }
+
+  /** With an embedding function, blend the scorer with votes from the person's tagged bullets. */
+  _personalScorer(personId, scorer, embed) {
+    if (!scorer || !embed) return scorer;
+    return withNeighbours(scorer, embed, this._taggedExamples(personId));
+  }
+
+  /** The person's tagged entries and bullets, as the text suggestion sees them. */
+  _taggedExamples(personId) {
+    const examples = [];
+    for (const s of this.getSections(personId)) {
+      for (const e of this.getSection(s.id).entries) {
+        const eText = entryText(e.fields);
+        if (eText && e.tags.length) examples.push({ text: eText, tags: e.tags });
+        for (const it of e.items) {
+          const iText = (it.content || '').trim();
+          if (iText && it.tags.length) examples.push({ text: iText, tags: it.tags });
+        }
+      }
+    }
+    return examples;
   }
 
   /**
@@ -329,8 +352,9 @@ class TagStore {
    * (an MCP client or the UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
    * once and reused across items.
    */
-  async suggestBulk(personId, { limit = 5, minScore, scorer } = {}) {
+  async suggestBulk(personId, { limit = 5, minScore, scorer: base, embed } = {}) {
     const candidates = this._suggestCandidates(personId);
+    const scorer = this._personalScorer(personId, base, embed);
     // Bulk runs are reviewed in one pass, so the lexical floor is stricter than a single suggest.
     const floor = minScore ?? (scorer ? undefined : 0.4);
     const out = [];

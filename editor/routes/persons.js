@@ -12,20 +12,20 @@ function intParam(value, label = 'id') {
 }
 
 /**
- * Map a `scorer` request param to a scorer function for db.suggestTags.
- * 'lexical' (or absent) → undefined (the default lexical scorer).
- * 'embedding' → the optional embedding module, lazy-required so it (and its
- * model) never load unless explicitly requested.
+ * Map a `scorer` request param to the {scorer, embed} options of db.suggestTags.
+ * 'lexical' (or absent) → {} (the default lexical scorer).
+ * 'embedding' → the optional embedding module's scorer and embed function,
+ * lazy-required so it (and its model) never load unless explicitly requested.
  */
 function resolveScorer(name) {
-  if (name !== 'embedding') return undefined;
+  if (name !== 'embedding') return {};
   let mod;
   try {
     mod = require('../lib/embed-scorer');
   } catch {
     throw new AppError('Embedding scorer is not available on this deployment', 501);
   }
-  return mod.scorer;
+  return { scorer: mod.scorer, embed: mod.embed };
 }
 
 module.exports = function createPersonsRouter(getDb) {
@@ -333,9 +333,7 @@ module.exports = function createPersonsRouter(getDb) {
       const id = intParam(req.params.pid, 'person id');
       requirePerson(id, req.userId);
       const { text, limit, minScore, scorer } = req.body;
-      res.json(
-        await getDb().suggestTags(id, text, { limit, minScore, scorer: resolveScorer(scorer) }),
-      );
+      res.json(await getDb().suggestTags(id, text, { limit, minScore, ...resolveScorer(scorer) }));
     }),
   );
 
@@ -368,7 +366,7 @@ module.exports = function createPersonsRouter(getDb) {
       const id = intParam(req.params.pid, 'person id');
       requirePerson(id, req.userId);
       const b = req.body || {};
-      const opts = { scorer: resolveScorer(b.scorer) };
+      const opts = { ...resolveScorer(b.scorer) };
       if (b.limit !== undefined) opts.limit = b.limit;
       if (b.minScore !== undefined) opts.minScore = b.minScore;
       res.json(await getDb().suggestBulk(id, opts));
