@@ -241,6 +241,23 @@ describe('Tag catalog + suggestion', () => {
     expect(db.tagEventStats(pid).totals.accept).toBe(0);
   });
 
+  test('with an embed function, suggestions lean toward tags on similar bullets', async () => {
+    const { e1, i1, i2, i3 } = buildMain();
+    for (const id of [i1, i2]) db.addItemTags(id, ['acme-stack']);
+    db.addEntryTags(e1, ['acme-stack']);
+    const vec = (text) => (/intern/i.test(text) ? [0, 1] : [1, 0]);
+    const embed = async (text) => vec(text);
+    // A flat base scorer: every candidate ties, so only neighbour votes can separate them.
+    const scorer = async (text, cands) => cands.map((c) => ({ tag: c.tag, score: 0.2 }));
+    db.addItemTags(i3, ['internship']);
+    const { results } = await db.suggestTags(pid, 'Built the frontend again', {
+      scorer,
+      embed,
+      limit: 1,
+    });
+    expect(results[0].tag).toBe('acme-stack');
+  });
+
   test('suggestBulk returns per entry/item candidates and writes nothing', async () => {
     const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['frontend']); // seed a vocab so something matches
