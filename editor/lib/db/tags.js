@@ -7,6 +7,11 @@
 const { normTag, entryText } = require('./helpers');
 const fuzzy = require('../fuzzy');
 const suggest = require('../suggest');
+const { SEED_TAGS, seedTag } = require('../seed-tags');
+
+// Below this many distinct tags of their own, a person's suggestions also draw
+// on the starter vocabulary.
+const SEED_UNTIL = 30;
 
 class TagStore {
   // ---- Tags ----
@@ -16,7 +21,9 @@ class TagStore {
     const tx = this.db.transaction(() => {
       for (const t of tags) {
         const tag = this._canonicalTag(pid, t);
-        if (tag) this._stmts.addEntryTag.run(entryId, tag);
+        if (!tag) continue;
+        this._stmts.addEntryTag.run(entryId, tag);
+        this._catalogSeedTag(pid, tag);
       }
     });
     tx();
@@ -32,10 +39,19 @@ class TagStore {
     const tx = this.db.transaction(() => {
       for (const t of tags) {
         const tag = this._canonicalTag(pid, t);
-        if (tag) this._stmts.addItemTag.run(itemId, tag);
+        if (!tag) continue;
+        this._stmts.addItemTag.run(itemId, tag);
+        this._catalogSeedTag(pid, tag);
       }
     });
     tx();
+  }
+
+  /** A starter tag joins the person's catalog, with its description, on first use. */
+  _catalogSeedTag(personId, tag) {
+    const seed = personId == null ? null : seedTag(tag);
+    if (seed)
+      this._stmts.insertCatalogTagIfAbsent.run(personId, tag, seed.description, seed.category);
   }
 
   removeItemTag(itemId, tag) {
@@ -200,7 +216,10 @@ class TagStore {
     return { added };
   }
 
-  /** Candidate vocab for suggestion: catalog (preferred) ∪ usage vocab, deduped by tag. */
+  /**
+   * Candidate vocab for suggestion: catalog (preferred) ∪ usage vocab, deduped by
+   * tag, plus the starter vocabulary while the person's own is under SEED_UNTIL.
+   */
   _suggestCandidates(personId) {
     const byTag = new Map();
     for (const c of this._stmts.getCatalog.all(personId)) {
@@ -215,6 +234,13 @@ class TagStore {
       const cur = byTag.get(tag);
       if (cur) cur.count = count;
       else byTag.set(tag, { tag, count, inCatalog: false });
+    }
+    if (byTag.size < SEED_UNTIL) {
+      for (const s of SEED_TAGS) {
+        if (!byTag.has(s.tag)) {
+          byTag.set(s.tag, { tag: s.tag, count: 0, inCatalog: false, description: s.description });
+        }
+      }
     }
     return [...byTag.values()];
   }
@@ -287,3 +313,4 @@ class TagStore {
 }
 
 module.exports = TagStore;
+module.exports.SEED_UNTIL = SEED_UNTIL;

@@ -66,4 +66,9 @@ async function scorer(text, candidates) {
   return cosineRank(queryVec, withVecs);
 }
 
-module.exports = { scorer, embed, MODEL, _cache };
+/** Embed candidates ahead of time, so the first suggestion does not pay for them. */
+async function warm(candidates) {
+  for (const c of candidates) await embed(candidateText(c));
+}
+
+module.exports = { scorer, embed, warm, candidateText, MODEL, _cache };

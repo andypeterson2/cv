@@ -242,6 +242,9 @@ class CvDatabase {
       upsertCatalogTag: p(
         'INSERT INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
       ),
+      insertCatalogTagIfAbsent: p(
+        'INSERT OR IGNORE INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?)',
+      ),
       delCatalogTag: p('DELETE FROM tag_catalog WHERE person_id = ? AND tag = ?'),
 
       // Variants
