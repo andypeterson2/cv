@@ -339,6 +339,27 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
+  // ---- Tag suggestion events (accept / dismiss / manual / remove) ----
+
+  router.post(
+    '/:pid/tags/events',
+    validate('tagEvents'),
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json({ success: true, ...getDb().recordTagEvents(id, req.body.events) });
+    }),
+  );
+
+  router.get(
+    '/:pid/tags/events/stats',
+    wrap((req, res) => {
+      const id = intParam(req.params.pid, 'person id');
+      requirePerson(id, req.userId);
+      res.json(getDb().tagEventStats(id));
+    }),
+  );
+
   // Suggest tags for EVERY entry/item at once (e.g. after an untagged import).
   // Suggest-only; all fields optional so an empty body is fine.
   router.post(

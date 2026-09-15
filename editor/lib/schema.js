@@ -200,6 +200,34 @@ const suggestTagsSchema = {
   additionalProperties: false,
 };
 
+// What a person did with tag suggestions (a batch from one editing pass).
+const tagEventsSchema = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 50,
+      items: {
+        type: 'object',
+        properties: {
+          target: { type: 'string', enum: ['entry', 'item'] },
+          id: { type: 'integer', minimum: 1 },
+          tag: { type: 'string', minLength: 1, maxLength: 60 },
+          action: { type: 'string', enum: ['accept', 'dismiss', 'manual', 'remove'] },
+          rank: { type: 'integer', minimum: 0, maximum: 49 },
+          score: { type: 'number' },
+          scorer: { type: 'string', enum: SCORER_METHODS },
+        },
+        required: ['target', 'id', 'tag', 'action'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['events'],
+  additionalProperties: false,
+};
+
 // ---------------------------------------------------------------------------
 // Variants
 // ---------------------------------------------------------------------------
@@ -341,6 +369,7 @@ const schemas = {
   expandRules: expandRulesSchema,
   setCatalogTag: setCatalogTagSchema,
   suggestTags: suggestTagsSchema,
+  tagEvents: tagEventsSchema,
   createVariant: createVariantSchema,
   updateVariant: updateVariantSchema,
   variantRules: variantRulesSchema,

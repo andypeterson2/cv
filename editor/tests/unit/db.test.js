@@ -196,6 +196,51 @@ describe('Tag catalog + suggestion', () => {
     expect(entry).toMatchObject({ description: 'My own words', category: 'mine' });
   });
 
+  test('tag events are recorded and summarised by rank', () => {
+    const { e1, i1 } = buildMain();
+    db.recordTagEvents(pid, [
+      {
+        target: 'item',
+        id: i1,
+        tag: 'backend',
+        action: 'accept',
+        rank: 0,
+        score: 0.41,
+        scorer: 'embedding',
+      },
+      { target: 'item', id: i1, tag: 'python', action: 'accept', rank: 1, scorer: 'embedding' },
+      { target: 'item', id: i1, tag: 'sales', action: 'dismiss', rank: 2, scorer: 'embedding' },
+      { target: 'entry', id: e1, tag: 'Front End', action: 'manual', rank: 1 },
+      { target: 'entry', id: e1, tag: 'acme-internal', action: 'manual' },
+    ]);
+    const stats = db.tagEventStats(pid);
+    expect(stats.totals).toEqual({ accept: 2, dismiss: 1, manual: 2, remove: 0 });
+    expect(stats.byRank).toEqual([
+      { rank: 0, accept: 1, dismiss: 0, acceptRate: 1 },
+      { rank: 1, accept: 1, dismiss: 0, acceptRate: 1 },
+      { rank: 2, accept: 0, dismiss: 1, acceptRate: 0 },
+    ]);
+    expect(stats.acceptRate).toBeCloseTo(2 / 3);
+    expect(stats.manualShare).toBe(0.5);
+    expect(stats.manualShownShare).toBe(0.5);
+  });
+
+  test("a tag event must name one of the person's own entries or items", () => {
+    const { i1 } = buildMain();
+    const other = db.createPerson('Other');
+    expect(() =>
+      db.recordTagEvents(other, [{ target: 'item', id: i1, tag: 'x', action: 'accept' }]),
+    ).toThrow(/not found/);
+    expect(db.tagEventStats(other).totals.accept).toBe(0);
+  });
+
+  test('tag events go with their person', () => {
+    const { i1 } = buildMain();
+    db.recordTagEvents(pid, [{ target: 'item', id: i1, tag: 'backend', action: 'accept' }]);
+    db.deletePerson(pid);
+    expect(db.tagEventStats(pid).totals.accept).toBe(0);
+  });
+
   test('suggestBulk returns per entry/item candidates and writes nothing', async () => {
     const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['frontend']); // seed a vocab so something matches
