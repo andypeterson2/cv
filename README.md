@@ -15,6 +15,7 @@ The editor frontend runs entirely in the browser and connects to a local backend
 - **Server-side LaTeX compilation** — XeLaTeX compiles documents to PDF with Roboto and Source Sans 3 fonts
 - **JSON import/export** — bulk data portability across instances
 - **Demo mode** — embedded Jane Doe dataset with static PDFs when no backend is connected
+- **Tag suggestion**: tags drive which content each variant includes, and suggestions rank existing tags for a bullet with a small local embedding model (all-MiniLM-L6-v2, int8). They never invent a tag. While a person has fewer than 30 tags of their own, suggestions also draw on a starter vocabulary (`editor/lib/seed-tags.json`) of 42 broad résumé categories plus ESCO technology, transversal and research skills. A starter tag joins the person's catalog, with its description, the first time it is used.
 
 ## Quick start
 
@@ -175,3 +176,7 @@ npm run test:dom         # DOM tests — UI interactions via happy-dom
 Résumé content lives only in the deployed database; this repository holds the editor, not anyone's documents. PDFs are compiled on demand by the running service (the compile routes above, or the MCP server's `cv_get_pdf`).
 
 Required fonts for compilation: [Roboto](https://fonts.google.com/specimen/Roboto) and [Source Sans 3](https://fonts.google.com/specimen/Source+Sans+3)
+
+## Third-party data
+
+The starter tag vocabulary contains ESCO classification data (v1.1.0), © European Union, https://esco.ec.europa.eu, reused under Commission Decision 2011/833/EU. ESCO labels are shortened to tags. Regenerate the file from the ESCO CSV download with `python scripts/build_seed_tags.py --esco-dir <dir>`.
