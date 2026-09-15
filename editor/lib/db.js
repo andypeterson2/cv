@@ -242,6 +242,12 @@ class CvDatabase {
       upsertCatalogTag: p(
         'INSERT INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
       ),
+      insertTagEvent: p(
+        'INSERT INTO tag_events (person_id, target, target_id, tag, action, rank, score, scorer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      ),
+      tagEventCounts: p(
+        'SELECT action, rank, COUNT(*) AS n FROM tag_events WHERE person_id = ? GROUP BY action, rank',
+      ),
       insertCatalogTagIfAbsent: p(
         'INSERT OR IGNORE INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?)',
       ),
