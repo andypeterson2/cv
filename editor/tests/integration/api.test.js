@@ -354,7 +354,8 @@ describe('Tag catalog + suggestion', () => {
 
   test('seed promotes usage vocab; suggest-bulk returns per-item candidates', async () => {
     const { e1, i1 } = await buildMain();
-    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    // frontend is a starter tag, catalogued on first use; acme-internal is not.
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend', 'acme-internal'] });
     expect((await request('POST', `/api/persons/${pid}/tags/catalog/seed`)).body.added).toBe(1);
 
     const bulk = (await request('POST', `/api/persons/${pid}/tags/suggest-bulk`, {})).body;

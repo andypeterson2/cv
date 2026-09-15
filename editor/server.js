@@ -238,7 +238,24 @@ if (require.main === module) {
     console.log(`CV Editor running at http://localhost:${PORT}`);
     console.log(`Project root: ${PROJECT_ROOT}`);
     console.log(`Database: ${DB_PATH}`);
+    warmSeedEmbeddings();
   });
+}
+
+/** Embed the starter vocabulary in the background; skipped where the embedding scorer is absent. */
+function warmSeedEmbeddings() {
+  let embedScorer;
+  try {
+    embedScorer = require('./lib/embed-scorer');
+  } catch {
+    return;
+  }
+  const { SEED_TAGS } = require('./lib/seed-tags');
+  const started = Date.now();
+  embedScorer
+    .warm(SEED_TAGS)
+    .then(() => console.log(`Seed tag embeddings ready (${Date.now() - started} ms).`))
+    .catch((err) => console.error('Seed tag warm-up failed:', err.message));
 }
 
 module.exports = app;

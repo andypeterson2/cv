@@ -4,6 +4,8 @@
  */
 
 const CvDatabase = require('../../lib/db');
+const { SEED_TAGS } = require('../../lib/seed-tags');
+const { SEED_UNTIL } = require('../../lib/db/tags');
 
 let db;
 let pid;
@@ -135,17 +137,19 @@ describe('Tag catalog + suggestion', () => {
     expect(tags).toContain('react');
     expect(tags).toContain('frontend');
     expect(results.find((r) => r.tag === 'react').inCatalog).toBe(true);
-    // Never returns a word that isn't an existing tag.
+    // Never returns a word that isn't an existing tag or a starter tag.
     expect(tags).not.toContain('built');
-    expect(tags.every((t) => ['react', 'frontend'].includes(t))).toBe(true);
+    const known = new Set(['react', 'frontend', ...SEED_TAGS.map((t) => t.tag)]);
+    expect(tags.every((t) => known.has(t))).toBe(true);
   });
 
   test('seedCatalogFromUsage promotes the usage vocabulary into the catalog', () => {
     const { e1, i1 } = buildMain();
     db.addEntryTags(e1, ['frontend', 'core']);
     db.addItemTags(i1, ['python']);
+    // frontend and python are starter tags, so first use already catalogued them.
     const { added } = db.seedCatalogFromUsage(pid);
-    expect(added).toBe(3);
+    expect(added).toBe(1);
     expect(
       db
         .getTagCatalog(pid)
@@ -154,6 +158,42 @@ describe('Tag catalog + suggestion', () => {
     ).toEqual(['core', 'frontend', 'python']);
     // idempotent: seeding again adds nothing
     expect(db.seedCatalogFromUsage(pid).added).toBe(0);
+  });
+
+  test('a person with few tags of their own gets starter-tag suggestions', async () => {
+    buildMain();
+    const { results } = await db.suggestTags(pid, 'Designed the PostgreSQL schema and SQL queries');
+    const tags = results.map((r) => r.tag);
+    expect(tags).toEqual(expect.arrayContaining(['postgresql', 'sql']));
+  });
+
+  test('the starter vocabulary drops out once a person has their own', async () => {
+    const { e1 } = buildMain();
+    db.addEntryTags(
+      e1,
+      Array.from({ length: SEED_UNTIL }, (_, i) => `own-tag-${i}`),
+    );
+    const { results } = await db.suggestTags(pid, 'Designed the PostgreSQL schema', {
+      minScore: 0,
+      limit: 0,
+    });
+    expect(results.some((r) => r.tag === 'postgresql')).toBe(false);
+  });
+
+  test('a starter tag joins the catalog with its description on first use', () => {
+    const { i1 } = buildMain();
+    db.addItemTags(i1, ['postgresql']);
+    const entry = db.getTagCatalog(pid).find((c) => c.tag === 'postgresql');
+    expect(entry.description).toMatch(/PostgreSQL/);
+    expect(entry.category).toBe('esco-ict');
+  });
+
+  test('using a starter tag never overwrites a catalog description', () => {
+    const { i1 } = buildMain();
+    db.setCatalogTag(pid, 'leadership', { description: 'My own words', category: 'mine' });
+    db.addItemTags(i1, ['leadership']);
+    const entry = db.getTagCatalog(pid).find((c) => c.tag === 'leadership');
+    expect(entry).toMatchObject({ description: 'My own words', category: 'mine' });
   });
 
   test('suggestBulk returns per entry/item candidates and writes nothing', async () => {
