@@ -299,9 +299,7 @@ describe('Variants CRUD', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Resolver — the decision table
-// ---------------------------------------------------------------------------
 
 describe('resolveVariant', () => {
   function texts(resolved) {
@@ -487,9 +485,7 @@ describe('resolveMain', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Per-variant cover-letter header (migration 011)
-// ---------------------------------------------------------------------------
 
 describe('per-variant cover-letter header', () => {
   test('getLetterHeader returns empty defaults until set, then the row', () => {
@@ -561,9 +557,7 @@ describe('per-variant cover-letter header', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Legacy import + seeding
-// ---------------------------------------------------------------------------
 
 describe('importLegacyData + seeding', () => {
   const legacy = {
@@ -632,7 +626,7 @@ describe('importLegacyData + seeding', () => {
     expect(resExp.entries.map((e) => e.fields.position)).toEqual(['Eng']); // 'Old role' excluded
     expect(resExp.entries[0].items.map((i) => i.content)).toEqual(['Kept bullet']); // dropped bullet gone
 
-    // Cover Letter — the legacy top-level header lands on the variant, not the person
+    // Cover Letter: the legacy top-level header lands on the variant
     const cl = db.resolveVariant(variants.find((v) => v.kind === 'coverletter').id);
     expect(cl.coverletter.sections.map((s) => s.title)).toEqual(['Intro']);
     expect(cl.coverletter.recipientName).toBe('HM');

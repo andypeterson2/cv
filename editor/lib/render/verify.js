@@ -5,7 +5,7 @@
  * Three layers:
  *   1. static    — manifest schema, contextVersion match, declared files exist.
  *   2. security  — scan every .tex/.cls/.sty/.fd/.njk for shell escape and for
- *                  \input/\openin/\openout of absolute or `..` paths. (NOT a
+ *                  \input/\openin/\openout of absolute or `..` paths. (not a
  *                  blanket \directlua/\write reject — those have legitimate uses,
  *                  e.g. the bundled FontAwesome helper, and are inert/bounded
  *                  under xelatex --no-shell-escape.)
@@ -30,9 +30,7 @@ const { makeKitchenSink } = require('./fixtures/kitchen-sink');
 
 const SCANNABLE = /\.(tex|cls|sty|fd|njk)$/i;
 
-// ---------------------------------------------------------------------------
 // security scan
-// ---------------------------------------------------------------------------
 
 function scanShellEscape(content) {
   return /\\write\s*18(?![0-9])/.test(content) ? ['\\write18 (shell escape)'] : [];
@@ -76,9 +74,7 @@ function securityScan(bundleDir) {
   return violations;
 }
 
-// ---------------------------------------------------------------------------
 // static checks
-// ---------------------------------------------------------------------------
 
 function staticChecks(bundleDir) {
   let manifest;
@@ -116,9 +112,7 @@ function staticChecks(bundleDir) {
   return { manifest, checks };
 }
 
-// ---------------------------------------------------------------------------
 // dynamic checks
-// ---------------------------------------------------------------------------
 
 function fixtureSamples() {
   return [
@@ -171,9 +165,7 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir })
   }
 }
 
-// ---------------------------------------------------------------------------
 // orchestrator
-// ---------------------------------------------------------------------------
 
 /**
  * @param {string} bundleDir
@@ -210,7 +202,7 @@ async function verifyLayout(bundleDir, opts = {}) {
 /**
  * Build real-data smoke samples from the DB: up to maxSamples resolved
  * variants (one per kind per person). Passed to verifyLayout so a candidate is
- * tested against the shapes the user's actual data produces, not just fixtures.
+ * tested against the shapes the user's own data produces as well as fixtures.
  */
 function gatherSamples(db, { maxSamples = 6 } = {}) {
   const samples = [];

@@ -4,9 +4,7 @@
 
 const { extractBraceArgs, findCommand } = require('./braceExtractor');
 
-// ---------------------------------------------------------------------------
 // Section type detection
-// ---------------------------------------------------------------------------
 
 function detectSectionType(tex) {
   if (/\\begin\{cventries\}/.test(tex)) return 'cventries';
@@ -17,9 +15,7 @@ function detectSectionType(tex) {
   return 'unknown';
 }
 
-// ---------------------------------------------------------------------------
 // Parse section title
-// ---------------------------------------------------------------------------
 
 function parseSectionTitle(tex) {
   const cmds = findCommand(tex, 'cvsection', 1);
@@ -27,9 +23,7 @@ function parseSectionTitle(tex) {
   return m ? m[1] : '';
 }
 
-// ---------------------------------------------------------------------------
 // cventries (experience, education, extracurricular)
-// ---------------------------------------------------------------------------
 
 function parseCventries(tex) {
   const title = parseSectionTitle(tex);
@@ -66,9 +60,7 @@ function parseCventries(tex) {
   return { type: 'cventries', title, entries };
 }
 
-// ---------------------------------------------------------------------------
 // cvskills
-// ---------------------------------------------------------------------------
 
 function parseCvskills(tex) {
   const title = parseSectionTitle(tex);
@@ -80,9 +72,7 @@ function parseCvskills(tex) {
   return { type: 'cvskills', title, entries };
 }
 
-// ---------------------------------------------------------------------------
 // cvhonors (certifications, honors)
-// ---------------------------------------------------------------------------
 
 function parseCvhonors(tex) {
   const title = parseSectionTitle(tex);
@@ -96,9 +86,7 @@ function parseCvhonors(tex) {
   return { type: 'cvhonors', title, entries };
 }
 
-// ---------------------------------------------------------------------------
 // cvreferences
-// ---------------------------------------------------------------------------
 
 function parseCvreferences(tex) {
   const title = parseSectionTitle(tex);
@@ -112,9 +100,7 @@ function parseCvreferences(tex) {
   return { type: 'cvreferences', title, entries };
 }
 
-// ---------------------------------------------------------------------------
 // cvparagraph (summary)
-// ---------------------------------------------------------------------------
 
 function parseCvparagraph(tex) {
   const title = parseSectionTitle(tex);
@@ -131,9 +117,7 @@ function parseCvparagraph(tex) {
   return { type: 'cvparagraph', title, text };
 }
 
-// ---------------------------------------------------------------------------
 // Auto-detect and parse any section file
-// ---------------------------------------------------------------------------
 
 function parseSection(tex) {
   const type = detectSectionType(tex);
@@ -153,9 +137,7 @@ function parseSection(tex) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Document parser (resume.tex / cv.tex) — extract \input ordering
-// ---------------------------------------------------------------------------
 
 function parseDocument(tex) {
   const sections = [];
@@ -167,7 +149,7 @@ function parseDocument(tex) {
     // Active section: \input{resume/experience.tex}
     const activeMatch = trimmed.match(/^\\input\{([^}]+)\}/);
     if (activeMatch) {
-      // Skip data.tex — it's the shared data file, not a content section
+      // Skip data.tex: it holds shared data rather than a content section
       if (activeMatch[1] === 'data.tex') continue;
       const comment = trimmed.includes('%')
         ? trimmed.substring(trimmed.indexOf('%') + 1).trim()
@@ -188,9 +170,7 @@ function parseDocument(tex) {
   return { sections };
 }
 
-// ---------------------------------------------------------------------------
 // data.tex parser
-// ---------------------------------------------------------------------------
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 31; the LaTeX tokenizer state machine
 function parseData(tex) {
@@ -274,9 +254,7 @@ function parseData(tex) {
   return { personal, metrics };
 }
 
-// ---------------------------------------------------------------------------
 // Cover letter parser
-// ---------------------------------------------------------------------------
 
 function parseCoverletter(tex) {
   const result = {

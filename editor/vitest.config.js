@@ -8,7 +8,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       // Gate all of lib + routes, thin spots included. Floors sit a few points
-      // below measured coverage: a regression ratchet, not a stretch goal.
+      // below measured coverage, so a drop fails the run.
       include: ['lib/**/*.js', 'routes/**/*.js'],
       thresholds: { statements: 75, branches: 60, functions: 72, lines: 78 },
     },

@@ -2,8 +2,8 @@
  * Approximate tag matching — powers the tag-search endpoint and the author-time
  * variant-rule expansion. Pure, deterministic, dependency-free.
  *
- * IMPORTANT: fuzziness lives HERE (and in the /tags/search + /rules/expand
- * endpoints that call it) ONLY. Variant *resolution* stays exact — see
+ * important: fuzziness lives HERE (and in the /tags/search + /rules/expand
+ * endpoints that call it) only. Variant *resolution* stays exact — see
  * db._matchesTags. The contract is: approximate matching helps an author/LLM
  * find and reuse tags, but anything that lands in a rendered PDF must be a
  * concrete tag stored in a variant rule, never a fuzzy match evaluated at

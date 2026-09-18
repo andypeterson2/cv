@@ -8,7 +8,7 @@
  *   - cv_get_pdf: the stdio server wrote the PDF to local disk; a Worker has no
  *     filesystem, so it returns the PDF INLINE as a base64 MCP resource.
  *   - cv_install_layout: reads a local .zip from disk — impossible on a Worker, so
- *     it returns a clear "unsupported on the remote server" error (the ONLY tool
+ *     it returns a clear "unsupported on the remote server" error (the only tool
  *     whose behaviour intentionally diverges).
  *
  * Config (CV_EDITOR_URL + CV_ORIGIN_SECRET) comes from the Worker env, read at call
@@ -220,7 +220,7 @@ const toolDefs: ToolDef[] = [
       return api('PATCH', `/api/persons/${enc(a.person_id)}/personal`, a.fields);
     },
   },
-  // ---- Sections / entries / bullets (main content) ----
+  // Sections / entries / bullets (main content)
   {
     name: 'cv_add_section',
     description:
@@ -367,7 +367,7 @@ const toolDefs: ToolDef[] = [
     },
     handler: (a) => api('DELETE', `/api/items/${enc(a.item_id)}`),
   },
-  // ---- Tags ----
+  // Tags
   {
     name: 'cv_tag',
     description:
@@ -635,7 +635,7 @@ const toolDefs: ToolDef[] = [
       return api('POST', `/api/persons/${enc(a.person_id)}/tags/suggest-bulk`, body);
     },
   },
-  // ---- Variants ----
+  // Variants
   {
     name: 'cv_list_variants',
     description:
@@ -856,7 +856,7 @@ const toolDefs: ToolDef[] = [
     },
   },
 
-  // ---- Layouts ----
+  // Layouts
   {
     name: 'cv_list_layouts',
     description:
@@ -953,7 +953,7 @@ const toolDefs: ToolDef[] = [
     handler: (a) => api('GET', `/api/layouts/${enc(a.layout_id)}`),
   },
 
-  // ---- Reference + global style settings ----
+  // Reference + global style settings
   {
     name: 'cv_catalog',
     description:
@@ -985,7 +985,7 @@ const toolDefs: ToolDef[] = [
     handler: (a) => api('PATCH', '/api/settings', a.settings),
   },
 
-  // ---- Person rename / export / import ----
+  // Person rename / export / import
   {
     name: 'cv_rename_person',
     description: 'Rename a person/profile (names are unique).',
@@ -1022,7 +1022,7 @@ const toolDefs: ToolDef[] = [
     handler: (a) => api('POST', `/api/persons/${enc(a.person_id)}/import`, a.data),
   },
 
-  // ---- Reordering (pass the full id list in the new order) ----
+  // Reordering (pass the full id list in the new order)
   {
     name: 'cv_reorder_sections',
     description:
@@ -1061,7 +1061,7 @@ const toolDefs: ToolDef[] = [
     handler: (a) => api('PATCH', `/api/entries/${enc(a.entry_id)}/items/order`, { ids: a.ids }),
   },
 
-  // ---- Variant rename + cover-letter paragraph edit/delete/reorder ----
+  // Variant rename + cover-letter paragraph edit/delete/reorder
   {
     name: 'cv_rename_variant',
     description: 'Rename a variant.',
@@ -1128,7 +1128,7 @@ const toolDefs: ToolDef[] = [
       api('PATCH', `/api/variants/${enc(a.variant_id)}/letter-sections/order`, { ids: a.ids }),
   },
 
-  // ---- LinkedIn / Indeed / Handshake export + drift tracking ----
+  // LinkedIn / Indeed / Handshake export + drift tracking
   {
     name: 'cv_export_linkedin',
     description:

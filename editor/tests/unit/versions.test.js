@@ -56,7 +56,7 @@ describe('Versions (ADR-006)', () => {
 
     expect(db.restoreVersion(pid, v1)).toBe(true);
     expect(db.getPersonExport(pid)).toEqual(before); // exact round-trip
-    expect(db.getSections(pid)).toHaveLength(1); // the extra section is gone, not appended
+    expect(db.getSections(pid)).toHaveLength(1); // the extra section is gone
   });
 
   test('restoring twice does not duplicate content (it clears first)', () => {

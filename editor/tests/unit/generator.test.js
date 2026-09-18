@@ -9,9 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// ---------------------------------------------------------------------------
 // generateDataTex
-// ---------------------------------------------------------------------------
 
 describe('generateDataTex', () => {
   it('generates personal info commands', () => {
@@ -65,9 +63,7 @@ describe('generateDataTex', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // generateSectionTex
-// ---------------------------------------------------------------------------
 
 describe('generateSectionTex', () => {
   it('generates cventries section', () => {
@@ -185,9 +181,7 @@ describe('generateSectionTex', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // generateDocumentTex
-// ---------------------------------------------------------------------------
 
 describe('generateDocumentTex', () => {
   it('generates document with section inputs', () => {
@@ -216,9 +210,7 @@ describe('generateDocumentTex', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // generateCoverletterTex
-// ---------------------------------------------------------------------------
 
 describe('generateCoverletterTex', () => {
   const personal = { firstName: 'Jane', lastName: 'Doe' };
@@ -299,9 +291,7 @@ describe('generateCoverletterTex', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // generateAll
-// ---------------------------------------------------------------------------
 
 describe('generateAll', () => {
   let buildDir;

@@ -7,7 +7,7 @@
  * (entry_overrides / item_overrides) + a section list (variant_sections), or —
  * for coverletter-kind variants — a list of letter paragraphs.
  *
- * There is NO "active person" and NO JSON-blob working copy. All ids are stable
+ * There is no "active person" and no JSON-blob working copy. All ids are stable
  * and every method takes the ids it operates on, so callers (REST, MCP) are
  * fully addressable and stateless.
  *
@@ -34,9 +34,7 @@ class CvDatabase {
     this.seedJaneDoe();
   }
 
-  // ---------------------------------------------------------------------------
   // Prepared statements
-  // ---------------------------------------------------------------------------
 
   _prepareStatements() {
     const p = (sql) => this.db.prepare(sql);
@@ -341,11 +339,9 @@ class CvDatabase {
 
   // Settings methods (global + per-person) are mixed in at the bottom of this file.
 
-  // ---------------------------------------------------------------------------
   // Persons
-  // ---------------------------------------------------------------------------
 
-  // ---- users + ownership (migration 018) ----
+  // users + ownership (migration 018)
 
   getUser(id) {
     return this._stmts.getUserById.get(id) || null;
@@ -374,7 +370,7 @@ class CvDatabase {
     );
     const existing = this.getUserByGoogleSub(googleSub);
     if (existing) {
-      // Late adoption: the owner may have signed in BEFORE OWNER_EMAIL was configured,
+      // Late adoption: the owner may have signed in before OWNER_EMAIL was configured,
       // which made an ordinary user instead of taking over '@owner'. If this is the
       // owner's email and '@owner' is still an unclaimed placeholder, fold that stray
       // account into it now — same net effect as first-sign-in adoption, one-shot.
@@ -430,7 +426,7 @@ class CvDatabase {
     })();
     return owner.id;
   }
-  // The owner/system accounts are resolved by ROLE, not by their '@owner'/'@system'
+  // The owner/system accounts are resolved by role rather than by their placeholder
   // placeholder sub — owner adoption rewrites the owner's sub to a real Google id, but
   // the role never changes, so these (and their caches) survive it.
   /** The account that owns the public demo — resolved once, then cached. */
@@ -489,9 +485,7 @@ class CvDatabase {
     return this.getMain(personId);
   }
 
-  // ---------------------------------------------------------------------------
   // Sections
-  // ---------------------------------------------------------------------------
 
   getSections(personId) {
     return this._stmts.getSectionsByPerson.all(personId).map(rowToSection);
@@ -554,9 +548,7 @@ class CvDatabase {
     tx();
   }
 
-  // ---------------------------------------------------------------------------
   // Entries
-  // ---------------------------------------------------------------------------
 
   getEntry(id) {
     const e = this._stmts.getEntry.get(id);
@@ -599,9 +591,7 @@ class CvDatabase {
     tx();
   }
 
-  // ---------------------------------------------------------------------------
   // Items
-  // ---------------------------------------------------------------------------
 
   createItem(entryId, content, title = '') {
     const order = this._stmts.maxItemSortOrder.get(entryId).m + 1;
@@ -632,9 +622,7 @@ class CvDatabase {
   // Variant subsystem (CRUD / rules / sections / overrides / letters / resolution)
   // is a mixin.
 
-  // ---------------------------------------------------------------------------
   // Aggregate read for MCP / UI — full main + variant summaries
-  // ---------------------------------------------------------------------------
 
   getMain(personId) {
     const person = this.getPerson(personId);
@@ -677,18 +665,14 @@ class CvDatabase {
 
   // Export / import / seeding is a mixin.
 
-  // ---------------------------------------------------------------------------
   // Lifecycle
-  // ---------------------------------------------------------------------------
 
   close() {
     this.db.close();
   }
 }
 
-// ---------------------------------------------------------------------------
 // Method mixins
-// ---------------------------------------------------------------------------
 
 // Each method cluster is its own module, mixed onto the prototype so the public
 // surface (and getDb()) stays a single CvDatabase class.

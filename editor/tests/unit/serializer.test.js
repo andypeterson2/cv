@@ -7,7 +7,7 @@ const {
   serializeCoverletter,
 } = require('../../lib/serializer');
 
-// ---- sanitizeLatex ----
+// sanitizeLatex
 
 describe('sanitizeLatex', () => {
   test('escapes bare # $ % & _ ^', () => {
@@ -40,7 +40,7 @@ describe('sanitizeLatex', () => {
   });
 });
 
-// ---- serializeSection: cventries ----
+// serializeSection: cventries
 
 describe('serializeSection - cventries', () => {
   const data = {
@@ -98,7 +98,7 @@ describe('serializeSection - cventries', () => {
   });
 });
 
-// ---- serializeSection: cvskills ----
+// serializeSection: cvskills
 
 describe('serializeSection - cvskills', () => {
   const data = {
@@ -125,7 +125,7 @@ describe('serializeSection - cvskills', () => {
   });
 });
 
-// ---- serializeSection: cvhonors ----
+// serializeSection: cvhonors
 
 describe('serializeSection - cvhonors', () => {
   const data = {
@@ -149,7 +149,7 @@ describe('serializeSection - cvhonors', () => {
   });
 });
 
-// ---- serializeSection: cvparagraph ----
+// serializeSection: cvparagraph
 
 describe('serializeSection - cvparagraph', () => {
   const data = {
@@ -167,7 +167,7 @@ describe('serializeSection - cvparagraph', () => {
   });
 });
 
-// ---- serializeSection: cvreferences ----
+// serializeSection: cvreferences
 
 describe('serializeSection - cvreferences', () => {
   const data = {
@@ -184,7 +184,7 @@ describe('serializeSection - cvreferences', () => {
   });
 });
 
-// ---- serializeSection: unknown type throws ----
+// serializeSection: unknown type throws
 
 describe('serializeSection - error handling', () => {
   test('throws on unknown type', () => {
@@ -192,7 +192,7 @@ describe('serializeSection - error handling', () => {
   });
 });
 
-// ---- serializeFilteredSection ----
+// serializeFilteredSection
 
 describe('serializeFilteredSection', () => {
   const sectionData = {
@@ -281,7 +281,7 @@ describe('serializeFilteredSection', () => {
   });
 });
 
-// ---- serializeDocumentSections ----
+// serializeDocumentSections
 
 describe('serializeDocumentSections', () => {
   const baseTex = [
@@ -327,7 +327,7 @@ describe('serializeDocumentSections', () => {
   });
 });
 
-// ---- serializeData ----
+// serializeData
 
 describe('serializeData', () => {
   const data = {
@@ -381,7 +381,7 @@ describe('serializeData', () => {
   });
 });
 
-// ---- serializeCoverletter ----
+// serializeCoverletter
 
 describe('serializeCoverletter', () => {
   const originalTex = [

@@ -26,9 +26,7 @@ const CONTEXT_VERSION = 1;
 
 const PRESET_COLOR_KEYS = ACCENT_COLORS.map((c) => c.key);
 
-// ---------------------------------------------------------------------------
 // personal
-// ---------------------------------------------------------------------------
 
 function buildPersonal(personalIn) {
   const p = Object.assign({}, personalIn);
@@ -54,9 +52,7 @@ function buildPersonal(personalIn) {
   return Object.assign({}, p, { photo, socials });
 }
 
-// ---------------------------------------------------------------------------
 // sections
-// ---------------------------------------------------------------------------
 
 function buildSection(section) {
   const latexType = getLatexType(section.type);
@@ -95,9 +91,7 @@ function buildSection(section) {
   return out;
 }
 
-// ---------------------------------------------------------------------------
 // style / spacing / fonts
-// ---------------------------------------------------------------------------
 
 // Accent resolution. `kind`/`value` drive awesome-cv's named-color commands;
 // `hex` (6 hex digits, no #) is the resolved colour for layouts that don't have
@@ -124,9 +118,7 @@ function buildStyle(styleIn) {
   return style;
 }
 
-// ---------------------------------------------------------------------------
 // public
-// ---------------------------------------------------------------------------
 
 /**
  * @param {object} compileData - output of db.resolveVariant(id)
