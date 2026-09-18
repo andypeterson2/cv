@@ -3,13 +3,13 @@
  * gateway but the backend is ALSO directly reachable, so this is the real gate).
  *
  * No-op unless CV_EDITOR_TOKEN is set (local dev + tests stay open). When set,
- * `Authorization: Bearer <token>` is REQUIRED for:
+ * `Authorization: Bearer <token>` is required for:
  *   - all writes (POST/PUT/PATCH/DELETE),
  *   - the compile GET (…/pdf — a CPU/DoS lever, gated regardless of person),
  *   - reads that expose a NON-PUBLIC person's data. A person owns not just
  *     `/persons/<id>/…` but the id-addressed resources hanging off it —
  *     `/variants/<id>` (its /resolve returns the whole CV), `/sections/<id>`,
- *     `/entries/<id>`, `/items/<id>` — so the owning person is resolved for ALL of
+ *     `/entries/<id>`, `/items/<id>` — so the owning person is resolved for all of
  *     them (getDb().ownerPersonId) and gated unless that person is on
  *     `publicPersonIds`. Non-person globals (the person LIST, /settings, /layouts,
  *     /catalog, /health) stay open for the demo; ANYTHING ELSE is denied by default,

@@ -1,7 +1,7 @@
 /**
  * Host-provided Nunjucks filters, available to every layout template.
  *
- * Escaping is deliberately NOT autoescaped (Nunjucks autoescape is HTML-only).
+ * Escaping is deliberately not autoescaped (Nunjucks autoescape is HTML-only).
  * Templates must call `| tex` on every user-supplied value; the verification
  * gate compiles a fixture full of LaTeX specials, so a layout that forgets to
  * escape fails the contract rather than silently producing broken output.

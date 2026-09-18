@@ -8,7 +8,7 @@
  * `this.props` inside CvMcp.
  *
  * CSRF/state is carried in STATELESS, HMAC-SIGNED tokens (see ./sign) — deliberately
- * NOT in cookies (they don't survive Claude's OAuth popup) and NOT in KV (eventually
+ * not in cookies (they don't survive Claude's OAuth popup) and not in KV (eventually
  * consistent: a value written on the consent GET is not reliably readable on the POST
  * milliseconds later — "Consent expired or invalid"; also passes locally where
  * Miniflare KV is synchronous, then fails on real Cloudflare). ADMIN_EMAILS is the gate.
@@ -26,8 +26,8 @@ const GOOGLE_USERINFO = 'https://openidconnect.googleapis.com/v1/userinfo';
 const TTL_MS = 5 * 60 * 1000; // signed state tokens valid for 5 minutes (interactive hop + slack)
 const GOOGLE_FETCH_TIMEOUT_MS = 8000;
 
-// Where an OAuth authorization code may be redirected. DCR is public, so this — not the
-// client's self-declared redirect_uri — is the real backstop against code interception.
+// Where an OAuth authorization code may be redirected. DCR is public, so this
+// allowlist is the real backstop against code interception.
 const ALLOWED_REDIRECT_HOSTS = new Set(['claude.ai', 'claude.com', 'localhost', '127.0.0.1']);
 
 interface GoogleTokens {
@@ -105,7 +105,7 @@ function securityHeaders(): Headers {
   const csp = [
     "default-src 'none'",
     "style-src 'self' 'unsafe-inline'",
-    // MUST allow Google: browsers enforce form-action against the consent POST's 302
+    // must allow Google: browsers enforce form-action against the consent POST's 302
     // target, so 'self' alone silently blocks the hop to accounts.google.com.
     "form-action 'self' https://accounts.google.com",
     "frame-ancestors 'none'",

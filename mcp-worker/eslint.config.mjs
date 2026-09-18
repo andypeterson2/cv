@@ -21,7 +21,7 @@ export default [
     plugins: { sonarjs },
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
-      // WARN, not error: MCP tool payloads and OAuth responses are untyped JSON at
+      // Warn only: MCP tool payloads and OAuth responses are untyped JSON at
       // the boundary; tsc strict still checks everything the types do cover.
       '@typescript-eslint/no-explicit-any': 'warn',
       ...complexityBudgets,

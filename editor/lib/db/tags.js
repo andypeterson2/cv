@@ -15,7 +15,7 @@ const { withNeighbours } = require('../neighbour-scorer');
 const SEED_UNTIL = 30;
 
 class TagStore {
-  // ---- Tags ----
+  // Tags
 
   addEntryTags(entryId, tags) {
     const pid = this._stmts.personForEntry.get(entryId)?.pid;
@@ -105,7 +105,7 @@ class TagStore {
     return { query: q, results };
   }
 
-  // ---- Tag aliases (per-person alias → canonical) ----
+  // Tag aliases (per-person alias → canonical)
 
   getTagAliases(personId) {
     return this._stmts.getAliases.all(personId);
@@ -176,7 +176,7 @@ class TagStore {
     this._stmts.delAlias.run(personId, normTag(alias));
   }
 
-  // ---- Tag catalog (per-person controlled vocabulary) + suggestion ----
+  // Tag catalog (per-person controlled vocabulary) + suggestion
 
   getTagCatalog(personId) {
     return this._stmts.getCatalog.all(personId);
@@ -309,7 +309,7 @@ class TagStore {
 
   /**
    * Suggest existing tags for a piece of text. Ranks the union of the catalog
-   * (preferred) and the usage vocabulary; NEVER invents a tag. Approximate —
+   * (preferred) and the usage vocabulary; never invents a tag. Approximate —
    * discovery/authoring only. `scorer` (optional) swaps in an
    * alternate ranker (e.g. embeddings) without changing this method's shape.
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
@@ -346,8 +346,8 @@ class TagStore {
   }
 
   /**
-   * Suggest tags for EVERY entry/item of a person in one pass — the natural
-   * step right after a legacy import that arrived untagged. Suggest-ONLY: writes
+   * Suggest tags for every entry/item of a person in one pass — the natural
+   * step right after a legacy import that arrived untagged. Suggest-only: writes
    * nothing; returns candidates + the target's current tags so a confirmer
    * (an MCP client or the UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
    * once and reused across items.

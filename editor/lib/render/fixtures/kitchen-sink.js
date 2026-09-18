@@ -11,7 +11,7 @@
  */
 
 // Every special the escaper handles, accented unicode, and an em-dash. No bare
-// backslash: the escaper passes `\` through, so a stray `\word` breaks ANY layout.
+// backslash: the escaper passes `\` through, so a stray `\word` breaks any layout.
 const SPECIALS = 'R&D: 100% of $5M, #1 a_b c^d ~approx — café résumé naïve';
 
 function basePersonal() {
@@ -62,7 +62,7 @@ function baseSections() {
             { content: 'Intentional LaTeX passes through: \\textbf{bold} and \\emph{italic}' },
           ],
         },
-        // entry with NO items → cventry {} branch
+        // entry with no items → cventry {} branch
         {
           fields: {
             position: 'Advisor',

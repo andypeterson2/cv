@@ -148,13 +148,11 @@ app.use(
 app.use(express.json({ limit: '2mb' }));
 // API-only: the editor frontend is owned and served by the portal — no static serving.
 
-// Front-door user provisioning, mounted BEFORE tokenAuth: it carries no user token
+// Front-door user provisioning, mounted before tokenAuth: it carries no user token
 // because it establishes the user. Gated by X-Origin-Secret inside the router.
 app.use('/api/auth', createAuthRouter(getDb));
 
-// ---------------------------------------------------------------------------
 // Public contract routes (registered before auth): health + API discovery.
-// ---------------------------------------------------------------------------
 
 app.get('/health', (req, res) => {
   try {
@@ -191,16 +189,12 @@ app.use(
 // reach it; every route reads it and the person layer scopes by it.
 app.use('/api', attachUser(getDb));
 
-// ---------------------------------------------------------------------------
 // Mount routers — every content route is id-addressable; there is no active
 // person / session state.
-// ---------------------------------------------------------------------------
 
 for (const [prefix, router] of API_ROUTERS) app.use(prefix, router);
 
-// ---------------------------------------------------------------------------
 // Error handling middleware
-// ---------------------------------------------------------------------------
 
 // Unmatched route → JSON 404 envelope.
 app.use((req, res) => {
@@ -216,12 +210,10 @@ app.use((err, req, res, _next) => {
   res.status(status).json(body);
 });
 
-// ---------------------------------------------------------------------------
 // Start
-// ---------------------------------------------------------------------------
 
 if (require.main === module) {
-  // Eager DB init: run migrations at boot, BEFORE listening. getDb() is otherwise lazy
+  // Eager DB init: run migrations at boot, before listening. getDb() is otherwise lazy
   // and /health is DB-free, so a crashing migration would pass the health check while
   // data requests 500 on a half-applied schema; here it exits non-zero instead. Tests
   // import `app` and inject their own DB via setDb, so this runs only for the server.

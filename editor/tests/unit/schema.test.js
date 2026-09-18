@@ -81,7 +81,7 @@ describe('setCatalogTag schema', () => {
     expect(v({ tag: 'frontend' })).toBe(true);
     expect(v({ tag: 'frontend', description: 'UI work', category: 'skill' })).toBe(true);
     expect(v({})).toBe(false);
-    expect(v({ tag: 123 })).toBe(false); // wrong type rejected (extra props are stripped, not rejected)
+    expect(v({ tag: 123 })).toBe(false); // wrong type rejected (extra props are stripped instead)
   });
 });
 
@@ -131,7 +131,7 @@ describe('variant schemas', () => {
     expect(validators.letterHeader({ recipientName: 'Acme', opening: 'Dear,' })).toBe(true);
     expect(validators.letterHeader({})).toBe(false); // must set at least one field
     expect(validators.letterHeader({ recipientName: 5 })).toBe(false);
-    // unknown keys are stripped (ajv removeAdditional), not rejected
+    // unknown keys are stripped (ajv removeAdditional)
     const body = { recipientName: 'Acme', bogus: 'x' };
     expect(validators.letterHeader(body)).toBe(true);
     expect(body).toEqual({ recipientName: 'Acme' });

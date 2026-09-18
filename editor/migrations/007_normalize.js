@@ -24,7 +24,7 @@
  * and a manual foreign_key_check gates the commit.
  */
 
-// Self-contained legacy→semantic type map (do NOT import the app's type map —
+// Self-contained legacy→semantic type map (do not import the app's type map —
 // migrations must be frozen and independent of evolving app code). Mirrors
 // LEGACY_TYPE_MAP at the time of writing; identity for already-semantic types.
 const LEGACY_TYPE = {
@@ -286,7 +286,7 @@ function backfillPerson(db, ins, person) {
   const pid = person.id;
   const counts = { sections: 0, entries: 0, items: 0 };
 
-  // ---- person_settings: personal.* and coverletter.* header (minus sections) ----
+  // person_settings: personal.* and coverletter.* header (minus sections)
   if (data.personal) {
     for (const [k, v] of Object.entries(data.personal))
       ins.setting.run(pid, 'personal.' + k, valStr(v));
@@ -298,7 +298,7 @@ function backfillPerson(db, ins, person) {
     }
   }
 
-  // ---- main section order: cv document order, then any blob sections not in cv ----
+  // main section order: cv document order, then any blob sections not in cv
   const blobSections = Array.isArray(data.sections) ? data.sections : [];
   const cvDoc = data.documents && Array.isArray(data.documents.cv) ? data.documents.cv : [];
   const orderedSlugs = [];
@@ -309,7 +309,7 @@ function backfillPerson(db, ins, person) {
   }
   for (const s of blobSections) if (!orderedSlugs.includes(s.id)) orderedSlugs.push(s.id);
 
-  // ---- sections / entries / items, capturing old→new id maps ----
+  // sections / entries / items, capturing old→new id maps
   const sectionIdBySlug = {};
   const entryIdByOld = {};
   const itemIdByOld = {};
@@ -357,12 +357,12 @@ function backfillPerson(db, ins, person) {
     }
   }
 
-  // ---- CV variant: no rules, no overrides; explicit section list from documents.cv ----
+  // CV variant: no rules, no overrides; explicit section list from documents.cv
   const cvVarId = ins.variant.run(pid, 'CV', 'cv').lastInsertRowid;
   writeVariantSections(ins, cvVarId, cvDoc, sectionIdBySlug);
 
   // ---- Resume variant: no rules; explicit section list + per-row exclude overrides
-  //      + paragraph text overrides. (A tag rule would lose section-level filtering.) ----
+  // + paragraph text overrides. (A tag rule would lose section-level filtering.)
   const resumeDoc =
     data.documents && Array.isArray(data.documents.resume) ? data.documents.resume : [];
   const resumeVarId = ins.variant.run(pid, 'Resume', 'resume').lastInsertRowid;
@@ -391,7 +391,7 @@ function backfillPerson(db, ins, person) {
     }
   }
 
-  // ---- Cover Letter variant: only if there are letter paragraphs ----
+  // Cover Letter variant: only if there are letter paragraphs
   const clSections =
     data.coverletter && Array.isArray(data.coverletter.sections) ? data.coverletter.sections : [];
   if (clSections.length) {
