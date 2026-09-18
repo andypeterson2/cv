@@ -3,7 +3,7 @@ const wrap = require('../lib/async-handler');
 const { AppError } = require('../lib/errors');
 
 /**
- * Front-door user provisioning (multi-tenancy phase 2).
+ * Front-door user provisioning.
  *
  * The gateway drives "Sign in with Google", verifies the id_token, then calls this
  * to create-or-update the cv user for that Google `sub` and get back the cv user id

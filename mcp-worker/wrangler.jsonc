@@ -33,8 +33,8 @@
 		}
 	],
 	"vars": {
-		// cv-editor REST base — the Cloudflare Tunnel hostname (tech-debt #12); the Railway
-		// origin is private, reached only via the tunnel. Public URL, not a secret.
+		// cv-editor REST base — the Cloudflare Tunnel hostname; the Railway origin is
+		// private, reached only via the tunnel. Public URL, not a secret.
 		"CV_EDITOR_URL": "https://cv-origin.andypeterson.dev",
 		// This Worker's own public origin, for building signed /pdf download links.
 		"MCP_PUBLIC_URL": "https://mcp.andypeterson.dev"

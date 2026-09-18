@@ -90,9 +90,8 @@ editor/
 │   └── index.html          Standalone editor UI
 ├── migrations/             Database schema migrations
 └── tests/
-    ├── unit/               7 test files — serializer, parser, schema, db, generator
-    ├── integration/        2 test files — full API lifecycle, multi-step workflows
-    └── dom/                7 test files — UI interactions via happy-dom
+    ├── unit/               serializer, parser, schema, db, generator
+    └── integration/        full API lifecycle, multi-step workflows
 ```
 
 ### Data model
@@ -150,13 +149,12 @@ All endpoints return JSON. Base path: `/api`.
 
 ## Testing
 
-525 tests across three layers:
+Two layers of tests:
 
 ```bash
 npm test                 # all tests (vitest)
 npm run test:unit        # unit tests — serializer, parser, schema, db, generator
 npm run test:integration # integration tests — full API lifecycle, workflows
-npm run test:dom         # DOM tests — UI interactions via happy-dom
 ```
 
 ## Tech stack
@@ -168,7 +166,7 @@ npm run test:dom         # DOM tests — UI interactions via happy-dom
 | Validation | AJV (JSON Schema) |
 | Frontend | Alpine.js, SortableJS |
 | PDF | XeLaTeX, Awesome-CV |
-| Testing | Vitest, happy-dom, @testing-library/dom |
+| Testing | Vitest |
 | Infrastructure | Docker |
 
 ## Documents

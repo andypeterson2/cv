@@ -61,7 +61,7 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
   return function (req, res, next) {
     if (!token) return next(); // disabled → open (local dev / tests)
 
-    // A front-door-authenticated USER (multi-tenancy phase 2): the gateway verified
+    // A front-door-authenticated USER: the gateway verified
     // their Google session and injected X-User-Id behind the shared front-door secret.
     // Let it through — the per-user person scoping downstream is what isolates them;
     // a direct caller can't forge X-Origin-Secret, so it can't set a trusted X-User-Id.
