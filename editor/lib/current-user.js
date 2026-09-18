@@ -1,18 +1,11 @@
 /**
- * The request → user seam (multi-tenancy phase 1).
- *
- * Every request that reaches a route carries a `req.userId`, and the person data
- * layer scopes by it. This keeps the resolution in ONE place so phase 2 can swap
- * how the user is identified without touching any route.
- *
- * Phase 1 is behaviour-preserving — there is no real per-visitor auth yet, so:
- *   - a request bearing the owner token IS the owner ('@owner');
- *   - anything else is the demo/system account ('@system'), which owns only the
- *     public person(s) — exactly what the token gate already exposed;
- *   - with no token configured (local dev / tests) we act as the owner.
- *
- * Phase 2 replaces the body below with "read the gateway-verified X-User-Id",
- * falling back to '@system' for logged-out visitors. Nothing else changes.
+ * Resolves the user behind a request, in one place, so every route can read
+ * `req.userId` and the person data layer can scope by it:
+ *   - a request bearing the owner token is the owner ('@owner');
+ *   - a request carrying a gateway-verified X-User-Id is that user;
+ *   - anything else is the demo account ('@system'), which owns only the public
+ *     person(s);
+ *   - with no token configured (local dev and tests) the request acts as the owner.
  */
 const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
 
