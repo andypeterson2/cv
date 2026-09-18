@@ -7,7 +7,7 @@
 const { rowsToSettings, stripPrefix } = require('./helpers');
 
 module.exports = {
-  // ---- Global settings (style / spacing / fonts) ----
+  // Global settings (style / spacing / fonts)
   getSettings(prefix) {
     const rows = this._stmts.getSettings.all(prefix ? prefix + '.' : '');
     return rowsToSettings(rows);
@@ -26,7 +26,7 @@ module.exports = {
     tx(Object.entries(map));
   },
 
-  // ---- Person settings (personal.* / coverletter.*) ----
+  // Person settings (personal.* / coverletter.*)
   getPersonSettings(personId, prefix) {
     const rows = this._stmts.getPersonSettings.all(personId, prefix ? prefix + '.' : '');
     return rowsToSettings(rows);

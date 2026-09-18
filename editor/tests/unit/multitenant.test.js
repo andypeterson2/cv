@@ -46,7 +46,7 @@ describe('multi-tenancy — per-user isolation', () => {
     expect(db.getPersonsForUser(a).map((p) => p.id)).toEqual([pa]);
     expect(db.getPersonsForUser(b).map((p) => p.id)).toEqual([pb]);
 
-    // Cross-user reads are INVISIBLE (null, not a 403 — no existence leak).
+    // Cross-user reads return null, so nothing leaks about what exists.
     expect(db.getPersonForUser(pb, a)).toBeNull();
     expect(db.getMainForUser(pb, a)).toBeNull();
     expect(db.getMainForUser(pb, b)).toBeTruthy();
@@ -89,8 +89,8 @@ describe('attachUser — resolving the request user', () => {
     const good = mkReq({ 'x-user-id': '77', 'x-origin-secret': 'front-door' });
     expect(run(mw, good)).toBe(true);
     expect(good.userId).toBe(77);
-    // X-User-Id without the secret is NOT trusted → falls back to the token path
-    // (no bearer token here → the demo/system user, not the claimed 77)
+    // X-User-Id without the secret is not trusted → falls back to the token path
+    // (no bearer token here, so the demo/system user answers)
     const spoof = mkReq({ 'x-user-id': '77' });
     run(mw, spoof);
     expect(spoof.userId).toBe(db.systemUserId());
@@ -130,7 +130,7 @@ describe('multi-tenancy — owner adoption', () => {
       email: 'ME@example.com',
       name: 'Me',
     });
-    expect(uid).toBe(ownerId); // same account, not a new one
+    expect(uid).toBe(ownerId); // the same account answers
     expect(db.getUser(ownerId).google_sub).toBe('google-real-123'); // relinked to Google
     expect(db.getUser(ownerId).name).toBe('Me');
     // The pre-existing résumé is still theirs, and the role-based lookup still resolves.
@@ -190,7 +190,7 @@ describe('multi-tenancy — owner adoption', () => {
       name: 'Me',
     });
 
-    // Folded into @owner: same id, relinked, stray removed, ALL résumés under the owner.
+    // Folded into @owner: same id, relinked, stray removed, all résumés under the owner.
     expect(uid).toBe(ownerId);
     expect(db.getUser(ownerId).google_sub).toBe('google-real-123');
     expect(db.getUserByGoogleSub('google-real-123').id).toBe(ownerId); // later logins hit the owner
@@ -245,7 +245,7 @@ describe('per-user résumé-name uniqueness (migration 020)', () => {
     const dir = path.join(__dirname, '../../migrations');
     const raw = new Database(':memory:');
     raw.pragma('foreign_keys = ON');
-    // Apply every migration BEFORE 020, so persons still has the OLD global UNIQUE(name).
+    // Apply every migration before 020, so persons still has the OLD global UNIQUE(name).
     raw.exec(
       `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
     );

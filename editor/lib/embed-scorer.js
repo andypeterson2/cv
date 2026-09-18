@@ -1,6 +1,6 @@
 /**
  * OPTIONAL local embedding scorer for tag suggestion — an alternate ranker that
- * plugs into db.suggestTags' `scorer` seam. Pure-Node, NO Python: uses
+ * plugs into db.suggestTags' `scorer` seam. Pure-Node, no Python: uses
  * @huggingface/transformers (v3, the maintained successor of @xenova/transformers)
  * running all-MiniLM-L6-v2 (~23 MB quantized ONNX). Catches conceptual matches the lexical
  * scorer misses (e.g. "orchestrated containers" → `kubernetes`).
@@ -11,7 +11,7 @@
  *  - GRACEFUL ABSENCE: if @huggingface/transformers isn't installed, requiring this
  *    module throws (the require.resolve below), and the suggest route turns
  *    that into a clean 501 — the lexical path is unaffected.
- *  - SUGGEST-NOT-APPLY: returns candidates only; never writes a tag, never
+ *  - SUGGEST-not-APPLY: returns candidates only; never writes a tag, never
  *    touches variant resolution.
  */
 

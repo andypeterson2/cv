@@ -10,7 +10,7 @@
  *   - copy every row into a new table PRESERVING ids, so the ON DELETE CASCADE children
  *     (sections, variants, versions, tags, linkedin_sync, …) stay bound,
  *   - swap the tables, recreate the user index, re-check FKs.
- * Fully guarded + atomic: a row-count mismatch or ANY dangling FK throws inside the
+ * Fully guarded + atomic: a row-count mismatch or any dangling FK throws inside the
  * transaction → rollback → the boot fails with the OLD table untouched (Railway then
  * keeps the previous healthy deploy). So a bad rebuild can never silently corrupt data.
  */

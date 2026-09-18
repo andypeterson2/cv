@@ -38,7 +38,7 @@ module.exports = function createEntriesRouter(getDb) {
     }),
   );
 
-  // ---- items ----
+  // items
 
   router.post(
     '/:id/items',
@@ -61,7 +61,7 @@ module.exports = function createEntriesRouter(getDb) {
     }),
   );
 
-  // ---- tags ----
+  // tags
 
   router.post(
     '/:id/tags',

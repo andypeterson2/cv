@@ -84,7 +84,7 @@ describe('cv tool catalog (moved into the Worker)', () => {
 });
 
 // Per-user scoping: every cv call carries the caller's verified
-// X-User-Id (from the async context set at dispatch) + the front-door secret — and NO
+// X-User-Id (from the async context set at dispatch) + the front-door secret — and no
 // shared owner token. cv trusts that header only behind the secret and scopes by it.
 describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
   let calls: Array<{ url: string; headers: Headers }>;

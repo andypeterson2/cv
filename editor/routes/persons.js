@@ -39,7 +39,7 @@ module.exports = function createPersonsRouter(getDb) {
     return person;
   };
 
-  // ---- Person CRUD ----
+  // Person CRUD
 
   router.get(
     '/',
@@ -99,7 +99,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Personal info ----
+  // Personal info
 
   router.get(
     '/:pid/personal',
@@ -124,7 +124,7 @@ module.exports = function createPersonsRouter(getDb) {
   // The cover-letter header moved to a per-variant table + PATCH
   // /variants/:id/header (design #14); the old per-person route is gone.
 
-  // ---- Export / import ----
+  // Export / import
 
   router.get(
     '/:pid/export',
@@ -148,7 +148,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Version history ----
+  // Version history
   // Reads of a public person's list stay open; snapshot + restore are writes, so
   // tokenAuth gates them to the owner. A checkpoint snapshots the person's
   // authoritative state server-side; restore re-imports it over the person.
@@ -213,7 +213,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Tag vocabulary ----
+  // Tag vocabulary
 
   router.get(
     '/:pid/tags',
@@ -228,7 +228,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // Fuzzy tag search — approximate, for discovery/authoring (NOT resolution).
+  // Fuzzy tag search — approximate, for discovery/authoring (not resolution).
   router.get(
     '/:pid/tags/search',
     wrap((req, res) => {
@@ -248,7 +248,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Tag aliases (alias → canonical; folded in at tag/rule write time) ----
+  // Tag aliases (alias → canonical; folded in at tag/rule write time)
 
   router.get(
     '/:pid/tag-aliases',
@@ -280,7 +280,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Tag catalog (per-person controlled vocabulary; soft guide) ----
+  // Tag catalog (per-person controlled vocabulary; soft guide)
 
   router.get(
     '/:pid/tags/catalog',
@@ -324,7 +324,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Tag suggestion (free text → ranked EXISTING tags; discovery only) ----
+  // Tag suggestion (free text → ranked EXISTING tags; discovery only)
 
   router.post(
     '/:pid/tags/suggest',
@@ -337,7 +337,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Tag suggestion events (accept / dismiss / manual / remove) ----
+  // Tag suggestion events (accept / dismiss / manual / remove)
 
   router.post(
     '/:pid/tags/events',
@@ -358,7 +358,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // Suggest tags for EVERY entry/item at once (e.g. after an untagged import).
+  // Suggest tags for every entry/item at once (e.g. after an untagged import).
   // Suggest-only; all fields optional so an empty body is fine.
   router.post(
     '/:pid/tags/suggest-bulk',
@@ -373,7 +373,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Sections (person-scoped list + create + reorder) ----
+  // Sections (person-scoped list + create + reorder)
 
   router.get(
     '/:pid/sections',
@@ -412,7 +412,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- Variants (person-scoped list + create) ----
+  // Variants (person-scoped list + create)
 
   router.get(
     '/:pid/variants',
@@ -440,7 +440,7 @@ module.exports = function createPersonsRouter(getDb) {
     }),
   );
 
-  // ---- LinkedIn / Indeed / Handshake export + drift tracking ----
+  // LinkedIn / Indeed / Handshake export + drift tracking
   // Turn a resolved variant into paste-ready work-history blocks (lib/linkedin) and
   // track a per-entry fingerprint so status names exactly which positions drifted
   // since the last paste. Person-scoped ON PURPOSE: a non-public person's blocks

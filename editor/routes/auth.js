@@ -9,7 +9,7 @@ const { AppError } = require('../lib/errors');
  * to create-or-update the cv user for that Google `sub` and get back the cv user id
  * (which it stores in the session and injects as X-User-Id on later requests).
  *
- * This is the ONE endpoint that mints users, so it is NOT behind tokenAuth (there is
+ * This is the one endpoint that mints users, so it is not behind tokenAuth (there is
  * no user yet) — it is gated instead by the shared front-door secret (X-Origin-Secret),
  * exactly what cv's origin-guard also checks, so only a front door can reach it. It is
  * mounted before tokenAuth for that reason. Unset secret (local dev / tests) ⇒ open.

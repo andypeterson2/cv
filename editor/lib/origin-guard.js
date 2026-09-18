@@ -9,7 +9,7 @@
  *   - the api.andypeterson.dev gateway worker (cv upstream only), and
  *   - the mcp.andypeterson.dev MCP worker (its api() helper, which the signed
  *     /pdf/<token> links also route through).
- * This is defense in depth *on top of* tokenAuth, not a replacement for it.
+ * This is defense in depth on top of tokenAuth, which still runs.
  *
  * Exempt:
  *   - `/health` and `/api/health` — the container HEALTHCHECK hits these from

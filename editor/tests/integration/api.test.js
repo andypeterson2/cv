@@ -303,7 +303,7 @@ describe('Fuzzy tags', () => {
       'frontend',
     ]);
 
-    // Now both entries resolve — via concrete tags, not fuzzy matching at render time.
+    // Now both entries resolve through concrete tags, with no fuzzy matching at render time.
     resolved = (await request('GET', `/api/variants/${v}/resolve`)).body;
     expect(
       resolved.sections
