@@ -1,7 +1,6 @@
 /**
- * Multi-tenancy phase 1 (migration 018): the ownership layer under `persons`.
- * These pin per-user ISOLATION at the data layer — the property the whole
- * feature rests on — before any real auth exists.
+ * The ownership layer under `persons`: these pin per-user isolation at the data
+ * layer, which is the property the whole feature rests on.
  */
 const CvDatabase = require('../../lib/db');
 const { attachUser } = require('../../lib/current-user');
@@ -74,7 +73,7 @@ describe('multi-tenancy — per-user isolation', () => {
   });
 });
 
-describe('attachUser seam — resolving the request user (phase 2)', () => {
+describe('attachUser — resolving the request user', () => {
   const mkReq = (headers) => ({ headers, get: (n) => headers[n.toLowerCase()] });
   const run = (mw, req) => {
     let called = false;
@@ -113,7 +112,7 @@ describe('attachUser seam — resolving the request user (phase 2)', () => {
   });
 });
 
-describe('multi-tenancy — owner adoption (phase 2)', () => {
+describe('multi-tenancy — owner adoption', () => {
   const prev = process.env.OWNER_EMAIL;
   afterEach(() => {
     if (prev === undefined) delete process.env.OWNER_EMAIL;

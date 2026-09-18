@@ -1,20 +1,14 @@
 /**
- * Multi-tenancy, phase 1: an ownership layer under `persons`.
+ * An ownership layer under `persons`.
  *
- * Adds a `users` table and gives every person an owner (`persons.user_id`). The
- * data model was already multi-PERSON (a person = one CV); this makes it
- * multi-USER, so a signed-in account sees only its own persons.
+ * Adds a `users` table and gives every person an owner (`persons.user_id`), so a
+ * signed-in account sees only its own persons. Two sentinel accounts bootstrap it:
+ * '@system' owns the public demo (the person(s) on CV_PUBLIC_PERSON_IDS), and
+ * '@owner' owns everything else.
  *
- * Two sentinel accounts bootstrap the world without any real auth yet:
- *   - '@system' owns the PUBLIC demo (person(s) on CV_PUBLIC_PERSON_IDS).
- *   - '@owner'  owns everything that existed before multi-tenancy (i.e. you).
- * Phase 2 links real Google `sub`s to accounts (the owner's '@owner' sentinel
- * gets its real sub on first sign-in; new visitors get fresh rows).
- *
- * ADDITIVE ON PURPOSE. `persons.name` keeps its global UNIQUE for now — moving to
- * per-user uniqueness (UNIQUE(user_id, name)) needs a table rebuild, which is a
- * Phase-2 step so it can be tested against real pre-existing data + FK children.
- * Until real users can sign up, only '@owner' + '@system' exist, so no collision.
+ * Additive on purpose: `persons.name` keeps its global UNIQUE. Per-user uniqueness
+ * (UNIQUE(user_id, name)) needs a table rebuild, and only '@owner' and '@system'
+ * exist, so names cannot collide.
  */
 module.exports = function migrate(db) {
   db.exec(`

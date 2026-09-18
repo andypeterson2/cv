@@ -1,6 +1,6 @@
 const { parseOriginSecrets, matchesOriginSecret } = require('../../lib/origin-secret');
 
-describe('origin-secret set (zero-downtime rotation, tech-debt #7)', () => {
+describe('origin-secret set (zero-downtime rotation)', () => {
   test('parses a single value, a comma list, stray whitespace/empties, and nullish', () => {
     expect(parseOriginSecrets('abc')).toEqual(['abc']);
     expect(parseOriginSecrets('old,new')).toEqual(['old', 'new']);

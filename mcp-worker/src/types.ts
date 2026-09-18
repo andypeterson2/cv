@@ -3,7 +3,7 @@ import type { OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 /**
  * Worker bindings + secrets. cv data lives on Railway; this Worker is a thin MCP
  * front door to it (OAuth gates WHO gets in; each authenticated caller is resolved
- * to its own cv user and drives cv scoped by a verified `X-User-Id`, per-user phase 1).
+ * to its own cv user and drives cv scoped by a verified `X-User-Id`).
  */
 /** The native Workers rate-limit binding — `env.OAUTH_RATE_LIMITER.limit({ key })`. */
 export interface RateLimiter {
