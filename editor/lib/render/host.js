@@ -6,7 +6,7 @@
  *   ──► write <kind>.tex + copy bundle class/ (+ assets) into the build dir
  *   ──► return the main .tex path for xelatex
  *
- * A layout owns ALL LaTeX emission via its templates; this file only moves
+ * A layout owns all LaTeX emission via its templates; this file only moves
  * data and files around. Unlike the legacy multi-file (`\input{}`) generator,
  * a template renders the whole document to a single self-contained .tex.
  */

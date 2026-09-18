@@ -3,7 +3,7 @@
  * candidate tags drawn from a target vocabulary. Powers the /tags/suggest
  * endpoint and the cv_suggest_tags MCP tool.
  *
- * IMPORTANT — like fuzzy tag search, this is DISCOVERY/AUTHORING only.
+ * important — like fuzzy tag search, this is DISCOVERY/AUTHORING only.
  * It returns CANDIDATES; it never writes a tag and never invents one outside
  * the supplied vocabulary. Whatever an author/LLM then chooses is written
  * through db.addEntryTags/addItemTags → normTag + alias fold, and variant
@@ -18,7 +18,7 @@
 const fuzzy = require('./fuzzy');
 
 // Function words only — kept deliberately small. We prune these so they don't
-// generate junk bigrams ("the-react") or match short tags; we do NOT prune
+// generate junk bigrams ("the-react") or match short tags; we do not prune
 // content verbs ("built", "designed") because they simply score low and the
 // minScore filter handles them, whereas over-pruning hurts recall.
 const STOPWORDS = new Set([

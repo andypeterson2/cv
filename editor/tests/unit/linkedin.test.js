@@ -86,7 +86,7 @@ describe('exportLinkedin — mapping + shape', () => {
 
   test('role ← fields.position, company ← fields.organization', () => {
     expect(positions[0].title).toBe('Research Assistant');
-    expect(positions[0].company).toBe('Example Research Lab'); // NOT fields.title (absent → would be '')
+    expect(positions[0].company).toBe('Example Research Lab'); // not fields.title (absent → would be '')
     expect(positions[0].location).toBe('Springfield, IL');
   });
 

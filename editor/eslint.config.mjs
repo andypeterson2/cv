@@ -5,7 +5,7 @@ import globals from 'globals';
 import sonarjs from 'eslint-plugin-sonarjs';
 
 // Complexity budgets (fleet lint baseline). Cognitive complexity is the
-// primary metric — it punishes nesting, not flat readable constructs — so the
+// primary metric, since it punishes nesting rather than length, so the
 // core `complexity` rule stays off (no double-charging).
 const complexityBudgets = {
   'sonarjs/cognitive-complexity': ['error', 15],

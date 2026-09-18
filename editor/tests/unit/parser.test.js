@@ -16,7 +16,7 @@ function readFixture(relPath) {
   return fs.readFileSync(path.join(FIXTURES, relPath), 'utf-8');
 }
 
-// ---- detectSectionType ----
+// detectSectionType
 
 describe('detectSectionType', () => {
   test('detects cventries', () => {
@@ -44,7 +44,7 @@ describe('detectSectionType', () => {
   });
 });
 
-// ---- parseSectionTitle ----
+// parseSectionTitle
 
 describe('parseSectionTitle', () => {
   test('extracts section title', () => {
@@ -56,7 +56,7 @@ describe('parseSectionTitle', () => {
   });
 });
 
-// ---- parseSection: cventries ----
+// parseSection: cventries
 
 describe('parseSection - cventries (experience)', () => {
   let parsed;
@@ -104,7 +104,7 @@ describe('parseSection - cventries (experience)', () => {
   });
 });
 
-// ---- parseSection: cvskills ----
+// parseSection: cvskills
 
 describe('parseSection - cvskills', () => {
   let parsed;
@@ -137,7 +137,7 @@ describe('parseSection - cvskills', () => {
   });
 });
 
-// ---- parseSection: cvhonors ----
+// parseSection: cvhonors
 
 describe('parseSection - cvhonors (certifications)', () => {
   let parsed;
@@ -172,7 +172,7 @@ describe('parseSection - cvhonors (certifications)', () => {
   });
 });
 
-// ---- parseSection: cvparagraph ----
+// parseSection: cvparagraph
 
 describe('parseSection - cvparagraph (summary)', () => {
   let parsed;
@@ -200,7 +200,7 @@ describe('parseSection - cvparagraph (summary)', () => {
   });
 });
 
-// ---- parseDocument ----
+// parseDocument
 
 describe('parseDocument', () => {
   let result;
@@ -247,7 +247,7 @@ describe('parseDocument', () => {
   });
 });
 
-// ---- parseData ----
+// parseData
 
 describe('parseData', () => {
   let data;
@@ -279,7 +279,7 @@ describe('parseData', () => {
   });
 });
 
-// ---- parseCoverletter ----
+// parseCoverletter
 
 describe('parseCoverletter', () => {
   let cl;

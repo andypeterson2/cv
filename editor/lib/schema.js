@@ -17,9 +17,7 @@ const { VARIANT_KINDS, SLUG_PATTERN, SCORER_METHODS } = require('@cv/constants')
 const VALID_KINDS = VARIANT_KINDS;
 const SLUG = SLUG_PATTERN;
 
-// ---------------------------------------------------------------------------
 // Global settings (style / spacing / fonts)
-// ---------------------------------------------------------------------------
 
 const settingsSchema = {
   type: 'object',
@@ -40,9 +38,7 @@ const settingsSchema = {
   minProperties: 1,
 };
 
-// ---------------------------------------------------------------------------
 // Persons + personal info
-// ---------------------------------------------------------------------------
 
 const createPersonSchema = {
   type: 'object',
@@ -69,9 +65,7 @@ const personalSchema = {
 // ...}) and the legacy shape ({personal, sections, documents, coverletter}) both pass.
 const importSchema = { type: 'object', minProperties: 1 };
 
-// ---------------------------------------------------------------------------
 // Sections
-// ---------------------------------------------------------------------------
 
 const createSectionSchema = {
   type: 'object',
@@ -95,9 +89,7 @@ const updateSectionSchema = {
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
 // Entries + items
-// ---------------------------------------------------------------------------
 
 const entryFieldsSchema = {
   type: 'object',
@@ -142,9 +134,7 @@ const reorderSchema = {
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
 // Tags
-// ---------------------------------------------------------------------------
 
 const addTagsSchema = {
   type: 'object',
@@ -228,9 +218,7 @@ const tagEventsSchema = {
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
 // Variants
-// ---------------------------------------------------------------------------
 
 const createVariantSchema = {
   type: 'object',
@@ -326,9 +314,7 @@ const letterHeaderSchema = {
   additionalProperties: false,
 };
 
-// ---------------------------------------------------------------------------
 // Versions
-// ---------------------------------------------------------------------------
 
 // Only `label` is accepted; the checkpoint's content is snapshotted server-side
 // from the person's authoritative state, so any client-sent `doc` is stripped
@@ -348,8 +334,6 @@ const tagVersionSchema = {
   properties: { tag: { type: 'string', maxLength: 100 } },
   additionalProperties: false,
 };
-
-// ---------------------------------------------------------------------------
 
 const schemas = {
   settings: settingsSchema,

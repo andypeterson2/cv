@@ -10,9 +10,7 @@ const fs = require('fs');
 const { serializeSection, serializeData, sanitizeLatex: san } = require('./serializer');
 const { getLatexType, SECTION_TYPE_MAP } = require('./latex-type-map');
 
-// ---------------------------------------------------------------------------
 // data.tex generation
-// ---------------------------------------------------------------------------
 
 /**
  * Generate data.tex from personal info.
@@ -30,9 +28,7 @@ function generateDataTex(personal) {
   return serializeData({ personal: p });
 }
 
-// ---------------------------------------------------------------------------
 // Section .tex generation
-// ---------------------------------------------------------------------------
 
 /**
  * Generate a section .tex file from a section object.
@@ -70,9 +66,7 @@ function generateSectionTex(section) {
   return serializeSection(data);
 }
 
-// ---------------------------------------------------------------------------
 // Style defaults & preamble builder
-// ---------------------------------------------------------------------------
 
 const { STYLE_DEFAULTS, SPACING_DEFAULTS, FONT_DEFAULTS } = require('./style-defaults');
 const ACCENT_COLORS = require('./accent-colors');
@@ -281,9 +275,7 @@ function buildPreamble(style, spacing, fonts) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // Document .tex generation (cv.tex, resume.tex)
-// ---------------------------------------------------------------------------
 
 const DOC_POSTAMBLE = `
 
@@ -309,9 +301,7 @@ function generateDocumentTex(variant, sectionFiles, style, spacing, fonts) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // Cover letter .tex generation
-// ---------------------------------------------------------------------------
 
 function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   const lines = [];
@@ -364,9 +354,7 @@ function generateCoverletterTex(personal, coverletter, style, spacing, fonts) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // Full build: write all .tex files to a build directory
-// ---------------------------------------------------------------------------
 
 /**
  * Generate all .tex files for a document variant and write to buildDir.

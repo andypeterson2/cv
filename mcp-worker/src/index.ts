@@ -28,10 +28,10 @@ const oauth = new OAuthProvider({
 
 /**
  * Default-DENY path allowlist (defense in depth; mirrored by a Cloudflare WAF rule
- * at the edge). The ONLY paths this server legitimately serves are the MCP endpoint,
+ * at the edge). The only paths this server legitimately serves are the MCP endpoint,
  * the OAuth 2.1 endpoints, and the OAuth/OIDC discovery metadata. Everything else —
  * the endless `.env` / `.git` / `.aws` / `wp-admin` credential-scanner probes — gets
- * a uniform 404 BEFORE it can reach the OAuth provider or the Durable Object.
+ * a uniform 404 before it can reach the OAuth provider or the Durable Object.
  */
 function isAllowedPath(pathname: string): boolean {
   // MCP Streamable-HTTP endpoint (+ any transport sub-path).

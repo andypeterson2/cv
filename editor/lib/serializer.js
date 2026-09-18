@@ -25,9 +25,7 @@ function escTex(str) {
     .replace(/(?<!\\)\^/g, '\\textasciicircum{}');
 }
 
-// ---------------------------------------------------------------------------
 // LaTeX sanitization — escape special chars that would break xelatex
-// ---------------------------------------------------------------------------
 
 /**
  * Escape bare LaTeX special characters in user-supplied text.
@@ -44,9 +42,7 @@ function sanitizeLatex(text) {
 /** Shorthand for sanitizeLatex */
 const san = sanitizeLatex;
 
-// ---------------------------------------------------------------------------
 // cventries (experience, education, extracurricular)
-// ---------------------------------------------------------------------------
 
 function serializeCventries(data) {
   const lines = [];
@@ -95,9 +91,7 @@ function serializeCventries(data) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // cvskills
-// ---------------------------------------------------------------------------
 
 function serializeCvskills(data) {
   const lines = [];
@@ -129,9 +123,7 @@ function serializeCvskills(data) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // cvhonors (certifications, honors)
-// ---------------------------------------------------------------------------
 
 function serializeCvhonors(data) {
   const lines = [];
@@ -163,9 +155,7 @@ function serializeCvhonors(data) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // cvreferences
-// ---------------------------------------------------------------------------
 
 function serializeCvreferences(data) {
   const lines = [];
@@ -194,9 +184,7 @@ function serializeCvreferences(data) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // cvparagraph (summary)
-// ---------------------------------------------------------------------------
 
 function serializeCvparagraph(data) {
   const lines = [];
@@ -218,9 +206,7 @@ function serializeCvparagraph(data) {
   return lines.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // Auto-dispatch serializer
-// ---------------------------------------------------------------------------
 
 function serializeSection(data) {
   const latexType = getLatexType(data.type);
@@ -240,9 +226,7 @@ function serializeSection(data) {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Document serializer (resume.tex / cv.tex) — rewrite \input lines
-// ---------------------------------------------------------------------------
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 33; the LaTeX emitter walks the whole tree
 function serializeDocumentSections(tex, sections) {
@@ -288,9 +272,7 @@ function serializeDocumentSections(tex, sections) {
   return result.join('\n');
 }
 
-// ---------------------------------------------------------------------------
 // data.tex serializer
-// ---------------------------------------------------------------------------
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 19; split when next touched
 function serializeData(data) {
@@ -346,9 +328,7 @@ function replaceCommand(tex, commandName, replacement) {
   return tex;
 }
 
-// ---------------------------------------------------------------------------
 // Cover letter serializer
-// ---------------------------------------------------------------------------
 
 function serializeCoverletter(tex, data) {
   // We do targeted replacements in the original tex to preserve structure
@@ -389,9 +369,7 @@ function serializeCoverletter(tex, data) {
   return result;
 }
 
-// ---------------------------------------------------------------------------
 // Filtered section serializer (for resume compilation)
-// ---------------------------------------------------------------------------
 
 function serializeFilteredSection(sectionData, configEntry) {
   if (!configEntry) return serializeSection(sectionData);

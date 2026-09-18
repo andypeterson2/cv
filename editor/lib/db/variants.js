@@ -32,7 +32,7 @@ class VariantStore {
     this._stmts.deleteVariant.run(id);
   }
 
-  // ---- rules ----
+  // rules
 
   getVariantRules(variantId) {
     const include = [];
@@ -66,7 +66,7 @@ class VariantStore {
    * include tag, fuzzy-match the person's vocabulary and ADD every tag scoring
    * >= threshold to the include set, writing the concrete expanded list back.
    *
-   * This is the ONLY bridge between fuzzy matching and what a variant renders —
+   * This is the only bridge between fuzzy matching and what a variant renders —
    * and it is deliberate: the fuzz happens once, here, and is frozen into stored
    * rules you can read back. Resolution itself never sees a fuzzy match, so the
    * rendered PDF stays exact and reproducible.
@@ -94,7 +94,7 @@ class VariantStore {
     return { before, after: [...have], added };
   }
 
-  // ---- sections ----
+  // sections
 
   getVariantSections(variantId) {
     return this._stmts.getVariantSections.all(variantId).map((r) => ({
@@ -120,7 +120,7 @@ class VariantStore {
     tx();
   }
 
-  // ---- overrides ----
+  // overrides
 
   getEntryOverrides(variantId) {
     const m = new Map();
@@ -188,7 +188,7 @@ class VariantStore {
     );
   }
 
-  // ---- cover-letter paragraphs ----
+  // cover-letter paragraphs
 
   getLetterSections(variantId) {
     return this._stmts.getLetterSections.all(variantId);
@@ -218,7 +218,7 @@ class VariantStore {
     tx();
   }
 
-  // ---- cover-letter header (per variant; see migration 011) ----
+  // cover-letter header (per variant; see migration 011)
 
   /** The variant's header (camelCase); empty-string fields when it has no row. */
   getLetterHeader(variantId) {
@@ -243,7 +243,7 @@ class VariantStore {
     );
   }
 
-  // ---- resolution — variant → compile-ready data for lib/generator ----
+  // resolution — variant → compile-ready data for lib/generator
 
   _matchesTags(tags, rules) {
     if (rules.exclude.size && tags.some((t) => rules.exclude.has(t))) return false;
@@ -366,7 +366,7 @@ class VariantStore {
    * The full "main" document, compile-ready — the same shape as resolveVariant but
    * with no variant lens: every section (default order), every entry, every item,
    * no include/exclude rules and no per-entry/item overrides. Backs the base-compile
-   * route so an owner can preview the whole CV, not just a named variant.
+   * route so an owner can preview the whole CV as well as a named variant.
    */
   resolveMain(personId) {
     return this.db.transaction(() => {

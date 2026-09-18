@@ -45,7 +45,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     return v;
   };
 
-  // ---- Variant CRUD ----
+  // Variant CRUD
 
   router.get(
     '/:id',
@@ -112,7 +112,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     }),
   );
 
-  // ---- Rules / sections / overrides ----
+  // Rules / sections / overrides
 
   router.put(
     '/:id/rules',
@@ -177,7 +177,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     }),
   );
 
-  // ---- Cover-letter paragraphs ----
+  // Cover-letter paragraphs
 
   router.get(
     '/:id/letter-sections',
@@ -229,7 +229,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     }),
   );
 
-  // ---- Cover-letter header (per variant) ----
+  // Cover-letter header (per variant)
 
   router.patch(
     '/:id/header',
@@ -242,7 +242,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     }),
   );
 
-  // ---- Resolution preview ----
+  // Resolution preview
 
   router.get(
     '/:id/resolve',
@@ -253,7 +253,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     }),
   );
 
-  // ---- Compile to PDF (resolve → generate → xelatex) ----
+  // Compile to PDF (resolve → generate → xelatex)
   //
   // The compile endpoints are the one real DoS lever (each spawns xelatex for up
   // to 30s). Two guards: a per-IP rate limit on inflow, and the shared
@@ -272,7 +272,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // concurrency cap. Any signed-in account can compile its own CV, so bound TOTAL
   // compiles/user/day — the real cost lever a rotating-IP abuser slips past. The owner
   // runs its own instance and is unmetered; everyone else (incl. @system for the public
-  // demo) shares CV_COMPILE_DAILY_LIMIT (default 100). Metered BEFORE the expensive work,
+  // demo) shares CV_COMPILE_DAILY_LIMIT (default 100). Metered before the expensive work,
   // and a blocked request isn't counted — so hitting the cap costs nothing.
   function compileQuota(req, res, next) {
     const db = getDb();

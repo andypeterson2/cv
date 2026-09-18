@@ -79,7 +79,7 @@ function parseRange(raw) {
 /**
  * Turn a resolved variant into work-history blocks. NOTE the field mapping, verified
  * against real data (Step 0): the role is `fields.position` and the organisation is
- * `fields.organization` — NOT `fields.title` (experience entries carry no `title`).
+ * `fields.organization` — not `fields.title` (experience entries carry no `title`).
  */
 function exportLinkedin(resolved, format = 'linkedin') {
   const bullet = BULLETS[format] ?? BULLETS.linkedin;
