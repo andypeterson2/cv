@@ -166,7 +166,7 @@ const toolDefs: ToolDef[] = [
     description:
       "Return a person's FULL main CV with stable ids: {person, personal, " +
       'sections:[{id,slug,type,title,sortOrder,entries:[{id,fields,tags,items:[{id,content,title,tags}]}]}], ' +
-      'variants:[{id,name,kind,rules,sections}], tags, tagAliases}. Read this once, then edit by id. This is the ' +
+      'variants:[{id,name,kind,rules,sections,personal}], tags, tagAliases}. Read this once, then edit by id. This is the ' +
       'canonical read — ids here are valid for every edit/tag/override tool. (Cover-letter headers are per-variant ' +
       'now — see cv_resolve_variant / the letter-section tools, not a top-level `coverletter`.)',
     inputSchema: {
@@ -651,7 +651,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_get_variant',
     description:
-      "Return a variant's full config: {id,name,kind,rules:{include,exclude},sections,entryOverrides,itemOverrides[,letterSections]}.",
+      "Return a variant's full config: {id,name,kind,rules:{include,exclude},sections,entryOverrides,itemOverrides,personal[,letterSections]}. `personal` holds this variant's personal.* overrides (its tagline); an absent key inherits the person value.",
     inputSchema: {
       type: 'object',
       properties: { variant_id: variantId },
@@ -659,6 +659,27 @@ const toolDefs: ToolDef[] = [
       additionalProperties: false,
     },
     handler: (a) => api('GET', `/api/variants/${enc(a.variant_id)}`),
+  },
+  {
+    name: 'cv_set_variant_personal',
+    description:
+      'Override personal.* header fields for ONE variant — the per-variant tagline (position), quote, and friends. Only passed fields change. A string sets the override, "" suppresses the field in this variant, and null drops the override so the person value is inherited again. Person-wide edits stay in cv_set_personal.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        variant_id: variantId,
+        fields: { type: 'object', description: 'field → string | null', minProperties: 1 },
+      },
+      required: ['variant_id', 'fields'],
+      additionalProperties: false,
+    },
+    handler: (a) => {
+      for (const [k, v] of Object.entries(a.fields)) {
+        if (v !== null && typeof v !== 'string')
+          throw new Error(`Personal field "${k}" must be a string or null, got ${typeof v}`);
+      }
+      return api('PATCH', `/api/variants/${enc(a.variant_id)}/personal`, a.fields);
+    },
   },
   {
     name: 'cv_create_variant',

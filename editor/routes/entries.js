@@ -2,6 +2,7 @@ const express = require('express');
 const { validate } = require('../lib/schema');
 const { AppError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
+const { ownedResourceGuard } = require('../lib/owned-resource');
 
 function intId(value) {
   const n = parseInt(value, 10);
@@ -12,10 +13,16 @@ function intId(value) {
 module.exports = function createEntriesRouter(getDb) {
   const router = express.Router();
 
+  // Ownership gate: writes need the caller to own the entry's person, reads also
+  // pass for a public person. `userId` comes from attachUser (req.userId).
+  const requireEntry = ownedResourceGuard(getDb, 'entry', 'Entry');
+
   router.get(
     '/:id',
     wrap((req, res) => {
-      const entry = getDb().getEntry(intId(req.params.id));
+      const id = intId(req.params.id);
+      requireEntry(id, req.userId, { write: false });
+      const entry = getDb().getEntry(id);
       if (!entry) throw new NotFoundError('Entry not found');
       res.json(entry);
     }),
@@ -25,7 +32,9 @@ module.exports = function createEntriesRouter(getDb) {
     '/:id',
     validate('updateEntry'),
     wrap((req, res) => {
-      getDb().updateEntry(intId(req.params.id), { fields: req.body.fields });
+      const id = intId(req.params.id);
+      requireEntry(id, req.userId);
+      getDb().updateEntry(id, { fields: req.body.fields });
       res.json({ success: true });
     }),
   );
@@ -33,7 +42,9 @@ module.exports = function createEntriesRouter(getDb) {
   router.delete(
     '/:id',
     wrap((req, res) => {
-      getDb().deleteEntry(intId(req.params.id));
+      const id = intId(req.params.id);
+      requireEntry(id, req.userId);
+      getDb().deleteEntry(id);
       res.json({ success: true });
     }),
   );
@@ -45,7 +56,7 @@ module.exports = function createEntriesRouter(getDb) {
     validate('createItem'),
     wrap((req, res) => {
       const id = intId(req.params.id);
-      if (!getDb().getEntry(id)) throw new NotFoundError('Entry not found');
+      requireEntry(id, req.userId);
       res
         .status(201)
         .json({ id: Number(getDb().createItem(id, req.body.content, req.body.title || '')) });
@@ -56,7 +67,9 @@ module.exports = function createEntriesRouter(getDb) {
     '/:id/items/order',
     validate('reorder'),
     wrap((req, res) => {
-      getDb().reorderItems(intId(req.params.id), req.body.ids);
+      const id = intId(req.params.id);
+      requireEntry(id, req.userId);
+      getDb().reorderItems(id, req.body.ids);
       res.json({ success: true });
     }),
   );
@@ -67,7 +80,9 @@ module.exports = function createEntriesRouter(getDb) {
     '/:id/tags',
     validate('addTags'),
     wrap((req, res) => {
-      getDb().addEntryTags(intId(req.params.id), req.body.tags);
+      const id = intId(req.params.id);
+      requireEntry(id, req.userId);
+      getDb().addEntryTags(id, req.body.tags);
       res.json({ success: true });
     }),
   );
@@ -75,7 +90,9 @@ module.exports = function createEntriesRouter(getDb) {
   router.delete(
     '/:id/tags/:tag',
     wrap((req, res) => {
-      getDb().removeEntryTag(intId(req.params.id), req.params.tag);
+      const id = intId(req.params.id);
+      requireEntry(id, req.userId);
+      getDb().removeEntryTag(id, req.params.tag);
       res.json({ success: true });
     }),
   );

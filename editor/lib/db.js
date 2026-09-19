@@ -156,7 +156,8 @@ class CvDatabase {
       getEntry: p('SELECT id, section_id, sort_order, fields FROM entries WHERE id = ?'),
       insertEntry: p('INSERT INTO entries (section_id, sort_order, fields) VALUES (?, ?, ?)'),
       updateEntryFields: p('UPDATE entries SET fields = ? WHERE id = ?'),
-      updateEntrySortOrder: p('UPDATE entries SET sort_order = ? WHERE id = ?'),
+      // Scoped by parent so a reorder can only move rows inside the named section.
+      updateEntrySortOrder: p('UPDATE entries SET sort_order = ? WHERE id = ? AND section_id = ?'),
       deleteEntry: p('DELETE FROM entries WHERE id = ?'),
       maxEntrySortOrder: p(
         'SELECT COALESCE(MAX(sort_order), -1) AS m FROM entries WHERE section_id = ?',
@@ -170,7 +171,8 @@ class CvDatabase {
       insertItem: p('INSERT INTO items (entry_id, sort_order, content, title) VALUES (?, ?, ?, ?)'),
       updateItemContent: p('UPDATE items SET content = ? WHERE id = ?'),
       updateItemTitle: p('UPDATE items SET title = ? WHERE id = ?'),
-      updateItemSortOrder: p('UPDATE items SET sort_order = ? WHERE id = ?'),
+      // Scoped by parent so a reorder can only move rows inside the named entry.
+      updateItemSortOrder: p('UPDATE items SET sort_order = ? WHERE id = ? AND entry_id = ?'),
       deleteItem: p('DELETE FROM items WHERE id = ?'),
       maxItemSortOrder: p(
         'SELECT COALESCE(MAX(sort_order), -1) AS m FROM items WHERE entry_id = ?',
@@ -319,9 +321,14 @@ class CvDatabase {
       insertLetterSection: p(
         'INSERT INTO variant_letter_sections (variant_id, sort_order, title, body) VALUES (?, ?, ?, ?)',
       ),
-      updateLetterSection: p('UPDATE variant_letter_sections SET title = ?, body = ? WHERE id = ?'),
-      deleteLetterSection: p('DELETE FROM variant_letter_sections WHERE id = ?'),
-      updateLetterSectionOrder: p('UPDATE variant_letter_sections SET sort_order = ? WHERE id = ?'),
+      // Scoped by variant so a paragraph can only be touched through its own variant.
+      updateLetterSection: p(
+        'UPDATE variant_letter_sections SET title = ?, body = ? WHERE id = ? AND variant_id = ?',
+      ),
+      deleteLetterSection: p('DELETE FROM variant_letter_sections WHERE id = ? AND variant_id = ?'),
+      updateLetterSectionOrder: p(
+        'UPDATE variant_letter_sections SET sort_order = ? WHERE id = ? AND variant_id = ?',
+      ),
       maxLetterSectionOrder: p(
         'SELECT COALESCE(MAX(sort_order), -1) AS m FROM variant_letter_sections WHERE variant_id = ?',
       ),
@@ -334,6 +341,13 @@ class CvDatabase {
         p(`INSERT INTO variant_letter_header (variant_id, recipient_name, recipient_address, opening, closing)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(variant_id) DO UPDATE SET recipient_name = excluded.recipient_name, recipient_address = excluded.recipient_address, opening = excluded.opening, closing = excluded.closing`),
+
+      // Per-variant personal.* overrides; key is unprefixed, absent means inherit
+      getVariantPersonal: p('SELECT key, value FROM variant_personal WHERE variant_id = ?'),
+      upsertVariantPersonal: p(
+        'INSERT INTO variant_personal (variant_id, key, value) VALUES (?, ?, ?) ON CONFLICT(variant_id, key) DO UPDATE SET value = excluded.value',
+      ),
+      deleteVariantPersonal: p('DELETE FROM variant_personal WHERE variant_id = ? AND key = ?'),
     };
   }
 
@@ -586,7 +600,8 @@ class CvDatabase {
 
   reorderEntries(sectionId, ids) {
     const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) this._stmts.updateEntrySortOrder.run(i, ids[i]);
+      for (let i = 0; i < ids.length; i++)
+        this._stmts.updateEntrySortOrder.run(i, ids[i], sectionId);
     });
     tx();
   }
@@ -612,7 +627,7 @@ class CvDatabase {
 
   reorderItems(entryId, ids) {
     const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) this._stmts.updateItemSortOrder.run(i, ids[i]);
+      for (let i = 0; i < ids.length; i++) this._stmts.updateItemSortOrder.run(i, ids[i], entryId);
     });
     tx();
   }
@@ -639,6 +654,7 @@ class CvDatabase {
         // (keyed by entry/item id, same shape as GET /variants/:id).
         entryOverrides: Object.fromEntries(this.getEntryOverrides(v.id)),
         itemOverrides: Object.fromEntries(this.getItemOverrides(v.id)),
+        personal: this.getVariantPersonal(v.id),
       })),
       tags: this.listTags(personId),
       tagAliases: this.getTagAliases(personId),
