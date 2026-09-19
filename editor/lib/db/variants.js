@@ -199,21 +199,23 @@ class VariantStore {
     return this._stmts.insertLetterSection.run(variantId, order, title, body).lastInsertRowid;
   }
 
-  updateLetterSection(id, { title, body }) {
+  /** A no-op when the paragraph belongs to another variant. */
+  updateLetterSection(variantId, id, { title, body }) {
     const cur = this.db
-      .prepare('SELECT title, body FROM variant_letter_sections WHERE id = ?')
-      .get(id);
+      .prepare('SELECT title, body FROM variant_letter_sections WHERE id = ? AND variant_id = ?')
+      .get(id, variantId);
     if (!cur) return;
-    this._stmts.updateLetterSection.run(title ?? cur.title, body ?? cur.body, id);
+    this._stmts.updateLetterSection.run(title ?? cur.title, body ?? cur.body, id, variantId);
   }
 
-  deleteLetterSection(id) {
-    this._stmts.deleteLetterSection.run(id);
+  deleteLetterSection(variantId, id) {
+    this._stmts.deleteLetterSection.run(id, variantId);
   }
 
   reorderLetterSections(variantId, ids) {
     const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) this._stmts.updateLetterSectionOrder.run(i, ids[i]);
+      for (let i = 0; i < ids.length; i++)
+        this._stmts.updateLetterSectionOrder.run(i, ids[i], variantId);
     });
     tx();
   }
@@ -241,6 +243,32 @@ class VariantStore {
       m.opening ?? '',
       m.closing ?? '',
     );
+  }
+
+  // per-variant personal.* overrides
+
+  /**
+   * A variant's personal.* overrides as a flat map of unprefixed keys. Only keys
+   * with a row appear; an empty string is a real value that suppresses the field.
+   */
+  getVariantPersonal(variantId) {
+    const out = {};
+    for (const r of this._stmts.getVariantPersonal.all(variantId)) out[r.key] = r.value ?? '';
+    return out;
+  }
+
+  /**
+   * Upsert overrides from a flat map of unprefixed keys. A null value drops the
+   * override, so the field inherits the person value again.
+   */
+  setVariantPersonal(variantId, fields) {
+    const tx = this.db.transaction(() => {
+      for (const [key, value] of Object.entries(fields)) {
+        if (value == null) this._stmts.deleteVariantPersonal.run(variantId, key);
+        else this._stmts.upsertVariantPersonal.run(variantId, key, String(value));
+      }
+    });
+    tx();
   }
 
   // resolution — variant → compile-ready data for lib/generator
@@ -274,7 +302,9 @@ class VariantStore {
       const v = this._stmts.getVariant.get(variantId);
       if (!v) throw new Error('Variant not found');
       const personId = v.person_id;
-      const personal = this.getPersonal(personId);
+      // Variant overrides win over the person's personal.* fields, so a variant
+      // can carry its own tagline.
+      const personal = { ...this.getPersonal(personId), ...this.getVariantPersonal(variantId) };
       const { style, spacing, fonts } = this._renderSettings();
 
       if (v.kind === 'coverletter') {

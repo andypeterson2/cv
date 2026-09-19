@@ -2,6 +2,7 @@ const express = require('express');
 const { validate } = require('../lib/schema');
 const { AppError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
+const { ownedResourceGuard } = require('../lib/owned-resource');
 
 function intId(value) {
   const n = parseInt(value, 10);
@@ -12,11 +13,17 @@ function intId(value) {
 module.exports = function createItemsRouter(getDb) {
   const router = express.Router();
 
+  // Ownership gate: every route here writes, so each one needs the caller to own
+  // the item's person. `userId` comes from attachUser (req.userId).
+  const requireItem = ownedResourceGuard(getDb, 'item', 'Item');
+
   router.put(
     '/:id',
     validate('updateItem'),
     wrap((req, res) => {
-      getDb().updateItem(intId(req.params.id), {
+      const id = intId(req.params.id);
+      requireItem(id, req.userId);
+      getDb().updateItem(id, {
         content: req.body.content,
         title: req.body.title,
       });
@@ -27,7 +34,9 @@ module.exports = function createItemsRouter(getDb) {
   router.delete(
     '/:id',
     wrap((req, res) => {
-      getDb().deleteItem(intId(req.params.id));
+      const id = intId(req.params.id);
+      requireItem(id, req.userId);
+      getDb().deleteItem(id);
       res.json({ success: true });
     }),
   );
@@ -36,7 +45,9 @@ module.exports = function createItemsRouter(getDb) {
     '/:id/tags',
     validate('addTags'),
     wrap((req, res) => {
-      getDb().addItemTags(intId(req.params.id), req.body.tags);
+      const id = intId(req.params.id);
+      requireItem(id, req.userId);
+      getDb().addItemTags(id, req.body.tags);
       res.json({ success: true });
     }),
   );
@@ -44,7 +55,9 @@ module.exports = function createItemsRouter(getDb) {
   router.delete(
     '/:id/tags/:tag',
     wrap((req, res) => {
-      getDb().removeItemTag(intId(req.params.id), req.params.tag);
+      const id = intId(req.params.id);
+      requireItem(id, req.userId);
+      getDb().removeItemTag(id, req.params.tag);
       res.json({ success: true });
     }),
   );
