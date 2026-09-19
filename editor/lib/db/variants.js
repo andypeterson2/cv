@@ -243,6 +243,32 @@ class VariantStore {
     );
   }
 
+  // per-variant personal.* overrides
+
+  /**
+   * A variant's personal.* overrides as a flat map of unprefixed keys. Only keys
+   * with a row appear; an empty string is a real value that suppresses the field.
+   */
+  getVariantPersonal(variantId) {
+    const out = {};
+    for (const r of this._stmts.getVariantPersonal.all(variantId)) out[r.key] = r.value ?? '';
+    return out;
+  }
+
+  /**
+   * Upsert overrides from a flat map of unprefixed keys. A null value drops the
+   * override, so the field inherits the person value again.
+   */
+  setVariantPersonal(variantId, fields) {
+    const tx = this.db.transaction(() => {
+      for (const [key, value] of Object.entries(fields)) {
+        if (value == null) this._stmts.deleteVariantPersonal.run(variantId, key);
+        else this._stmts.upsertVariantPersonal.run(variantId, key, String(value));
+      }
+    });
+    tx();
+  }
+
   // resolution — variant → compile-ready data for lib/generator
 
   _matchesTags(tags, rules) {
@@ -274,7 +300,9 @@ class VariantStore {
       const v = this._stmts.getVariant.get(variantId);
       if (!v) throw new Error('Variant not found');
       const personId = v.person_id;
-      const personal = this.getPersonal(personId);
+      // Variant overrides win over the person's personal.* fields, so a variant
+      // can carry its own tagline.
+      const personal = { ...this.getPersonal(personId), ...this.getVariantPersonal(variantId) };
       const { style, spacing, fonts } = this._renderSettings();
 
       if (v.kind === 'coverletter') {

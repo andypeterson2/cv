@@ -75,6 +75,8 @@ class ImportExport {
         })),
         entryOverrides,
         itemOverrides,
+        // personal.* overrides, keyed unprefixed; {} when the variant has none
+        personal: this.getVariantPersonal(v.id),
         letterSections:
           v.kind === 'coverletter'
             ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
@@ -166,6 +168,8 @@ class ImportExport {
               sortOverride: o.sortOverride,
             });
         }
+        if (v.personal && Object.keys(v.personal).length)
+          this.setVariantPersonal(variantId, v.personal);
         for (const s of v.letterSections || [])
           this.createLetterSection(variantId, s.title || '', s.body || '');
         // per-variant header; older exports carried it once at the top level (data.coverletter)

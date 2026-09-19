@@ -334,6 +334,13 @@ class CvDatabase {
         p(`INSERT INTO variant_letter_header (variant_id, recipient_name, recipient_address, opening, closing)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(variant_id) DO UPDATE SET recipient_name = excluded.recipient_name, recipient_address = excluded.recipient_address, opening = excluded.opening, closing = excluded.closing`),
+
+      // Per-variant personal.* overrides; key is unprefixed, absent means inherit
+      getVariantPersonal: p('SELECT key, value FROM variant_personal WHERE variant_id = ?'),
+      upsertVariantPersonal: p(
+        'INSERT INTO variant_personal (variant_id, key, value) VALUES (?, ?, ?) ON CONFLICT(variant_id, key) DO UPDATE SET value = excluded.value',
+      ),
+      deleteVariantPersonal: p('DELETE FROM variant_personal WHERE variant_id = ? AND key = ?'),
     };
   }
 
@@ -639,6 +646,7 @@ class CvDatabase {
         // (keyed by entry/item id, same shape as GET /variants/:id).
         entryOverrides: Object.fromEntries(this.getEntryOverrides(v.id)),
         itemOverrides: Object.fromEntries(this.getItemOverrides(v.id)),
+        personal: this.getVariantPersonal(v.id),
       })),
       tags: this.listTags(personId),
       tagAliases: this.getTagAliases(personId),

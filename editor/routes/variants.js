@@ -7,6 +7,7 @@ const wrap = require('../lib/async-handler');
 const { rateLimit } = require('express-rate-limit');
 const { clientIp } = require('../lib/client-ip');
 const { queuedCompile } = require('../lib/render/latex');
+const { publicPersonIdSet } = require('../lib/public-persons');
 
 function intId(value, label = 'id') {
   const n = parseInt(value, 10);
@@ -39,10 +40,19 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   const router = express.Router();
   const ASSETS_DIR = path.join(projectRoot, 'assets');
 
-  const requireVariant = (id) => {
-    const v = getDb().getVariant(id);
+  const PUBLIC_PERSON_IDS = publicPersonIdSet(process.env.CV_PUBLIC_PERSON_IDS || '1');
+
+  // Fetch a variant the caller may act on, or 404. Writes require ownership of the
+  // variant's person; reads also allow a public person, which is what keeps the
+  // logged-out demo readable. A cross-user id 404s, so nothing leaks about what
+  // exists. `userId` comes from attachUser (req.userId).
+  const requireVariant = (id, userId, { write = true } = {}) => {
+    const db = getDb();
+    const v = db.getVariant(id);
     if (!v) throw new NotFoundError('Variant not found');
-    return v;
+    if (db.getPersonForUser(v.personId, userId)) return v;
+    if (!write && PUBLIC_PERSON_IDS.has(String(v.personId))) return v;
+    throw new NotFoundError('Variant not found');
   };
 
   // Variant CRUD
@@ -51,7 +61,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     '/:id',
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      const v = requireVariant(id);
+      const v = requireVariant(id, req.userId, { write: false });
       const db = getDb();
       const body = {
         ...v,
@@ -59,6 +69,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
         sections: db.getVariantSections(id),
         entryOverrides: Object.fromEntries(db.getEntryOverrides(id)),
         itemOverrides: Object.fromEntries(db.getItemOverrides(id)),
+        personal: db.getVariantPersonal(id),
       };
       if (v.kind === 'coverletter') {
         body.letterSections = db.getLetterSections(id);
@@ -73,7 +84,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('updateVariant'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       getDb().updateVariant(id, { name: req.body.name });
       res.json({ success: true });
     }),
@@ -82,7 +93,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   router.delete(
     '/:id',
     wrap((req, res) => {
-      getDb().deleteVariant(intId(req.params.id, 'variant id'));
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId);
+      getDb().deleteVariant(id);
       res.json({ success: true });
     }),
   );
@@ -93,7 +106,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     '/:id/layout',
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      const v = requireVariant(id);
+      const v = requireVariant(id, req.userId);
       const layoutId = req.body ? req.body.layout_id : undefined;
       if (layoutId == null || layoutId === '') {
         getDb().setVariantLayout(id, null);
@@ -119,7 +132,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('variantRules'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       getDb().setVariantRules(id, {
         include: req.body.include || [],
         exclude: req.body.exclude || [],
@@ -135,7 +148,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('expandRules'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       const result = getDb().expandVariantRules(id, {
         threshold: req.body.threshold,
         limit: req.body.limit,
@@ -149,7 +162,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('variantSections'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       getDb().setVariantSections(id, req.body.sections);
       res.json({ success: true });
     }),
@@ -160,7 +173,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('variantOverride'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       const { targetType, targetId, included, textOverride, sortOverride, fieldsOverride } =
         req.body;
       if (targetType === 'entry') {
@@ -183,7 +196,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     '/:id/letter-sections',
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId, { write: false });
       res.json(getDb().getLetterSections(id));
     }),
   );
@@ -193,7 +206,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('createLetterSection'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       res
         .status(201)
         .json({ id: Number(getDb().createLetterSection(id, req.body.title, req.body.body)) });
@@ -204,7 +217,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     '/:id/letter-sections/:lid',
     validate('updateLetterSection'),
     wrap((req, res) => {
-      intId(req.params.id, 'variant id');
+      requireVariant(intId(req.params.id, 'variant id'), req.userId);
       getDb().updateLetterSection(intId(req.params.lid, 'letter section id'), req.body);
       res.json({ success: true });
     }),
@@ -213,6 +226,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   router.delete(
     '/:id/letter-sections/:lid',
     wrap((req, res) => {
+      requireVariant(intId(req.params.id, 'variant id'), req.userId);
       getDb().deleteLetterSection(intId(req.params.lid, 'letter section id'));
       res.json({ success: true });
     }),
@@ -223,7 +237,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('reorder'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       getDb().reorderLetterSections(id, req.body.ids);
       res.json({ success: true });
     }),
@@ -236,8 +250,32 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     validate('letterHeader'),
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId);
       getDb().setLetterHeader(id, req.body);
+      res.json({ success: true });
+    }),
+  );
+
+  // Per-variant personal.* overrides (the tagline and friends)
+
+  router.get(
+    '/:id/personal',
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId, { write: false });
+      res.json(getDb().getVariantPersonal(id));
+    }),
+  );
+
+  // A null value drops that override, so the field inherits the person value
+  // again; an empty string is kept and suppresses the field for this variant.
+  router.patch(
+    '/:id/personal',
+    validate('variantPersonal'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId);
+      getDb().setVariantPersonal(id, req.body);
       res.json({ success: true });
     }),
   );
@@ -248,7 +286,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     '/:id/resolve',
     wrap((req, res) => {
       const id = intId(req.params.id, 'variant id');
-      requireVariant(id);
+      requireVariant(id, req.userId, { write: false });
       res.json(getDb().resolveVariant(id));
     }),
   );
@@ -332,13 +370,14 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       });
   }
 
-  function compileVariant(id, res, { inline }) {
+  function compileVariant(id, userId, res, { inline }) {
     let compileData, variant;
     try {
-      variant = getDb().getVariant(id);
-      if (!variant) return res.status(404).json({ success: false, log: 'Variant not found' });
+      variant = requireVariant(id, userId, { write: false });
       compileData = getDb().resolveVariant(id);
     } catch (e) {
+      if (e instanceof NotFoundError)
+        return res.status(404).json({ success: false, log: 'Variant not found' });
       return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
     }
     return runCompile(
@@ -358,10 +397,11 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // The full "main" document — the whole CV with no variant lens (getDb().resolveMain).
   // Person-keyed; the path ends in /pdf so the /api auth gate treats it as a compile GET
   // (gated regardless of person — a CPU/DoS lever), same as the variant compile.
-  function compileMain(pid, res, { inline }) {
+  function compileMain(pid, userId, res, { inline }) {
     let compileData, person;
     try {
-      person = getDb().getPerson(pid);
+      person = getDb().getPersonForUser(pid, userId);
+      if (!person && PUBLIC_PERSON_IDS.has(String(pid))) person = getDb().getPerson(pid);
       if (!person) return res.status(404).json({ success: false, log: 'Person not found' });
       compileData = getDb().resolveMain(pid);
     } catch (e) {
@@ -384,13 +424,13 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // /main/:pid/pdf (3 segments) can't collide with /:id/pdf (2 segments); registered
   // first for clarity.
   router.get('/main/:pid/pdf', compileRateLimit, compileQuota, (req, res) =>
-    compileMain(intId(req.params.pid, 'person id'), res, { inline: true }),
+    compileMain(intId(req.params.pid, 'person id'), req.userId, res, { inline: true }),
   );
   router.get('/:id/pdf', compileRateLimit, compileQuota, (req, res) =>
-    compileVariant(intId(req.params.id, 'variant id'), res, { inline: true }),
+    compileVariant(intId(req.params.id, 'variant id'), req.userId, res, { inline: true }),
   );
   router.post('/:id/compile', compileRateLimit, compileQuota, (req, res) =>
-    compileVariant(intId(req.params.id, 'variant id'), res, { inline: false }),
+    compileVariant(intId(req.params.id, 'variant id'), req.userId, res, { inline: false }),
   );
 
   return router;

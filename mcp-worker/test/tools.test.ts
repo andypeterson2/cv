@@ -7,9 +7,9 @@ import { cvCtx } from '../src/cv-ctx';
 // Worker runtime — proves the 57-tool catalog + the Workers-safe validator behave
 // like the stdio server before that server is deleted.
 describe('cv tool catalog (moved into the Worker)', () => {
-  it('exposes exactly 61 tools, each cv_*-prefixed with a description + schema', () => {
-    expect(TOOL_COUNT).toBe(61);
-    expect(tools.length).toBe(61);
+  it('exposes exactly 62 tools, each cv_*-prefixed with a description + schema', () => {
+    expect(TOOL_COUNT).toBe(62);
+    expect(tools.length).toBe(62);
     for (const t of tools) {
       expect(t.name).toMatch(/^cv_/);
       expect(typeof t.description).toBe('string');
