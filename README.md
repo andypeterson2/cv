@@ -25,6 +25,8 @@ npm run dev        # node --watch on http://localhost:3001
 
 Compiles shell out to the host `xelatex`, so no container is needed. Only one process can hold the port, so stop the Docker container first if it is running.
 
+`better-sqlite3` is a native module, so it is built against whichever Node built it. Switching Node versions between installs makes every database test fail with `NODE_MODULE_VERSION`; `npm rebuild better-sqlite3` fixes it. CI runs Node 22.
+
 ```bash
 docker compose up -d --build    # dev image, http://localhost:3001
 ```
