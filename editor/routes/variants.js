@@ -7,6 +7,7 @@ const wrap = require('../lib/async-handler');
 const { rateLimit } = require('express-rate-limit');
 const { clientIp } = require('../lib/client-ip');
 const { queuedCompile } = require('../lib/render/latex');
+const { ownedResourceGuard } = require('../lib/owned-resource');
 const { publicPersonIdSet } = require('../lib/public-persons');
 
 function intId(value, label = 'id') {
@@ -40,19 +41,14 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   const router = express.Router();
   const ASSETS_DIR = path.join(projectRoot, 'assets');
 
+  const guardVariant = ownedResourceGuard(getDb, 'variant', 'Variant');
+  // The main-document compile is person-keyed, so it checks the person itself.
   const PUBLIC_PERSON_IDS = publicPersonIdSet(process.env.CV_PUBLIC_PERSON_IDS || '1');
 
-  // Fetch a variant the caller may act on, or 404. Writes require ownership of the
-  // variant's person; reads also allow a public person, which is what keeps the
-  // logged-out demo readable. A cross-user id 404s, so nothing leaks about what
-  // exists. `userId` comes from attachUser (req.userId).
-  const requireVariant = (id, userId, { write = true } = {}) => {
-    const db = getDb();
-    const v = db.getVariant(id);
-    if (!v) throw new NotFoundError('Variant not found');
-    if (db.getPersonForUser(v.personId, userId)) return v;
-    if (!write && PUBLIC_PERSON_IDS.has(String(v.personId))) return v;
-    throw new NotFoundError('Variant not found');
+  // Fetch a variant the caller may act on, or 404. `userId` comes from attachUser.
+  const requireVariant = (id, userId, opts) => {
+    guardVariant(id, userId, opts);
+    return getDb().getVariant(id);
   };
 
   // Variant CRUD
@@ -217,8 +213,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     '/:id/letter-sections/:lid',
     validate('updateLetterSection'),
     wrap((req, res) => {
-      requireVariant(intId(req.params.id, 'variant id'), req.userId);
-      getDb().updateLetterSection(intId(req.params.lid, 'letter section id'), req.body);
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId);
+      getDb().updateLetterSection(id, intId(req.params.lid, 'letter section id'), req.body);
       res.json({ success: true });
     }),
   );
@@ -226,8 +223,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   router.delete(
     '/:id/letter-sections/:lid',
     wrap((req, res) => {
-      requireVariant(intId(req.params.id, 'variant id'), req.userId);
-      getDb().deleteLetterSection(intId(req.params.lid, 'letter section id'));
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId);
+      getDb().deleteLetterSection(id, intId(req.params.lid, 'letter section id'));
       res.json({ success: true });
     }),
   );

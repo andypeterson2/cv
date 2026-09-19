@@ -199,21 +199,23 @@ class VariantStore {
     return this._stmts.insertLetterSection.run(variantId, order, title, body).lastInsertRowid;
   }
 
-  updateLetterSection(id, { title, body }) {
+  /** A no-op when the paragraph belongs to another variant. */
+  updateLetterSection(variantId, id, { title, body }) {
     const cur = this.db
-      .prepare('SELECT title, body FROM variant_letter_sections WHERE id = ?')
-      .get(id);
+      .prepare('SELECT title, body FROM variant_letter_sections WHERE id = ? AND variant_id = ?')
+      .get(id, variantId);
     if (!cur) return;
-    this._stmts.updateLetterSection.run(title ?? cur.title, body ?? cur.body, id);
+    this._stmts.updateLetterSection.run(title ?? cur.title, body ?? cur.body, id, variantId);
   }
 
-  deleteLetterSection(id) {
-    this._stmts.deleteLetterSection.run(id);
+  deleteLetterSection(variantId, id) {
+    this._stmts.deleteLetterSection.run(id, variantId);
   }
 
   reorderLetterSections(variantId, ids) {
     const tx = this.db.transaction(() => {
-      for (let i = 0; i < ids.length; i++) this._stmts.updateLetterSectionOrder.run(i, ids[i]);
+      for (let i = 0; i < ids.length; i++)
+        this._stmts.updateLetterSectionOrder.run(i, ids[i], variantId);
     });
     tx();
   }
