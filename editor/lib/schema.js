@@ -302,6 +302,15 @@ const updateLetterSectionSchema = {
   additionalProperties: false,
 };
 
+// Per-variant personal.* overrides: same key shape as `personal`, but a null
+// value is allowed and drops the override so the field inherits again.
+const variantPersonalSchema = {
+  type: 'object',
+  patternProperties: { '^[a-zA-Z0-9_]+$': { type: ['string', 'null'] } },
+  additionalProperties: false,
+  minProperties: 1,
+};
+
 const letterHeaderSchema = {
   type: 'object',
   properties: {
@@ -362,6 +371,7 @@ const schemas = {
   createLetterSection: createLetterSectionSchema,
   updateLetterSection: updateLetterSectionSchema,
   letterHeader: letterHeaderSchema,
+  variantPersonal: variantPersonalSchema,
   createVersion: createVersionSchema,
   tagVersion: tagVersionSchema,
 };

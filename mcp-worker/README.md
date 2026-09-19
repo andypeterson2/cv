@@ -1,6 +1,6 @@
 # cv-mcp — remote MCP server for the cv editor
 
-A Cloudflare Worker that exposes the cv editor's REST API as **61 `cv_*` MCP tools**
+A Cloudflare Worker that exposes the cv editor's REST API as **62 `cv_*` MCP tools**
 over MCP Streamable-HTTP, behind **Google OAuth** (admin-only). This is the **single**
 MCP server — it supersedes the local stdio `../mcp-server` (deleted once parity is
 verified). Use it from Claude on web, desktop, **and** mobile by adding it as a
@@ -12,7 +12,7 @@ Claude (web/desktop/mobile) ──OAuth 2.1 (PKCE+DCR)──▶ cv-mcp Worker �
 ```
 
 ## Layout
-- `src/tools.ts` — the 61 tools + `api()` REST helper + `@cfworker/json-schema` validation (moved from `../mcp-server/server.mjs`).
+- `src/tools.ts` — the 62 tools + `api()` REST helper + `@cfworker/json-schema` validation (moved from `../mcp-server/server.mjs`).
 - `src/mcp.ts` — `CvMcp` (McpAgent / Durable Object); mounts the tools on the low-level MCP `Server`.
 - `src/oauth-google.ts` — the Google OAuth *proxy* (consent + CSRF + state + `ADMIN_EMAILS` gate).
 - `src/index.ts` — `OAuthProvider` wrapping `/mcp`.
@@ -21,7 +21,7 @@ Claude (web/desktop/mobile) ──OAuth 2.1 (PKCE+DCR)──▶ cv-mcp Worker �
 ```bash
 npm install
 npm run typecheck        # tsc --noEmit
-npm test                 # vitest (runs in workerd): 61 tools + validators
+npm test                 # vitest (runs in workerd): 62 tools + validators
 npm run build            # wrangler deploy --dry-run (bundle check)
 npm run dev              # wrangler dev — boots the Worker locally
 ```
@@ -93,7 +93,7 @@ Then revert the offending commit on `main`, or the next deploy ships it again.
 
 ## Verify (post-deploy)
 - **Auth**: connecting with an allowlisted Google account succeeds; a non-allowlisted account is denied. Tokens are never exposed to the client.
-- **Tools**: the connector lists 61 tools; `cv_get_main` returns your CV; `cv_get_pdf` returns an inline PDF.
+- **Tools**: the connector lists 62 tools; `cv_get_main` returns your CV; `cv_get_pdf` returns an inline PDF.
 - **Mobile**: same connector works in the Claude mobile app.
 
 ## Hardening — default-deny allowlist + rate limiting

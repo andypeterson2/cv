@@ -19,14 +19,10 @@
  * (e.g. `/variants/10/resolve`); we tolerate a leading `/api` anyway for tests.
  */
 const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
+const { publicPersonIdSet } = require('./public-persons');
 
 function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = null } = {}) {
-  const publicIds = new Set(
-    String(publicPersonIds)
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  const publicIds = publicPersonIdSet(publicPersonIds);
   // Accepted front-door secrets (a SET, for zero-downtime rotation).
   const originSecrets = parseOriginSecrets(originSecret);
 
