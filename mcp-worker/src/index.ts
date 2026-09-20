@@ -50,8 +50,15 @@ function isAllowedPath(pathname: string): boolean {
 }
 
 // OAuth endpoints a single source might hammer. `/mcp` (token-gated, chatty) and
-// `/.well-known/*` (cheap discovery clients must reach) are deliberately not limited.
+// `/.well-known/*` (cheap discovery clients must reach) stay unlimited.
 const RATE_LIMITED_PATHS = new Set(['/authorize', '/callback', '/token', '/register']);
+
+// Signed download links are limited too: each one runs a full xelatex compile on the
+// cv origin, and a link stays replayable for its whole lifetime.
+
+function isPdfPath(pathname: string): boolean {
+  return pathname.startsWith('/pdf/');
+}
 
 const PDF_LINK_TTL_MS = 5 * 60 * 1000;
 
@@ -91,22 +98,20 @@ async function servePdf(request: Request, env: Env): Promise<Response> {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(request.url);
+    const pdf = isPdfPath(pathname);
 
-    // Signed PDF download links (cv_get_pdf) — served directly, outside the OAuth flow.
-    if (pathname.startsWith('/pdf/')) return servePdf(request, env);
-
-    // 1. Default-deny: only allowlisted paths get past the front door.
-    if (!isAllowedPath(pathname)) {
-      // Stealth 404 (reveals nothing) — blocks the scan before any OAuth logic runs.
+    // 1. Default-deny: only allowlisted paths (and the signed PDF links) get past
+    //    the front door. Stealth 404 blocks a scan before any other logic runs.
+    if (!pdf && !isAllowedPath(pathname)) {
       return new Response('Not found', {
         status: 404,
         headers: { 'x-content-type-options': 'nosniff' },
       });
     }
 
-    // 2. Rate-limit the OAuth endpoints per client IP. Cloudflare sets CF-Connecting-IP
-    //    at the edge (clients can't spoof it); best-effort throttling of a hammering source.
-    if (RATE_LIMITED_PATHS.has(pathname)) {
+    // 2. Rate-limit per client IP. Cloudflare sets CF-Connecting-IP at the edge
+    //    (clients can't spoof it); best-effort throttling of a hammering source.
+    if (pdf || RATE_LIMITED_PATHS.has(pathname)) {
       const key = request.headers.get('CF-Connecting-IP') || 'unknown';
       const { success } = await env.OAUTH_RATE_LIMITER.limit({ key });
       if (!success) {
@@ -116,6 +121,9 @@ export default {
         });
       }
     }
+
+    // 3. Signed PDF download links (cv_get_pdf) — served outside the OAuth flow.
+    if (pdf) return servePdf(request, env);
 
     return oauth.fetch(request, env, ctx);
   },
