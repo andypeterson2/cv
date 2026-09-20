@@ -22,7 +22,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { validateManifest } = require('./manifest-schema');
-const { loadLayout } = require('./loader');
+const { loadLayout, resolveInBundle } = require('./loader');
 const { renderVariantIsolated } = require('./host');
 const { queuedCompile } = require('./latex');
 const { CONTEXT_VERSION } = require('./context');
@@ -78,6 +78,22 @@ function securityScan(bundleDir) {
 
 // static checks
 
+/**
+ * A path the manifest declares: it has to stay inside the bundle and it has to be
+ * there. Resolving it through the bundle jail means a manifest reaching outside its
+ * own directory fails verification rather than being reported as present.
+ */
+function declaredFile(bundleDir, rel) {
+  let abs;
+  try {
+    abs = resolveInBundle(bundleDir, rel);
+  } catch (e) {
+    return { ok: false, detail: e.message };
+  }
+  const exists = fs.existsSync(abs);
+  return { ok: exists, detail: exists ? rel : `missing ${rel}` };
+}
+
 function staticChecks(bundleDir) {
   let manifest;
   try {
@@ -104,12 +120,10 @@ function staticChecks(bundleDir) {
   });
 
   for (const [kind, rel] of Object.entries(manifest.entry || {})) {
-    const exists = !!rel && fs.existsSync(path.join(bundleDir, rel));
-    checks.push({ name: `entry:${kind}`, ok: exists, detail: exists ? rel : `missing ${rel}` });
+    checks.push({ name: `entry:${kind}`, ...declaredFile(bundleDir, rel) });
   }
   for (const rel of manifest.classFiles || []) {
-    const exists = fs.existsSync(path.join(bundleDir, rel));
-    checks.push({ name: `classFile:${rel}`, ok: exists, detail: exists ? 'present' : 'missing' });
+    checks.push({ name: `classFile:${rel}`, ...declaredFile(bundleDir, rel) });
   }
   return { manifest, checks };
 }
