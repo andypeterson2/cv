@@ -16,7 +16,7 @@ Use the pinned Node version (`.nvmrc`). Two things matter:
 ```sh
 nvm use            # Node 22 — matches the Docker image
 npm ci             # builds the native better-sqlite3 binding for this Node
-npm test           # 300+ unit + integration tests
+npm test           # the unit + integration suite
 ```
 
 If you switch Node versions and see
