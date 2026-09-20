@@ -49,7 +49,7 @@ Google Cloud Console → **Google Auth Platform**:
 - **Custom domain**: add to `wrangler.jsonc` — `"routes": [{ "pattern": "mcp.andypeterson.dev", "custom_domain": true }]` (Cloudflare auto-creates the proxied DNS record + cert on deploy).
 
 ### 3. The front-door credentials for cv
-- Generate a `CV_ORIGIN_SECRET`, set it on the Railway **cv** service env, and use the same value for the Worker secret below (both sides must match).
+- Generate a `CV_ORIGIN_SECRET`, set it on the Railway **cv** service env, and use the same value for the Worker secret below (both sides must match). cv accepts a comma-separated set, so to rotate: add the new secret on cv, move each sender to it, then drop the old one. Senders present the first entry.
 - Zero Trust → Access → **Service Auth** → create a service token for cv's tunnel host (`cv-origin.andypeterson.dev`) and allow it in that host's Access policy. Its client id and secret become `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`.
 
 ### 4. First deploy, then set secrets
