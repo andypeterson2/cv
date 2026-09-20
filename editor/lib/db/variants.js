@@ -284,10 +284,16 @@ class VariantStore {
     return this._matchesTags(tags, rules);
   }
 
-  _renderSettings() {
-    const style = stripPrefix(this.getSettings('style'), 'style.');
-    const spacing = combineUnits(stripPrefix(this.getSettings('spacing'), 'spacing.'));
-    const fonts = combineUnits(stripPrefix(this.getSettings('fonts'), 'fonts.'));
+  /**
+   * Style/spacing/fonts for a document, read from the account that owns the person it
+   * belongs to. The result depends on the document alone, so every reader sees the
+   * same thing and the public demo renders identically for all of them. An account
+   * with no rows yields {}, which the render context fills from the defaults.
+   */
+  _renderSettings(userId) {
+    const style = stripPrefix(this.getSettings('style', userId), 'style.');
+    const spacing = combineUnits(stripPrefix(this.getSettings('spacing', userId), 'spacing.'));
+    const fonts = combineUnits(stripPrefix(this.getSettings('fonts', userId), 'fonts.'));
     return { style, spacing, fonts };
   }
 
@@ -305,7 +311,7 @@ class VariantStore {
       // Variant overrides win over the person's personal.* fields, so a variant
       // can carry its own tagline.
       const personal = { ...this.getPersonal(personId), ...this.getVariantPersonal(variantId) };
-      const { style, spacing, fonts } = this._renderSettings();
+      const { style, spacing, fonts } = this._renderSettings(this.personUserId(personId));
 
       if (v.kind === 'coverletter') {
         const coverletter = this.getLetterHeader(variantId);
@@ -403,7 +409,7 @@ class VariantStore {
       const person = this.getPerson(personId);
       if (!person) throw new Error('Person not found');
       const personal = this.getPersonal(personId);
-      const { style, spacing, fonts } = this._renderSettings();
+      const { style, spacing, fonts } = this._renderSettings(this.personUserId(personId));
 
       const sections = [];
       for (const s of this.getSections(personId)) {

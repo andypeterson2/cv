@@ -11,8 +11,10 @@
  * and every method takes the ids it operates on, so callers (REST, MCP) are
  * fully addressable and stateless.
  *
- * Style/spacing/fonts remain GLOBAL (the `settings` table); personal info and
- * the cover-letter header are per-person (`person_settings`).
+ * Style/spacing/fonts are per-user (the `settings` table, keyed on the account);
+ * personal info is per-person (`person_settings`) and the cover-letter header is
+ * per-variant. A document renders with its person's owner's style, so what a
+ * reader sees does not depend on who asked for it.
  */
 
 const Database = require('better-sqlite3');
@@ -39,15 +41,20 @@ class CvDatabase {
   _prepareStatements() {
     const p = (sql) => this.db.prepare(sql);
     this._stmts = {
-      // Global settings (style/spacing/fonts)
+      // Per-user settings (style/spacing/fonts)
       getSettings: p(
-        "SELECT key, value, value_num, value_unit FROM settings WHERE key LIKE ? || '%'",
+        "SELECT key, value, value_num, value_unit FROM settings WHERE user_id = ? AND key LIKE ? || '%'",
       ),
       upsertSetting: p(
-        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        'INSERT INTO settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value',
       ),
       upsertSettingUnit: p(
-        'INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit',
+        'INSERT INTO settings (user_id, key, value, value_num, value_unit) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit',
+      ),
+      // Carried into the owner account when a stray account is adopted; the owner's
+      // own keys win, so the copy cannot overwrite a value they already chose.
+      copySettingsToUser: p(
+        'INSERT OR IGNORE INTO settings (user_id, key, value, value_num, value_unit, value_legacy) SELECT ?, key, value, value_num, value_unit, value_legacy FROM settings WHERE user_id = ?',
       ),
 
       // Person settings (personal.* / coverletter.*)
@@ -266,21 +273,34 @@ class CvDatabase {
       clearVariantLayoutFor: p('UPDATE variants SET layout_id = NULL WHERE layout_id = ?'),
       deleteVariant: p('DELETE FROM variants WHERE id = ?'),
 
-      // Layouts (bundle metadata; files live on disk)
+      // Layouts (bundle metadata; files live on disk). A builtin has user_id NULL,
+      // which is what makes it visible to every account; an upload names its owner.
       listLayouts: p(
-        "SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts ORDER BY (source = 'builtin') DESC, id",
+        "SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts WHERE user_id IS NULL OR user_id = ? ORDER BY (source = 'builtin') DESC, id",
       ),
       getLayout: p(
-        'SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at FROM layouts WHERE id = ?',
+        'SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at, user_id FROM layouts WHERE id = ? AND (user_id IS NULL OR user_id = ?)',
       ),
       upsertLayout:
-        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at)
-        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at)
+        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id)
+        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id)
         ON CONFLICT(id) DO UPDATE SET
           name=excluded.name, version=excluded.version, engine=excluded.engine, kinds=excluded.kinds,
           status=excluded.status, source=excluded.source, manifest=excluded.manifest,
-          checksum=excluded.checksum, report=excluded.report, verified_at=excluded.verified_at`),
-      deleteLayout: p('DELETE FROM layouts WHERE id = ?'),
+          checksum=excluded.checksum, report=excluded.report, verified_at=excluded.verified_at,
+          user_id=excluded.user_id`),
+      // `= ?` never matches a NULL owner, so the scoped delete cannot remove a
+      // builtin however it is called.
+      deleteLayout: p('DELETE FROM layouts WHERE id = ? AND user_id = ?'),
+      // Unscoped — SYSTEM use only (the boot seed reconciling rows against disk).
+      // Request handlers must go through the scoped pair above.
+      listAllLayouts: p(
+        "SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts ORDER BY (source = 'builtin') DESC, id",
+      ),
+      deleteLayoutUnscoped: p('DELETE FROM layouts WHERE id = ?'),
+      getLayoutUnscoped: p(
+        'SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at, user_id FROM layouts WHERE id = ?',
+      ),
 
       // Variant rules
       getVariantRules: p('SELECT tag, mode FROM variant_rules WHERE variant_id = ?'),
@@ -424,10 +444,13 @@ class CvDatabase {
 
   /**
    * Fold a stray account (created before OWNER_EMAIL was set) into the '@owner'
-   * placeholder: move any résumés it made over to the owner, delete it (which frees the
-   * UNIQUE google_sub), then relink '@owner' to the real Google identity. Atomic.
-   * Returns the owner id, or null when there's no unclaimed placeholder to adopt into
-   * (caller then falls back to a normal profile update).
+   * placeholder: move any résumés it made over to the owner, carry its style settings
+   * across, delete it (which frees the UNIQUE google_sub), then relink '@owner' to the
+   * real Google identity. Atomic. Returns the owner id, or null when there's no
+   * unclaimed placeholder to adopt into (caller then falls back to a profile update).
+   *
+   * The settings copy runs before the delete: settings cascade with their account, and
+   * without it the adopted résumés would restyle. The owner's own keys win.
    */
   _adoptStrayIntoOwner(stray, { googleSub, email, name }) {
     const ownerId = this.ownerUserId();
@@ -435,6 +458,7 @@ class CvDatabase {
     if (!owner || owner.google_sub !== '@owner' || owner.id === stray.id) return null;
     this.db.transaction(() => {
       this._stmts.reassignPersons.run(owner.id, stray.id); // keep anything they created
+      this._stmts.copySettingsToUser.run(owner.id, stray.id);
       this._stmts.deleteUser.run(stray.id); // frees the UNIQUE google_sub for the relink
       this._stmts.adoptUser.run(googleSub, email, name, owner.id);
     })();

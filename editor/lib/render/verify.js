@@ -65,6 +65,8 @@ function walkFiles(dir, out = []) {
 
 function securityScan(bundleDir) {
   const violations = [];
+  // Nothing to scan when the bundle directory is gone; staticChecks reports that.
+  if (!fs.existsSync(bundleDir)) return violations;
   for (const file of walkFiles(bundleDir)) {
     const content = fs.readFileSync(file, 'utf-8');
     const rel = path.relative(bundleDir, file);
@@ -200,14 +202,20 @@ async function verifyLayout(bundleDir, opts = {}) {
 }
 
 /**
- * Build real-data smoke samples from the DB: up to maxSamples resolved
- * variants (one per kind per person). Passed to verifyLayout so a candidate is
- * tested against the shapes the user's own data produces as well as fixtures.
+ * Build real-data smoke samples from a single account's own résumés: up to maxSamples
+ * resolved variants (one per kind per person of theirs). Passed to verifyLayout so a
+ * candidate is tested against the shapes that account's data produces as well as
+ * fixtures.
+ *
+ * Scoped to `userId` because a candidate bundle's templates are untrusted and run over
+ * whatever is passed here, and the report — person ids, and the xelatex log on failure
+ * — goes back to whoever uploaded it. Without a userId there are no samples.
  */
-function gatherSamples(db, { maxSamples = 6 } = {}) {
+function gatherSamples(db, { userId = null, maxSamples = 6 } = {}) {
   const samples = [];
+  if (userId == null) return samples;
   try {
-    for (const person of db.getPersons()) {
+    for (const person of db.getPersonsForUser(userId)) {
       const seenKinds = new Set();
       for (const v of db.getVariants(person.id)) {
         if (seenKinds.has(v.kind)) continue;

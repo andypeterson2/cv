@@ -6,7 +6,7 @@ import { cvCtx } from './cv-ctx';
 import type { Env, CvProps } from './types';
 
 /**
- * The cv MCP server as a Durable-Object-backed McpAgent. The 57 tools mount on the
+ * The cv MCP server as a Durable-Object-backed McpAgent. The tool catalog mounts on the
  * low-level MCP Server via the same ListTools/CallTool request handlers the stdio
  * server used — no per-tool re-registration, no zod rewrite (McpAgent.server accepts
  * a low-level Server).
@@ -14,7 +14,7 @@ import type { Env, CvProps } from './types';
  * OAuth (Google + ADMIN_EMAILS) gates WHO reaches this agent; each authenticated
  * caller is resolved to its OWN cv user id (`this.props.cvUserId`) and every tool
  * call runs scoped to it via X-User-Id — no shared owner token. The user id is put
- * into an AsyncLocalStorage at dispatch so all 57 handlers stay untouched.
+ * into an AsyncLocalStorage at dispatch so every handler stays untouched.
  */
 export class CvMcp extends McpAgent<Env, unknown, CvProps> {
   server = new Server({ name: 'cv-editor', version: '0.2.0' }, { capabilities: { tools: {} } });

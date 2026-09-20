@@ -110,7 +110,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       }
       if (typeof layoutId !== 'string')
         throw new AppError('layout_id must be a string or null', 400);
-      const layout = getDb().getLayout(layoutId);
+      // Resolved against the person's owner, the same account the compile will read
+      // it as, so a variant can only be bound to a layout it can actually use.
+      const layout = getDb().getLayout(layoutId, getDb().personUserId(v.personId));
       if (!layout) throw new NotFoundError('Layout not found');
       if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
       if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
@@ -383,8 +385,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       {
         buildRoot: path.join(projectRoot, 'build', 'variants', String(id)),
         kind: variant.kind,
-        // Layout: the variant's own layout_id ?? global default ?? builtin.
-        selectLayoutFor: () => selectLayout(getDb(), variant),
+        // Layout: the variant's own layout_id ?? the owner's default ?? builtin.
+        selectLayoutFor: () =>
+          selectLayout(getDb(), variant, getDb().personUserId(variant.personId)),
         filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
       },
       res,
@@ -410,8 +413,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       {
         buildRoot: path.join(projectRoot, 'build', 'persons', String(pid)),
         kind: 'cv',
-        // The full document has no per-variant layout → global default ?? builtin.
-        selectLayoutFor: () => selectLayout(getDb(), { layoutId: null, kind: 'cv' }),
+        // The full document has no per-variant layout → the owner's default ?? builtin.
+        selectLayoutFor: () =>
+          selectLayout(getDb(), { layoutId: null, kind: 'cv' }, getDb().personUserId(pid)),
         filename: `${slugifyName(person.name)}.pdf`,
       },
       res,

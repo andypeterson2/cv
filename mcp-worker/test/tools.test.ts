@@ -4,7 +4,7 @@ import { tools, toolDefs, callTool, validate, TOOL_COUNT } from '../src/tools';
 import { cvCtx } from '../src/cv-ctx';
 
 // Parity coverage moved from cv/mcp-server/tests/validators.test.mjs (Node) to the
-// Worker runtime — proves the 57-tool catalog + the Workers-safe validator behave
+// Worker runtime — proves the tool catalog + the Workers-safe validator behave
 // like the stdio server before that server is deleted.
 describe('cv tool catalog (moved into the Worker)', () => {
   it('exposes exactly 62 tools, each cv_*-prefixed with a description + schema', () => {
