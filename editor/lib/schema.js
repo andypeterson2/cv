@@ -9,6 +9,7 @@
 const Ajv = require('ajv');
 const LATEX_UNITS = require('./latex-units');
 const { VALID_SEMANTIC_TYPES } = require('./latex-type-map');
+const { ValidationError } = require('./errors');
 
 const ajv = new Ajv({ allErrors: true, removeAdditional: 'all', coerceTypes: false });
 
@@ -381,16 +382,16 @@ for (const [name, schema] of Object.entries(schemas)) validators[name] = ajv.com
 
 /**
  * Express middleware factory: validates req.body against a named schema.
+ *
+ * A failure is raised as a ValidationError so the app's error handler formats it
+ * into the same {error:{code,message,details}} body every other failure uses.
  */
 function validate(schemaName) {
   const validator = validators[schemaName];
   if (!validator) throw new Error(`Unknown schema: ${schemaName}`);
   return (req, res, next) => {
-    if (validator(req.body)) {
-      next();
-    } else {
-      res.status(400).json({ error: 'Validation failed', details: validator.errors });
-    }
+    if (validator(req.body)) next();
+    else next(new ValidationError(validator.errors));
   };
 }
 

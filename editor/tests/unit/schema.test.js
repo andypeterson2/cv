@@ -155,13 +155,17 @@ describe('validate middleware', () => {
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
-  it('returns 400 on invalid body', () => {
+  it('raises a 400 ValidationError on an invalid body', () => {
     const req = { body: {} };
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
     const next = vi.fn();
     validate('createPerson')(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Validation failed' }));
+    // Handed to the error handler, which renders the shared error body.
+    expect(res.status).not.toHaveBeenCalled();
+    const err = next.mock.calls[0][0];
+    expect(err.status).toBe(400);
+    expect(err.message).toBe('Validation failed');
+    expect(Array.isArray(err.details)).toBe(true);
   });
   it('throws on unknown schema name', () => {
     expect(() => validate('nonexistent')).toThrow('Unknown schema: nonexistent');
