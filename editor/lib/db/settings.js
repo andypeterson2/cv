@@ -1,25 +1,34 @@
 /**
- * Settings methods for CvDatabase, mixed onto the prototype. Global
- * style/spacing/fonts live in `settings`; personal info is per-person in
- * `person_settings`; the cover-letter header is per-variant. Methods run with
- * `this` === the CvDatabase instance, so they use its prepared statements + db.
+ * Settings methods for CvDatabase, mixed onto the prototype. Style/spacing/fonts are
+ * per-user in `settings`; personal info is per-person in `person_settings`; the
+ * cover-letter header is per-variant. Methods run with `this` === the CvDatabase
+ * instance, so they use its prepared statements + db.
+ *
+ * An account with no rows of its own reads back nothing, and the render context fills
+ * every missing key from STYLE_DEFAULTS. There is no shared tier underneath.
  */
 const { rowsToSettings, stripPrefix } = require('./helpers');
 
 module.exports = {
-  // Global settings (style / spacing / fonts)
-  getSettings(prefix) {
-    const rows = this._stmts.getSettings.all(prefix ? prefix + '.' : '');
+  // Per-user settings (style / spacing / fonts)
+  getSettings(prefix, userId) {
+    const rows = this._stmts.getSettings.all(userId ?? null, prefix ? prefix + '.' : '');
     return rowsToSettings(rows);
   },
 
-  setSettings(map) {
+  setSettings(map, userId) {
     const tx = this.db.transaction((entries) => {
       for (const [key, val] of entries) {
         if (val && typeof val === 'object' && 'num' in val && 'unit' in val) {
-          this._stmts.upsertSettingUnit.run(key, String(val.num) + val.unit, val.num, val.unit);
+          this._stmts.upsertSettingUnit.run(
+            userId,
+            key,
+            String(val.num) + val.unit,
+            val.num,
+            val.unit,
+          );
         } else {
-          this._stmts.upsertSetting.run(key, val);
+          this._stmts.upsertSetting.run(userId, key, val);
         }
       }
     });

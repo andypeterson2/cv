@@ -1,5 +1,5 @@
 /**
- * cv tool catalog — the 57 `cv_*` tools, MOVED from cv/mcp-server/server.mjs into
+ * cv tool catalog — the `cv_*` tools, MOVED from cv/mcp-server/server.mjs into
  * the remote MCP Worker (the stdio server is retired once parity is verified).
  *
  * Identical to the stdio catalog except for what the Workers runtime forces:
@@ -131,7 +131,7 @@ const tagList = {
   items: { type: 'string' },
   description: 'Tag names (free strings)',
 };
-const layoutId = { type: 'string', description: 'Layout id (slug, from cv_list_layouts)' };
+const layoutId = { type: 'string', description: 'Layout id (opaque, from cv_list_layouts)' };
 const idList = {
   type: 'array',
   items: { type: 'integer', minimum: 1 },
@@ -881,16 +881,16 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_list_layouts',
     description:
-      'List installed LaTeX layouts and the global default: {layouts:[{id,name,version,kinds,status,source,builtin}], default}. ' +
+      'List the layouts you can use — the builtins plus your own uploads — and your default: {layouts:[{id,name,version,kinds,status,source,builtin}], default}. ' +
       'A layout decides how a variant is typeset; "awesome-cv" is the builtin default. Pick one per variant with ' +
-      'cv_set_variant_layout, or change the global default with cv_set_default_layout.',
+      'cv_set_variant_layout, or change your default with cv_set_default_layout.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: () => api('GET', '/api/layouts'),
   },
   {
     name: 'cv_set_default_layout',
     description:
-      'Set the global default layout (used by any variant that has not chosen its own). layout_id from cv_list_layouts.',
+      'Set your account default layout (used by any of your variants that has not chosen its own). layout_id from cv_list_layouts.',
     inputSchema: {
       type: 'object',
       properties: { layout_id: layoutId },
@@ -952,7 +952,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_delete_layout',
     description:
-      'Delete an uploaded layout (builtins cannot be deleted). Variants using it revert to the global default.',
+      'Delete one of your uploaded layouts (builtins cannot be deleted). Variants using it revert to the default.',
     inputSchema: {
       type: 'object',
       properties: { layout_id: layoutId },
@@ -985,7 +985,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_get_settings',
     description:
-      'Read GLOBAL style/spacing/fonts settings (shared by every variant) as a flat {key:value} map. Optional prefix ∈ style|spacing|fonts narrows it.',
+      'Read your account style/spacing/fonts settings (shared by every résumé you own) as a flat {key:value} map. Optional prefix ∈ style|spacing|fonts narrows it.',
     inputSchema: {
       type: 'object',
       properties: { prefix: { type: 'string', enum: ['style', 'spacing', 'fonts'] } },
@@ -996,7 +996,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_set_settings',
     description:
-      'Update GLOBAL style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. See cv_catalog for valid colors/units.',
+      'Update your account style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. See cv_catalog for valid colors/units.',
     inputSchema: {
       type: 'object',
       properties: { settings: { type: 'object', minProperties: 1 } },
