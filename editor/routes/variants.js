@@ -26,6 +26,12 @@ function slugifyName(s) {
   );
 }
 
+// A compile failure answers with the shared {error:{code,message}} body, keeping the
+// `success` and `log` keys the editor already reads.
+function compileFail(res, status, code, log) {
+  return res.status(status).json({ success: false, log, error: { code, message: log } });
+}
+
 function cleanupDir(dir) {
   try {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -110,7 +116,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       }
       if (typeof layoutId !== 'string')
         throw new AppError('layout_id must be a string or null', 400);
-      const layout = getDb().getLayout(layoutId);
+      // Resolved against the person's owner, the same account the compile will read
+      // it as, so a variant can only be bound to a layout it can actually use.
+      const layout = getDb().getLayout(layoutId, getDb().personUserId(v.personId));
       if (!layout) throw new NotFoundError('Layout not found');
       if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
       if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
@@ -301,7 +309,11 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     keyGenerator: clientIp,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { success: false, log: 'Too many compile requests — please wait a moment.' },
+    message: {
+      success: false,
+      log: 'Too many compile requests — please wait a moment.',
+      error: { code: 'rate_limited', message: 'Too many compile requests — please wait a moment.' },
+    },
   });
 
   // Durable per-USER daily cap, layered on the per-IP burst limit above + the shared
@@ -317,10 +329,8 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     const r = db.bumpCompileQuota(req.userId, limit);
     if (!r.ok) {
       res.setHeader('Retry-After', '3600');
-      return res.status(429).json({
-        success: false,
-        log: `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.`,
-      });
+      const log = `Daily compile limit reached (${r.limit}/day). Please try again tomorrow.`;
+      return compileFail(res, 429, 'rate_limited', log);
     }
     next();
   }
@@ -343,7 +353,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       mainTexFile = renderVariant(compileData, buildDir, { layoutDir, assetsDir: ASSETS_DIR });
     } catch (e) {
       if (buildDir) cleanupDir(buildDir);
-      return res.status(500).json({ success: false, log: 'File generation failed: ' + e.message });
+      return compileFail(res, 500, 'internal_error', 'File generation failed: ' + e.message);
     }
 
     // Queue the expensive xelatex run behind the shared concurrency limiter.
@@ -351,7 +361,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       .then((result) => {
         if (!result.ok) {
           cleanupDir(buildDir);
-          return res.status(500).json({ success: false, log: result.log });
+          return compileFail(res, 500, 'internal_error', result.log);
         }
         if (inline) {
           res.setHeader('Content-Type', 'application/pdf');
@@ -364,7 +374,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       })
       .catch((e) => {
         cleanupDir(buildDir);
-        res.status(500).json({ success: false, log: 'Compile failed: ' + e.message });
+        compileFail(res, 500, 'internal_error', 'Compile failed: ' + e.message);
       });
   }
 
@@ -375,16 +385,17 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       compileData = getDb().resolveVariant(id);
     } catch (e) {
       if (e instanceof NotFoundError)
-        return res.status(404).json({ success: false, log: 'Variant not found' });
-      return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
+        return compileFail(res, 404, 'not_found', 'Variant not found');
+      return compileFail(res, 500, 'internal_error', 'Resolution failed: ' + e.message);
     }
     return runCompile(
       compileData,
       {
         buildRoot: path.join(projectRoot, 'build', 'variants', String(id)),
         kind: variant.kind,
-        // Layout: the variant's own layout_id ?? global default ?? builtin.
-        selectLayoutFor: () => selectLayout(getDb(), variant),
+        // Layout: the variant's own layout_id ?? the owner's default ?? builtin.
+        selectLayoutFor: () =>
+          selectLayout(getDb(), variant, getDb().personUserId(variant.personId)),
         filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
       },
       res,
@@ -400,18 +411,19 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     try {
       person = getDb().getPersonForUser(pid, userId);
       if (!person && PUBLIC_PERSON_IDS.has(String(pid))) person = getDb().getPerson(pid);
-      if (!person) return res.status(404).json({ success: false, log: 'Person not found' });
+      if (!person) return compileFail(res, 404, 'not_found', 'Person not found');
       compileData = getDb().resolveMain(pid);
     } catch (e) {
-      return res.status(500).json({ success: false, log: 'Resolution failed: ' + e.message });
+      return compileFail(res, 500, 'internal_error', 'Resolution failed: ' + e.message);
     }
     return runCompile(
       compileData,
       {
         buildRoot: path.join(projectRoot, 'build', 'persons', String(pid)),
         kind: 'cv',
-        // The full document has no per-variant layout → global default ?? builtin.
-        selectLayoutFor: () => selectLayout(getDb(), { layoutId: null, kind: 'cv' }),
+        // The full document has no per-variant layout → the owner's default ?? builtin.
+        selectLayoutFor: () =>
+          selectLayout(getDb(), { layoutId: null, kind: 'cv' }, getDb().personUserId(pid)),
         filename: `${slugifyName(person.name)}.pdf`,
       },
       res,

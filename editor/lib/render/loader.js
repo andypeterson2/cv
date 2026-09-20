@@ -10,6 +10,9 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { SLUG_PATTERN } = require('@cv/constants');
+
+const SLUG_RE = new RegExp(SLUG_PATTERN);
 
 class LayoutError extends Error {}
 
@@ -61,6 +64,11 @@ function loadLayout(layoutDir) {
   for (const field of ['id', 'engine', 'kinds', 'entry']) {
     if (manifest[field] == null) throw new LayoutError(`Manifest missing required field: ${field}`);
   }
+  // The id names a directory in the layouts store, so it must be a slug before any
+  // caller derives a path from it.
+  if (typeof manifest.id !== 'string' || !SLUG_RE.test(manifest.id)) {
+    throw new LayoutError(`Manifest id must match ${SLUG_PATTERN}: ${JSON.stringify(manifest.id)}`);
+  }
   if (!Array.isArray(manifest.kinds) || manifest.kinds.length === 0) {
     throw new LayoutError('Manifest "kinds" must be a non-empty array');
   }
@@ -70,12 +78,16 @@ function loadLayout(layoutDir) {
 /**
  * Resolve the entry template for a document kind.
  * Cover letters use entry.coverletter; cv/resume share entry.document.
+ *
+ * With a layoutDir the path is confined to the bundle, so a manifest pointing at
+ * `../something` is refused here rather than deeper in the render engine.
  */
-function entryTemplateFor(manifest, kind) {
+function entryTemplateFor(manifest, kind, layoutDir = null) {
   const entry = manifest.entry || {};
   const rel = kind === 'coverletter' ? entry.coverletter : entry.document;
   if (!rel) throw new LayoutError(`Layout "${manifest.id}" does not support kind "${kind}"`);
+  if (layoutDir) resolveInBundle(layoutDir, rel);
   return rel;
 }
 
-module.exports = { loadLayout, resolveInBundle, entryTemplateFor, LayoutError };
+module.exports = { loadLayout, resolveInBundle, entryTemplateFor };

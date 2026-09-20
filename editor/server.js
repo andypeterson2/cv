@@ -21,8 +21,8 @@ const createAuthRouter = require('./routes/auth');
 const { seedBuiltinLayouts } = require('./lib/render/seed');
 
 const app = express();
-// Behind the Cloudflare gateway → Railway the socket IP is the proxy's; trust one
-// hop so req.ip is meaningful. Rate limits key on CF-Connecting-IP (see lib/client-ip).
+// Behind a reverse proxy the socket IP is the proxy's; trust one hop so req.ip names
+// the client. Rate limits key on req.ip unless CV_TRUST_CF_IP (see lib/client-ip).
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3001;
 const PROJECT_ROOT = path.resolve(__dirname, '..');
@@ -93,7 +93,7 @@ function listEndpoints(expressApp) {
     const key = `${M} ${p}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ method: M, path: p, summary: '' });
+    out.push({ method: M, path: p });
   };
   const addRouteLayer = (prefix, layer) => {
     if (!layer.route) return;
@@ -167,7 +167,6 @@ app.get('/api', (req, res) => {
     service: 'cv',
     version: pkg.version,
     endpoints: listEndpoints(app),
-    streaming: [],
   });
 });
 

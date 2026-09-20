@@ -16,6 +16,7 @@ from _contract import (
     assert_matches,
     base_url,
     http_get,
+    http_post,
     skip_unless_reachable,
 )
 
@@ -47,6 +48,27 @@ class TestContractSurface:
         assert status == 404
         assert_matches("error", body)
         assert body["error"]["code"] == "not_found"
+
+    def test_error_envelope_on_validation_failure(self):
+        """A rejected body is an error like any other, not its own shape."""
+        status, body = http_post(BASE, "/api/persons", {"name": ""})
+        assert status == 400, f"expected 400 for an empty name, got {status}"
+        assert_matches("error", body)
+        assert body["error"]["code"] == "bad_request"
+        assert body["error"]["details"], "a validation failure should say what failed"
+
+
+class TestRateLimitEnvelope:
+    """Kept last: it spends the upload limiter's window for this process."""
+
+    def test_error_envelope_on_rate_limit(self):
+        # The limiter answers before multer, so a bodyless POST is enough to reach it.
+        limit = 5  # CV_UPLOAD_RATE_MAX default
+        statuses = [http_post(BASE, "/api/layouts")[0] for _ in range(limit + 2)]
+        assert 429 in statuses, f"expected the upload limiter to fire, saw {statuses}"
+        body = next(b for st, b in (http_post(BASE, "/api/layouts"),) if st == 429)
+        assert_matches("error", body)
+        assert body["error"]["code"] == "rate_limited"
 
 
 class TestReadShapes:

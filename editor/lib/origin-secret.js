@@ -1,7 +1,7 @@
 /**
  * The set of accepted origin secrets.
  *
- * Both front doors present `X-Origin-Secret`, and cv checks it in three places, so
+ * Both front doors present `X-Origin-Secret`, and cv checks it in four places, so
  * every sender has to agree with cv at once. Accepting a comma-separated set removes
  * that outage window: set `CV_ORIGIN_SECRET` to `old,new`, move each sender to `new`
  * one at a time, then drop `old`. A single value behaves as a plain equality check.

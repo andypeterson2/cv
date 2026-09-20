@@ -22,7 +22,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { validateManifest } = require('./manifest-schema');
-const { loadLayout } = require('./loader');
+const { loadLayout, resolveInBundle } = require('./loader');
 const { renderVariantIsolated } = require('./host');
 const { queuedCompile } = require('./latex');
 const { CONTEXT_VERSION } = require('./context');
@@ -65,6 +65,8 @@ function walkFiles(dir, out = []) {
 
 function securityScan(bundleDir) {
   const violations = [];
+  // Nothing to scan when the bundle directory is gone; staticChecks reports that.
+  if (!fs.existsSync(bundleDir)) return violations;
   for (const file of walkFiles(bundleDir)) {
     const content = fs.readFileSync(file, 'utf-8');
     const rel = path.relative(bundleDir, file);
@@ -75,6 +77,22 @@ function securityScan(bundleDir) {
 }
 
 // static checks
+
+/**
+ * A path the manifest declares: it has to stay inside the bundle and it has to be
+ * there. Resolving it through the bundle jail means a manifest reaching outside its
+ * own directory fails verification rather than being reported as present.
+ */
+function declaredFile(bundleDir, rel) {
+  let abs;
+  try {
+    abs = resolveInBundle(bundleDir, rel);
+  } catch (e) {
+    return { ok: false, detail: e.message };
+  }
+  const exists = fs.existsSync(abs);
+  return { ok: exists, detail: exists ? rel : `missing ${rel}` };
+}
 
 function staticChecks(bundleDir) {
   let manifest;
@@ -102,12 +120,10 @@ function staticChecks(bundleDir) {
   });
 
   for (const [kind, rel] of Object.entries(manifest.entry || {})) {
-    const exists = !!rel && fs.existsSync(path.join(bundleDir, rel));
-    checks.push({ name: `entry:${kind}`, ok: exists, detail: exists ? rel : `missing ${rel}` });
+    checks.push({ name: `entry:${kind}`, ...declaredFile(bundleDir, rel) });
   }
   for (const rel of manifest.classFiles || []) {
-    const exists = fs.existsSync(path.join(bundleDir, rel));
-    checks.push({ name: `classFile:${rel}`, ok: exists, detail: exists ? 'present' : 'missing' });
+    checks.push({ name: `classFile:${rel}`, ...declaredFile(bundleDir, rel) });
   }
   return { manifest, checks };
 }
@@ -200,14 +216,20 @@ async function verifyLayout(bundleDir, opts = {}) {
 }
 
 /**
- * Build real-data smoke samples from the DB: up to maxSamples resolved
- * variants (one per kind per person). Passed to verifyLayout so a candidate is
- * tested against the shapes the user's own data produces as well as fixtures.
+ * Build real-data smoke samples from a single account's own résumés: up to maxSamples
+ * resolved variants (one per kind per person of theirs). Passed to verifyLayout so a
+ * candidate is tested against the shapes that account's data produces as well as
+ * fixtures.
+ *
+ * Scoped to `userId` because a candidate bundle's templates are untrusted and run over
+ * whatever is passed here, and the report — person ids, and the xelatex log on failure
+ * — goes back to whoever uploaded it. Without a userId there are no samples.
  */
-function gatherSamples(db, { maxSamples = 6 } = {}) {
+function gatherSamples(db, { userId = null, maxSamples = 6 } = {}) {
   const samples = [];
+  if (userId == null) return samples;
   try {
-    for (const person of db.getPersons()) {
+    for (const person of db.getPersonsForUser(userId)) {
       const seenKinds = new Set();
       for (const v of db.getVariants(person.id)) {
         if (seenKinds.has(v.kind)) continue;
@@ -226,4 +248,4 @@ function gatherSamples(db, { maxSamples = 6 } = {}) {
   return samples;
 }
 
-module.exports = { verifyLayout, securityScan, staticChecks, fixtureSamples, gatherSamples };
+module.exports = { verifyLayout, securityScan, gatherSamples };
