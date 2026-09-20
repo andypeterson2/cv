@@ -44,7 +44,7 @@ function prepare(compileData, layoutDir) {
   if (!layoutDir) throw new Error('renderVariant: opts.layoutDir is required');
   const { manifest } = loadLayout(layoutDir);
   const kind = compileData.variant;
-  const entryRel = entryTemplateFor(manifest, kind);
+  const entryRel = entryTemplateFor(manifest, kind, layoutDir);
   const context = buildContext(compileData, { layoutId: manifest.id });
   return { manifest, kind, entryRel, context };
 }
