@@ -19,6 +19,7 @@
  */
 import type { Env } from './types';
 import { signingSecret, signPayload, verifyPayload } from './sign';
+import { currentOriginSecret } from './origin-secret';
 
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN = 'https://oauth2.googleapis.com/token';
@@ -66,13 +67,14 @@ async function upsertCvUser(
   env: Env,
   who: { googleSub: string; email: string; name?: string },
 ): Promise<number | null> {
-  if (!env.CV_EDITOR_URL || !env.CV_ORIGIN_SECRET) return null;
+  const originSecret = currentOriginSecret(env.CV_ORIGIN_SECRET);
+  if (!env.CV_EDITOR_URL || !originSecret) return null;
   try {
     const res = await fetch(`${env.CV_EDITOR_URL.replace(/\/$/, '')}/api/auth/upsert-user`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Origin-Secret': env.CV_ORIGIN_SECRET,
+        'X-Origin-Secret': originSecret,
         // CF Access service-token in front of cv's tunnel host (Stage 6) — omitted until set.
         ...(env.CF_ACCESS_CLIENT_ID && env.CF_ACCESS_CLIENT_SECRET
           ? {
