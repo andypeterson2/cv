@@ -8,7 +8,6 @@
  * Mixed onto the CvDatabase prototype; methods run with
  * `this` === the CvDatabase instance, sharing its prepared statements + db handle.
  */
-const { createHash } = require('crypto');
 
 class Versions {
   /**
@@ -18,13 +17,10 @@ class Versions {
   createVersion(personId, label = '', branch = 'main', parent = null) {
     const doc = this.getPersonExport(personId);
     if (!doc) return null;
-    const json = JSON.stringify(doc);
-    const hash = createHash('sha256').update(json).digest('hex');
     return this._stmts.insertVersion.run(
       personId,
       label || '',
-      hash,
-      json,
+      JSON.stringify(doc),
       Date.now(),
       branch || 'main',
       parent ?? null,

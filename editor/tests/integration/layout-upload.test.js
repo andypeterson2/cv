@@ -6,6 +6,10 @@
  *
  * Builds real .zip bundles with the `zip` CLI; skips if it isn't available.
  */
+// The default upload limit (5/min) is spent by the rejection cases below, and these
+// all run against one server, so lift it before the router reads it at construction.
+process.env.CV_UPLOAD_RATE_MAX = '1000';
+
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
@@ -153,5 +157,60 @@ describe('DELETE /api/layouts/:id', () => {
   });
   it('404 for an unknown layout', async () => {
     expect(await del('ghost')).toBe(404);
+  });
+});
+
+describe('layout ids', () => {
+  it.skipIf(!hasZip)('422 for a manifest id that is not a slug', async () => {
+    const zip = makeZip('escape.zip', {
+      'layout.json': MANIFEST({ id: '../escape' }),
+      'templates/document.tex.njk': 'x',
+    });
+    const { status } = await uploadZip(zip);
+    expect(status).toBe(422);
+    // Nothing outside the layouts store was touched, and no row was created.
+    expect(db.listLayouts(db.ownerUserId()).some((l) => l.id.includes('escape'))).toBe(false);
+  });
+
+  it('stores an upload under an id that carries the installer', () => {
+    // Two accounts installing the same manifest id must not collide on the
+    // layouts primary key, which the bare manifest id would.
+    const a = db.upsertUser({ googleSub: 'g-a', email: 'a@x.test' });
+    const b = db.upsertUser({ googleSub: 'g-b', email: 'b@x.test' });
+    db.upsertLayout({ id: `u${a}-modern`, name: 'M', kinds: ['cv'], source: 'upload', userId: a });
+    db.upsertLayout({ id: `u${b}-modern`, name: 'M', kinds: ['cv'], source: 'upload', userId: b });
+    expect(db.listLayouts(a).map((l) => l.id)).toContain(`u${a}-modern`);
+    expect(db.listLayouts(a).map((l) => l.id)).not.toContain(`u${b}-modern`);
+    expect(db.listLayouts(b).map((l) => l.id)).toContain(`u${b}-modern`);
+  });
+
+  it('re-verifying updates the row in place instead of adding a second one', async () => {
+    // The row id carries the installer; its manifest keeps the bare id it was
+    // authored with. Re-upserting by the manifest id would insert a duplicate.
+    const owner = db.ownerUserId();
+    const storedId = `u${owner}-cand`;
+    db.upsertLayout({
+      id: storedId,
+      name: 'Cand',
+      kinds: ['cv'],
+      source: 'upload',
+      userId: owner,
+      manifest: { id: 'cand', name: 'Cand', engine: 'nunjucks', kinds: ['cv'], entry: {} },
+    });
+    const before = db.listLayouts(owner).length;
+
+    // No bundle on disk, so verification fails at the static stage — no xelatex needed.
+    const res = await fetch(`http://localhost:${port}/api/layouts/${storedId}/verify`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(false);
+
+    const after = db.listLayouts(owner);
+    expect(after.length).toBe(before);
+    expect(after.filter((l) => l.id === storedId)).toHaveLength(1);
+    expect(after.some((l) => l.id === 'cand')).toBe(false);
+    expect(db.getLayout(storedId, owner).status).toBe('invalid');
+    db.deleteLayout(storedId, owner);
   });
 });

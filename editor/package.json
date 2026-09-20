@@ -5,7 +5,7 @@
   "description": "Web editor for LaTeX resume/CV/cover letter",
   "main": "server.js",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node server.js",
@@ -14,8 +14,8 @@
     "test:coverage": "vitest run --coverage",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "lint": "eslint . && prettier --check '**/*.{js,cjs,mjs}'",
-    "format": "prettier --write '**/*.{js,cjs,mjs}'"
+    "lint": "eslint . && prettier --check '*.js' '*.cjs' '*.mjs' 'lib/**/*.js' 'routes/**/*.js' 'migrations/**/*.js' 'scripts/**/*.cjs' 'tests/**/*.js'",
+    "format": "prettier --write '*.js' '*.cjs' '*.mjs' 'lib/**/*.js' 'routes/**/*.js' 'migrations/**/*.js' 'scripts/**/*.cjs' 'tests/**/*.js'"
   },
   "dependencies": {
     "@cv/constants": "file:../shared",

@@ -43,6 +43,9 @@ function request(method, urlPath, body, userId) {
 beforeAll(async () => {
   const app = require('../../server');
   db = new CvDatabase(':memory:');
+  // Register the builtin bundles the way the server's own getDb() does, so the
+  // layout routes see the rows production would give them.
+  require('../../lib/render/seed').seedBuiltinLayouts(db);
   app.setDb(db);
   await new Promise((resolve) => {
     server = app.listen(0, () => {
@@ -231,5 +234,94 @@ describe('nested ids stay inside the parent in the path', () => {
 
     await request('DELETE', `/api/variants/${other}/letter-sections/${lid}`);
     expect((await request('GET', `/api/variants/${mine}/letter-sections`)).body).toHaveLength(1);
+  });
+});
+
+describe('settings', () => {
+  test('a stranger cannot change the owner style, and reads only their own', async () => {
+    await request('PATCH', '/api/settings', { 'style.accentColor': 'awesome-red' });
+    const wrote = await request(
+      'PATCH',
+      '/api/settings',
+      { 'style.accentColor': 'awesome-pink' },
+      stranger,
+    );
+    expect(wrote.status).toBe(200); // writes their own row
+    expect((await request('GET', '/api/settings?prefix=style')).body).toEqual({
+      'style.accentColor': 'awesome-red',
+    });
+    expect((await request('GET', '/api/settings?prefix=style', undefined, stranger)).body).toEqual({
+      'style.accentColor': 'awesome-pink',
+    });
+  });
+
+  test('a resolve carries the style of the account that owns the person', async () => {
+    await request('PATCH', '/api/settings', { 'style.accentColor': 'awesome-red' });
+    await request('PATCH', '/api/settings', { 'style.accentColor': 'awesome-pink' }, stranger);
+    const vid = Number(
+      (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id,
+    );
+    const mine = await request('GET', `/api/variants/${vid}/resolve`);
+    expect(mine.body.style.accentColor).toBe('awesome-red');
+    // The stranger cannot reach this variant at all, which is the stronger guarantee.
+    expect((await request('GET', `/api/variants/${vid}/resolve`, undefined, stranger)).status).toBe(
+      404,
+    );
+  });
+});
+
+describe('layouts', () => {
+  const install = (id, userId) =>
+    db.upsertLayout({ id, name: id, kinds: ['cv'], source: 'upload', userId });
+
+  test('a stranger sees the builtins but not the owner’s upload', async () => {
+    install('u-owner-x', db.ownerUserId());
+    const mine = await request('GET', '/api/layouts');
+    const theirs = await request('GET', '/api/layouts', undefined, stranger);
+    expect(mine.body.layouts.map((l) => l.id)).toContain('u-owner-x');
+    expect(theirs.body.layouts.map((l) => l.id)).not.toContain('u-owner-x');
+    expect(theirs.body.layouts.map((l) => l.id)).toContain('awesome-cv');
+  });
+
+  test('a stranger cannot read, re-verify, or delete it, and it survives', async () => {
+    install('u-owner-x', db.ownerUserId());
+    for (const [method, url] of [
+      ['GET', '/api/layouts/u-owner-x'],
+      ['POST', '/api/layouts/u-owner-x/verify'],
+      ['DELETE', '/api/layouts/u-owner-x'],
+    ]) {
+      expect((await request(method, url, undefined, stranger)).status).toBe(404);
+    }
+    expect(db.getLayout('u-owner-x', db.ownerUserId())).toBeTruthy();
+  });
+
+  test('a stranger cannot point the owner’s default at anything', async () => {
+    install('u-owner-x', db.ownerUserId());
+    expect(
+      (await request('PUT', '/api/layouts/default', { layout_id: 'u-owner-x' }, stranger)).status,
+    ).toBe(404);
+    expect((await request('GET', '/api/layouts/default', undefined, stranger)).body.layout_id).toBe(
+      'awesome-cv',
+    );
+  });
+
+  test('defaults are per account', async () => {
+    install('u-owner-x', db.ownerUserId());
+    await request('PUT', '/api/layouts/default', { layout_id: 'u-owner-x' });
+    expect((await request('GET', '/api/layouts/default')).body.layout_id).toBe('u-owner-x');
+    expect((await request('GET', '/api/layouts/default', undefined, stranger)).body.layout_id).toBe(
+      'awesome-cv',
+    );
+  });
+
+  test('a variant cannot be bound to another account’s layout', async () => {
+    install('u-stranger-y', stranger);
+    const vid = Number(
+      (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id,
+    );
+    expect(
+      (await request('PUT', `/api/variants/${vid}/layout`, { layout_id: 'u-stranger-y' })).status,
+    ).toBe(404);
+    expect(db.getVariant(vid).layoutId).toBe(null);
   });
 });

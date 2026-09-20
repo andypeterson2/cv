@@ -293,3 +293,174 @@ describe('per-user résumé-name uniqueness (migration 020)', () => {
     raw.close();
   });
 });
+
+describe('per-user settings (migration 023)', () => {
+  test("one account's style never reaches another's", () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com' });
+    const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com' });
+    db.setSettings({ 'style.accentColor': 'awesome-red' }, a);
+    expect(db.getSettings('style', a)).toEqual({ 'style.accentColor': 'awesome-red' });
+    expect(db.getSettings('style', b)).toEqual({});
+  });
+
+  test('both accounts can hold the same key at once', () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com' });
+    const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com' });
+    db.setSettings({ 'style.accentColor': 'awesome-red' }, a);
+    db.setSettings({ 'style.accentColor': 'awesome-pink' }, b);
+    expect(db.getSettings('style', a)['style.accentColor']).toBe('awesome-red');
+    expect(db.getSettings('style', b)['style.accentColor']).toBe('awesome-pink');
+  });
+
+  test('a {num, unit} value round-trips per account', () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com' });
+    db.setSettings({ 'spacing.sectionGap': { num: 1.5, unit: 'em' } }, a);
+    const row = db.db
+      .prepare('SELECT value, value_num, value_unit FROM settings WHERE user_id = ? AND key = ?')
+      .get(a, 'spacing.sectionGap');
+    expect(row).toEqual({ value: '1.5em', value_num: 1.5, value_unit: 'em' });
+  });
+
+  test('an account with no rows resolves a document to the style defaults', () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com' });
+    const pid = db.createPerson('Theirs', a);
+    db.createSection(pid, 'exp', 'experience', 'Experience');
+    expect(db.resolveMain(pid).style).toEqual({});
+  });
+
+  test('a document renders with its own owner’s style, whoever asks', () => {
+    const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com' });
+    const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com' });
+    db.setSettings({ 'style.accentColor': 'awesome-red' }, a);
+    db.setSettings({ 'style.accentColor': 'awesome-pink' }, b);
+    const pid = db.createPerson('Theirs', a);
+    const sid = db.createSection(pid, 'exp', 'experience', 'Experience');
+    db.createEntry(sid, { title: 'T' });
+    expect(db.resolveMain(pid).style.accentColor).toBe('awesome-red');
+  });
+
+  test('adoption carries the stray account’s settings, and the owner’s keys win', () => {
+    process.env.OWNER_EMAIL = 'me@x.com';
+    try {
+      const stray = db.upsertUser({ googleSub: 'g-stray', email: 'me@x.com' });
+      db.setSettings({ 'style.accentColor': 'awesome-pink', 'style.fontSize': '11pt' }, stray);
+      const ownerId = db.ownerUserId();
+      db.setSettings({ 'style.accentColor': 'awesome-red' }, ownerId);
+      // Signing in again with OWNER_EMAIL set folds the stray into '@owner'.
+      expect(db.upsertUser({ googleSub: 'g-stray', email: 'me@x.com' })).toBe(ownerId);
+      const after = db.getSettings('style', ownerId);
+      expect(after['style.accentColor']).toBe('awesome-red'); // the owner's own key wins
+      expect(after['style.fontSize']).toBe('11pt'); // the stray's other key carried across
+    } finally {
+      delete process.env.OWNER_EMAIL;
+    }
+  });
+
+  test('the rebuild preserves values and re-keys them onto both sentinels', () => {
+    const Database = require('better-sqlite3');
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../../migrations');
+    const raw = new Database(':memory:');
+    raw.pragma('foreign_keys = ON');
+    raw.exec(
+      `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    );
+    // Every migration before 023, so `settings` still has the old key-only PK.
+    for (const f of fs
+      .readdirSync(dir)
+      .filter((x) => (x.endsWith('.sql') || x.endsWith('.js')) && !x.includes('rollback'))
+      .sort()) {
+      if (parseInt(f, 10) >= 23) break;
+      if (f.endsWith('.sql')) raw.exec(fs.readFileSync(path.join(dir, f), 'utf-8'));
+      else require(path.join(dir, f))(raw);
+      raw.prepare('INSERT INTO _migrations (name) VALUES (?)').run(f);
+    }
+    raw
+      .prepare('INSERT INTO settings (key, value, value_num, value_unit) VALUES (?, ?, ?, ?)')
+      .run('spacing.sectionGap', '1.5em', 1.5, 'em');
+    raw.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('style.accentColor', 'red');
+    const before = raw.prepare('SELECT COUNT(*) AS n FROM settings').get().n;
+
+    require('../../migrations/023_settings_per_user')(raw);
+
+    const ownerId = raw.prepare("SELECT id FROM users WHERE role='owner'").get().id;
+    const systemId = raw.prepare("SELECT id FROM users WHERE role='system'").get().id;
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM settings').get().n).toBe(before * 2);
+    for (const uid of [ownerId, systemId]) {
+      expect(
+        raw
+          .prepare(
+            'SELECT value, value_num, value_unit FROM settings WHERE user_id = ? AND key = ?',
+          )
+          .get(uid, 'spacing.sectionGap'),
+      ).toEqual({ value: '1.5em', value_num: 1.5, value_unit: 'em' });
+    }
+    expect(raw.pragma('foreign_key_check').length).toBe(0);
+    // The unit CHECK survives the rebuild, and the new key admits one row per account.
+    expect(() =>
+      raw
+        .prepare('INSERT INTO settings (user_id, key, value_unit) VALUES (?, ?, ?)')
+        .run(ownerId, 'spacing.other', 'xx'),
+    ).toThrow(/CHECK/);
+    expect(() =>
+      raw.prepare('INSERT INTO settings (user_id, key) VALUES (?, ?)').run(ownerId, 'style.new'),
+    ).not.toThrow();
+    expect(() =>
+      raw.prepare('INSERT INTO settings (user_id, key) VALUES (?, ?)').run(ownerId, 'style.new'),
+    ).toThrow(/UNIQUE|PRIMARY/);
+    raw.close();
+  });
+});
+
+describe('per-user layouts (migration 024)', () => {
+  test('builtins stay ownerless and uploads go to the owner', () => {
+    require('../../lib/render/seed').seedBuiltinLayouts(db);
+    const ownerId = db.ownerUserId();
+    db.upsertLayout({ id: 'mine', name: 'Mine', kinds: ['cv'], source: 'upload', userId: ownerId });
+    expect(db.getLayout('awesome-cv', ownerId).userId).toBe(null);
+    expect(db.getLayout('mine', ownerId).userId).toBe(ownerId);
+  });
+
+  test('a variant bound to another account’s layout is severed by the backfill', () => {
+    const Database = require('better-sqlite3');
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../../migrations');
+    const raw = new Database(':memory:');
+    raw.pragma('foreign_keys = ON');
+    raw.exec(
+      `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    );
+    for (const f of fs
+      .readdirSync(dir)
+      .filter((x) => (x.endsWith('.sql') || x.endsWith('.js')) && !x.includes('rollback'))
+      .sort()) {
+      if (parseInt(f, 10) >= 24) break;
+      if (f.endsWith('.sql')) raw.exec(fs.readFileSync(path.join(dir, f), 'utf-8'));
+      else require(path.join(dir, f))(raw);
+      raw.prepare('INSERT INTO _migrations (name) VALUES (?)').run(f);
+    }
+    const ownerId = raw.prepare("SELECT id FROM users WHERE role='owner'").get().id;
+    raw.prepare("INSERT INTO users (google_sub, email, role) VALUES ('g-o','o@x','user')").run();
+    const otherId = raw.prepare("SELECT id FROM users WHERE google_sub='g-o'").get().id;
+    raw
+      .prepare("INSERT INTO layouts (id, name, kinds, source) VALUES ('shared','S','[]','upload')")
+      .run();
+    raw.prepare('INSERT INTO persons (name, user_id) VALUES (?, ?)').run('Theirs', otherId);
+    const pid = raw.prepare("SELECT id FROM persons WHERE name='Theirs'").get().id;
+    raw
+      .prepare("INSERT INTO variants (person_id, name, kind, layout_id) VALUES (?,?,'cv','shared')")
+      .run(pid, 'V');
+
+    require('../../migrations/024_layouts_per_user')(raw);
+
+    // The layout belongs to the owner after the backfill; the variant's person does not.
+    expect(raw.prepare("SELECT user_id FROM layouts WHERE id='shared'").get().user_id).toBe(
+      ownerId,
+    );
+    expect(raw.prepare('SELECT layout_id FROM variants').get().layout_id).toBe(null);
+    expect(raw.pragma('foreign_key_check').length).toBe(0);
+    raw.close();
+  });
+});

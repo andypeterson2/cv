@@ -71,4 +71,4 @@ async function warm(candidates) {
   for (const c of candidates) await embed(candidateText(c));
 }
 
-module.exports = { scorer, embed, warm, candidateText, MODEL, _cache };
+module.exports = { scorer, embed, warm };

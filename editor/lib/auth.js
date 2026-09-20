@@ -90,7 +90,7 @@ function tokenAuth(token, { publicPersonIds = '', getDb = null, originSecret = n
     const provided = header.startsWith('Bearer ') ? header.slice(7) : header;
     if (provided && provided === token) return next();
 
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: { code: 'unauthorized', message: 'Unauthorized' } });
   };
 }
 

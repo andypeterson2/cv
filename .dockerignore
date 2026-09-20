@@ -10,6 +10,5 @@ cv.db.bak*
 .DS_Store
 .git
 .github
-mcp-server/
 # legacy root LaTeX outputs — the image builds its own under /app/build
 *.pdf

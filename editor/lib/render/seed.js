@@ -1,15 +1,19 @@
 /**
  * Boot seed: register the builtin layout bundles as DB rows so they're
- * listable, selectable, and FK-referenceable, and set the global default if
- * none is set. Idempotent — safe to run on every startup.
+ * listable, selectable, and FK-referenceable. Idempotent — safe to run on every
+ * startup.
  *
  * Builtin bundle FILES stay read-only under BUILTIN_LAYOUTS_DIR; only metadata
- * is written to the DB. (Uploaded bundles live under CV_LAYOUTS_DIR.)
+ * is written to the DB. (Uploaded bundles live under CV_LAYOUTS_DIR.) A builtin
+ * row carries a null owner, which is what makes it visible to every account.
+ *
+ * No default is written here. Each account's default is its own settings row, and
+ * an account without one falls through to the builtin in lib/render/select.
  */
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { BUILTIN_LAYOUTS_DIR, DEFAULT_LAYOUT_ID, uploadedLayoutDir } = require('./layouts');
+const { BUILTIN_LAYOUTS_DIR, uploadedLayoutDir } = require('./layouts');
 const { loadLayout } = require('./loader');
 
 /** Stable hash of a bundle's manifest + template sources, for drift detection. */
@@ -53,15 +57,17 @@ function seedBuiltinLayouts(db) {
       checksum: bundleChecksum(dir),
       report: null,
       verified_at: null,
+      userId: null,
     });
   }
-  // Reconcile DB/disk drift: drop uploaded rows whose bundle dir vanished
-  // (e.g. the layouts volume was reset but the DB persisted).
-  for (const l of db.listLayouts()) {
-    if (l.source !== 'builtin' && !fs.existsSync(uploadedLayoutDir(l.id))) db.deleteLayout(l.id);
+  // Reconcile DB/disk state: drop uploaded rows whose bundle dir vanished (e.g. the
+  // layouts volume was reset but the DB persisted). This runs for every account, so
+  // it uses the unscoped pair rather than a caller's view.
+  for (const l of db.listAllLayouts()) {
+    if (l.source !== 'builtin' && !fs.existsSync(uploadedLayoutDir(l.id))) {
+      db.deleteLayoutUnscoped(l.id);
+    }
   }
-
-  if (!db.getDefaultLayoutId()) db.setDefaultLayoutId(DEFAULT_LAYOUT_ID);
 }
 
 module.exports = { seedBuiltinLayouts, bundleChecksum };

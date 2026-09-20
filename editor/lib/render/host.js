@@ -44,7 +44,7 @@ function prepare(compileData, layoutDir) {
   if (!layoutDir) throw new Error('renderVariant: opts.layoutDir is required');
   const { manifest } = loadLayout(layoutDir);
   const kind = compileData.variant;
-  const entryRel = entryTemplateFor(manifest, kind);
+  const entryRel = entryTemplateFor(manifest, kind, layoutDir);
   const context = buildContext(compileData, { layoutId: manifest.id });
   return { manifest, kind, entryRel, context };
 }
@@ -89,9 +89,8 @@ async function renderVariantIsolated(compileData, buildDir, opts = {}) {
   const { manifest, kind, entryRel, context } = prepare(compileData, opts.layoutDir);
   const tex = await renderInWorker(opts.layoutDir, entryRel, context, {
     timeoutMs: opts.timeoutMs,
-    maxBytes: opts.maxBytes,
   });
   return finish(buildDir, manifest, kind, tex, opts.layoutDir, opts.assetsDir);
 }
 
-module.exports = { renderVariant, renderVariantIsolated, mainTexName };
+module.exports = { renderVariant, renderVariantIsolated };

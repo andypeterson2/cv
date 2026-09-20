@@ -14,9 +14,9 @@ Use the pinned Node version (`.nvmrc`). Two things matter:
   that opens a database throws at startup.
 
 ```sh
-nvm use            # Node 20 — matches the Docker image
+nvm use            # Node 22 — matches the Docker image
 npm ci             # builds the native better-sqlite3 binding for this Node
-npm test           # 300+ unit + integration tests
+npm test           # the unit + integration suite
 ```
 
 If you switch Node versions and see
@@ -28,6 +28,6 @@ npm rebuild better-sqlite3
 
 ## Deploy
 
-Railway builds from the repo-root `Dockerfile` (`node:20-slim`) and auto-deploys
+Railway builds from the repo-root `Dockerfile` (`node:22-slim`) and auto-deploys
 on push to `main` **after** the repo's GitHub Actions CI passes (a push alone
 does not deploy until CI is green).

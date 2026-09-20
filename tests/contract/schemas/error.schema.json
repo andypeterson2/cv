@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://andypeterson.dev/api-contract/error.schema.json",
   "title": "Error envelope",
-  "description": "Body returned for any 4xx/5xx response. The HTTP status code carries the error class; the envelope carries a stable machine code and a human message.",
+  "description": "Body returned for any 4xx/5xx response. The HTTP status code carries the error class; the envelope carries a stable machine code and a human message. An endpoint may add its own keys beside `error` (the compile routes return `success` and the xelatex `log`), so only the `error` object itself is closed.",
   "type": "object",
   "required": ["error"],
   "properties": {
@@ -27,5 +27,5 @@
       "additionalProperties": false
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

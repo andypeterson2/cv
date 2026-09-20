@@ -6,7 +6,7 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { verifyLayout, securityScan } = require('../../lib/render/verify');
+const { verifyLayout, securityScan, gatherSamples } = require('../../lib/render/verify');
 const { renderVariantIsolated } = require('../../lib/render/host');
 const { makeKitchenSink } = require('../../lib/render/fixtures/kitchen-sink');
 const { getLatexType, LATEX_TYPE_MAP } = require('../../lib/latex-type-map');
@@ -168,5 +168,98 @@ describe('fixture coverage guard', () => {
     const covered = new Set(fixture.sections.map((s) => getLatexType(s.type)));
     const required = new Set(Object.values(LATEX_TYPE_MAP));
     for (const t of required) expect(covered.has(t)).toBe(true);
+  });
+});
+
+describe('gatherSamples scoping', () => {
+  const CvDatabase = require('../../lib/db');
+
+  it('returns only the named account’s own résumés', () => {
+    const db = new CvDatabase(':memory:');
+    const a = db.upsertUser({ googleSub: 'g-a', email: 'a@x.test' });
+    const b = db.upsertUser({ googleSub: 'g-b', email: 'b@x.test' });
+    const pa = db.createPerson('A person', a);
+    const pb = db.createPerson('B person', b);
+    db.createSection(pa, 'exp', 'experience', 'Experience');
+    db.createSection(pb, 'exp', 'experience', 'Experience');
+    db.createVariant(pa, 'VA', 'cv');
+    db.createVariant(pb, 'VB', 'cv');
+
+    const labels = (uid) => gatherSamples(db, { userId: uid }).map((s) => s.label);
+    expect(labels(a)).toEqual([`real:${pa}:cv`]);
+    expect(labels(b)).toEqual([`real:${pb}:cv`]);
+    // A report handed to one account must not name another account's person.
+    expect(labels(a).join()).not.toContain(String(pb));
+    db.close();
+  });
+
+  it('yields nothing when no account is named', () => {
+    const db = new CvDatabase(':memory:');
+    db.createPerson('Someone', db.ownerUserId());
+    expect(gatherSamples(db)).toEqual([]);
+    db.close();
+  });
+});
+
+describe('bundle path confinement', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { loadLayout, entryTemplateFor } = require('../../lib/render/loader');
+
+  let root;
+  let dir;
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'jail-'));
+    fs.writeFileSync(path.join(root, 'outside.njk'), 'x');
+    dir = path.join(root, 'bundle');
+    fs.mkdirSync(path.join(dir, 'templates'), { recursive: true });
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const manifest = (over) =>
+    fs.writeFileSync(
+      path.join(dir, 'layout.json'),
+      JSON.stringify({
+        id: 'jail',
+        name: 'Jail',
+        engine: 'nunjucks',
+        contextVersion: 1,
+        kinds: ['cv'],
+        entry: { document: 'templates/document.tex.njk' },
+        ...over,
+      }),
+    );
+
+  it('fails a manifest whose entry points outside the bundle', async () => {
+    manifest({ entry: { document: '../outside.njk' } });
+    const report = await verifyLayout(dir, { compile: async () => ({ ok: true, pages: 1 }) });
+    const check = report.checks.find((c) => c.name === 'entry:document');
+    expect(report.ok).toBe(false);
+    expect(check.ok).toBe(false);
+    expect(check.detail).toMatch(/escapes its directory/);
+  });
+
+  it('fails a classFile that points outside the bundle', async () => {
+    fs.writeFileSync(path.join(dir, 'templates/document.tex.njk'), 'x');
+    manifest({ classFiles: ['../outside.njk'] });
+    const report = await verifyLayout(dir, { compile: async () => ({ ok: true, pages: 1 }) });
+    expect(report.checks.find((c) => c.name === 'classFile:../outside.njk').ok).toBe(false);
+  });
+
+  it('refuses an escaping entry at render time too', () => {
+    manifest({ entry: { document: '../outside.njk' } });
+    const { manifest: m } = loadLayout(dir);
+    expect(() => entryTemplateFor(m, 'cv', dir)).toThrow(/escapes its directory/);
+  });
+
+  it('rejects a manifest id that is not a slug', () => {
+    manifest({ id: '../escape' });
+    expect(() => loadLayout(dir)).toThrow(/Manifest id must match/);
+  });
+
+  it('accepts a namespaced upload id', () => {
+    manifest({ id: 'u7-modern' });
+    expect(loadLayout(dir).manifest.id).toBe('u7-modern');
   });
 });
