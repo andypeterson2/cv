@@ -1,6 +1,7 @@
 const express = require('express');
 const wrap = require('../lib/async-handler');
 const { AppError } = require('../lib/errors');
+const { parseOriginSecrets, matchesOriginSecret } = require('../lib/origin-secret');
 
 /**
  * Front-door user provisioning.
@@ -13,15 +14,18 @@ const { AppError } = require('../lib/errors');
  * no user yet) — it is gated instead by the shared front-door secret (X-Origin-Secret),
  * exactly what cv's origin-guard also checks, so only a front door can reach it. It is
  * mounted before tokenAuth for that reason. Unset secret (local dev / tests) ⇒ open.
+ *
+ * The secret is a SET, so a sender still on the old value and one already on the new
+ * value are both accepted while CV_ORIGIN_SECRET holds `old,new`.
  */
 module.exports = function createAuthRouter(getDb) {
   const router = express.Router();
-  const secret = process.env.CV_ORIGIN_SECRET;
+  const secrets = parseOriginSecrets(process.env.CV_ORIGIN_SECRET);
 
   router.post(
     '/upsert-user',
     wrap((req, res) => {
-      if (secret && req.get('x-origin-secret') !== secret) {
+      if (secrets.length > 0 && !matchesOriginSecret(req.get('x-origin-secret'), secrets)) {
         throw new AppError('Forbidden', 403);
       }
       const { googleSub, email = null, name = null } = req.body || {};

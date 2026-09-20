@@ -7,10 +7,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      // Gate all of lib + routes, thin spots included. Floors sit a few points
-      // below measured coverage, so a drop fails the run.
+      // Covers all of lib + routes, thin spots included. CI runs test:coverage, not
+      // the bare test script, or these floors never apply to anything.
       include: ['lib/**/*.js', 'routes/**/*.js'],
-      thresholds: { statements: 75, branches: 60, functions: 72, lines: 78 },
+      thresholds: { statements: 85, branches: 74, functions: 84, lines: 86 },
     },
   },
 });
