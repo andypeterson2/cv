@@ -84,4 +84,4 @@ function round(n) {
   return Math.round(n * 1000) / 1000;
 }
 
-module.exports = { trigrams, diceCoefficient, scoreTag, searchTags, MIN_TRIGRAM_LEN };
+module.exports = { trigrams, diceCoefficient, scoreTag, searchTags };

@@ -3,4 +3,3 @@ services:
     display_name: CV Editor
     compose_service: cv-editor
     default_port: 3001
-    submodule_path: "editor/public/ui-kit/"

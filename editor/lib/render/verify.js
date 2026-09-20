@@ -248,4 +248,4 @@ function gatherSamples(db, { userId = null, maxSamples = 6 } = {}) {
   return samples;
 }
 
-module.exports = { verifyLayout, securityScan, staticChecks, fixtureSamples, gatherSamples };
+module.exports = { verifyLayout, securityScan, gatherSamples };

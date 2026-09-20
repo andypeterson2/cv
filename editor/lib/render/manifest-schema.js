@@ -26,7 +26,6 @@ const schema = {
     },
     main: { type: 'string' },
     classFiles: { type: 'array', items: { type: 'string' } },
-    options: {},
   },
   additionalProperties: true,
 };

@@ -10,7 +10,7 @@
 # ---------------------------------------------------------------------------
 # texbase — XeLaTeX engine + fonts. Changes ~never → cached across builds.
 # Trimmed: dropped texlive-fonts-extra (unused — the actual fonts are fetched
-# below and FontAwesome is bundled in templates/). Added latex-recommended/
+# below and FontAwesome ships inside each layout bundle). Added latex-recommended/
 # latex-extra (tcolorbox, enumitem, hyperref, …) and pictures (PGF/tikz: the
 # photo uses tikzpicture and tcolorbox[skins] pulls tikz).
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ RUN apt-get update -qq && \
       "https://github.com/googlefonts/roboto/releases/download/v2.138/roboto-android.zip" && \
     unzip -o /tmp/roboto.zip -d /tmp/roboto && \
     find /tmp/roboto -name '*.ttf' -exec cp {} /usr/share/fonts/roboto/ \; && \
-    printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>/app/build</dir>\n  <dir>/app/editor/layouts</dir>\n  <dir>/app/fonts</dir>\n</fontconfig>\n' > /etc/fonts/conf.d/99-app-fonts.conf && \
+    printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <dir>/app/build</dir>\n  <dir>/app/editor/layouts</dir>\n</fontconfig>\n' > /etc/fonts/conf.d/99-app-fonts.conf && \
     fc-cache -fv && \
     rm -rf /tmp/source-sans.zip /tmp/source-sans /tmp/roboto.zip /tmp/roboto && \
     apt-get purge -y curl unzip && apt-get autoremove -y && \
@@ -88,7 +88,7 @@ COPY --from=deps /app/editor/node_modules ./node_modules
 COPY assets/ /app/assets/
 # (No shared/ copy needed: editor depends on @cv/constants as a normal package,
 # vendored into node_modules in the `deps` stage and carried over via --from=deps.)
-RUN mkdir -p /app/build /app/fonts
+RUN mkdir -p /app/build
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD node -e "require('http').get('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"

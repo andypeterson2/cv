@@ -14,7 +14,7 @@ While a person has fewer than 30 tags of their own, suggestions also draw on a s
 
 ## Running it locally
 
-The host needs XeLaTeX and the Source Sans 3 and Roboto fonts. On macOS that is MacTeX (or BasicTeX plus the packages below) and the two families in `~/Library/Fonts`. On Debian or Ubuntu: `texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-pictures`, plus the fonts. FontAwesome ships in `templates/`.
+The host needs XeLaTeX and the Source Sans 3 and Roboto fonts. On macOS that is MacTeX (or BasicTeX plus the packages below) and the two families in `~/Library/Fonts`. On Debian or Ubuntu: `texlive-xetex texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended texlive-pictures`, plus the fonts. FontAwesome ships inside each layout bundle.
 
 ```bash
 cd editor

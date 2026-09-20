@@ -207,8 +207,6 @@ const tagEventsSchema = {
           tag: { type: 'string', minLength: 1, maxLength: 60 },
           action: { type: 'string', enum: ['accept', 'dismiss', 'manual', 'remove'] },
           rank: { type: 'integer', minimum: 0, maximum: 49 },
-          score: { type: 'number' },
-          scorer: { type: 'string', enum: SCORER_METHODS },
         },
         required: ['target', 'id', 'tag', 'action'],
         additionalProperties: false,
@@ -404,6 +402,5 @@ module.exports = {
   validators,
   validate,
   isValidKind,
-  VALID_KINDS,
   schemas,
 };

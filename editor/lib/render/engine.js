@@ -68,12 +68,9 @@ function renderTemplate(layoutDir, entryRelPath, context) {
  * instead of blocking the event loop. context must be structured-cloneable
  * (buildContext output is plain data). Resolves the rendered string.
  */
-function renderInWorker(
-  layoutDir,
-  entryRelPath,
-  context,
-  { timeoutMs = 10000, maxBytes = 5_000_000 } = {},
-) {
+const MAX_RENDER_BYTES = 5_000_000;
+
+function renderInWorker(layoutDir, entryRelPath, context, { timeoutMs = 10000 } = {}) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(path.join(__dirname, 'render-worker.js'), {
       workerData: { layoutDir, entryRel: entryRelPath, context },
@@ -92,12 +89,12 @@ function renderInWorker(
     );
     worker.once('message', (m) => {
       if (!m.ok) return done(reject, new Error(m.error));
-      if (typeof m.out === 'string' && m.out.length > maxBytes)
-        return done(reject, new Error(`Rendered output exceeds ${maxBytes} bytes`));
+      if (typeof m.out === 'string' && m.out.length > MAX_RENDER_BYTES)
+        return done(reject, new Error(`Rendered output exceeds ${MAX_RENDER_BYTES} bytes`));
       done(resolve, m.out);
     });
     worker.once('error', (e) => done(reject, e));
   });
 }
 
-module.exports = { renderTemplate, renderInWorker, makeEnv, TAGS };
+module.exports = { renderTemplate, renderInWorker };

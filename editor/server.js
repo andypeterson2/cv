@@ -93,7 +93,7 @@ function listEndpoints(expressApp) {
     const key = `${M} ${p}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ method: M, path: p, summary: '' });
+    out.push({ method: M, path: p });
   };
   const addRouteLayer = (prefix, layer) => {
     if (!layer.route) return;
@@ -167,7 +167,6 @@ app.get('/api', (req, res) => {
     service: 'cv',
     version: pkg.version,
     endpoints: listEndpoints(app),
-    streaming: [],
   });
 });
 
