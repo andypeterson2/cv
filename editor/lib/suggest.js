@@ -161,4 +161,4 @@ function round(n) {
   return Math.round(n * 1000) / 1000;
 }
 
-module.exports = { suggestTags, tokenize, STOPWORDS, CATALOG_BOOST, LEXICAL_MIN_SCORE };
+module.exports = { suggestTags, tokenize, CATALOG_BOOST, LEXICAL_MIN_SCORE };

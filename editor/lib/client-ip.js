@@ -24,4 +24,4 @@ function clientIp(req) {
   return ipKeyGenerator(forwarded || req.ip);
 }
 
-module.exports = { clientIp, trustsCloudflare };
+module.exports = { clientIp };

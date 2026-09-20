@@ -90,4 +90,4 @@ function entryTemplateFor(manifest, kind, layoutDir = null) {
   return rel;
 }
 
-module.exports = { loadLayout, resolveInBundle, entryTemplateFor, LayoutError };
+module.exports = { loadLayout, resolveInBundle, entryTemplateFor };

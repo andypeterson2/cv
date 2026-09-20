@@ -15,7 +15,7 @@ const COMPILE_TIMEOUT_MS = Number(process.env.CV_COMPILE_TIMEOUT_MS) || 30000;
 const compileLimit = createLimiter(Number(process.env.CV_COMPILE_CONCURRENCY) || 2);
 
 /** Run xelatex once in buildDir. Resolves {ok, pdfPath, log, pages}. Never rejects. */
-function runLatex(buildDir, mainTexFile, { timeoutMs = COMPILE_TIMEOUT_MS } = {}) {
+function runLatex(buildDir, mainTexFile) {
   return new Promise((resolve) => {
     execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
       execFile(
@@ -34,7 +34,7 @@ function runLatex(buildDir, mainTexFile, { timeoutMs = COMPILE_TIMEOUT_MS } = {}
         // buildDir, and \usepackage from the texmf tree, are unaffected.
         {
           cwd: buildDir,
-          timeout: timeoutMs,
+          timeout: COMPILE_TIMEOUT_MS,
           env: { ...process.env, openin_any: 'p', openout_any: 'p' },
         },
         (error, stdout, stderr) => {
@@ -58,8 +58,8 @@ function pagesFromLog(log) {
 }
 
 /** Queue a compile behind the shared concurrency cap. */
-function queuedCompile(buildDir, mainTexFile, opts) {
-  return compileLimit(() => runLatex(buildDir, mainTexFile, opts));
+function queuedCompile(buildDir, mainTexFile) {
+  return compileLimit(() => runLatex(buildDir, mainTexFile));
 }
 
-module.exports = { runLatex, queuedCompile, compileLimit, pagesFromLog, COMPILE_TIMEOUT_MS };
+module.exports = { queuedCompile };

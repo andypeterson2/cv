@@ -89,9 +89,8 @@ async function renderVariantIsolated(compileData, buildDir, opts = {}) {
   const { manifest, kind, entryRel, context } = prepare(compileData, opts.layoutDir);
   const tex = await renderInWorker(opts.layoutDir, entryRel, context, {
     timeoutMs: opts.timeoutMs,
-    maxBytes: opts.maxBytes,
   });
   return finish(buildDir, manifest, kind, tex, opts.layoutDir, opts.assetsDir);
 }
 
-module.exports = { renderVariant, renderVariantIsolated, mainTexName };
+module.exports = { renderVariant, renderVariantIsolated };

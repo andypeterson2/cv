@@ -248,8 +248,8 @@ class TagStore {
 
   /**
    * Record what a person did with tag suggestions. Each event names an entry or
-   * item of theirs; `rank`, `score` and `scorer` describe the suggestion when
-   * the tag came from one. Returns {recorded}.
+   * item of theirs; `rank` is its position in the suggestion list when the tag came
+   * from one. Returns {recorded}.
    * @throws Error with .status 404 when a target is not the person's.
    */
   recordTagEvents(personId, events) {
@@ -262,16 +262,7 @@ class TagStore {
           throw err;
         }
         const tag = this._canonicalTag(personId, e.tag);
-        this._stmts.insertTagEvent.run(
-          personId,
-          e.target,
-          e.id,
-          tag,
-          e.action,
-          e.rank ?? null,
-          e.score ?? null,
-          e.scorer ?? null,
-        );
+        this._stmts.insertTagEvent.run(personId, e.target, e.id, tag, e.action, e.rank ?? null);
       }
     });
     tx();

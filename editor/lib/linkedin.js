@@ -111,4 +111,4 @@ function exportLinkedin(resolved, format = 'linkedin') {
   return { format, limits: LIMITS, positions };
 }
 
-module.exports = { exportLinkedin, clean, parseRange, LIMITS, BULLETS };
+module.exports = { exportLinkedin, clean, parseRange };

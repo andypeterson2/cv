@@ -104,7 +104,7 @@ class CvDatabase {
 
       // Versions + the per-person content reset restore uses
       insertVersion: p(
-        'INSERT INTO versions (person_id, label, hash, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO versions (person_id, label, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?)',
       ),
       versionsByPerson: p(
         'SELECT id, label, created_at, branch, tag, parent_id FROM versions WHERE person_id = ? ORDER BY id DESC',
@@ -250,7 +250,7 @@ class CvDatabase {
         'INSERT INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
       ),
       insertTagEvent: p(
-        'INSERT INTO tag_events (person_id, target, target_id, tag, action, rank, score, scorer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO tag_events (person_id, target, target_id, tag, action, rank) VALUES (?, ?, ?, ?, ?, ?)',
       ),
       tagEventCounts: p(
         'SELECT action, rank, COUNT(*) AS n FROM tag_events WHERE person_id = ? GROUP BY action, rank',

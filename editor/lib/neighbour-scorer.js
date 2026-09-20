@@ -47,4 +47,4 @@ function withNeighbours(base, embed, examples) {
   };
 }
 
-module.exports = { withNeighbours, ALPHA, K, MIN_EXAMPLES };
+module.exports = { withNeighbours, ALPHA, MIN_EXAMPLES };
