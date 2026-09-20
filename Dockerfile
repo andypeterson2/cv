@@ -14,7 +14,7 @@
 # latex-extra (tcolorbox, enumitem, hyperref, …) and pictures (PGF/tikz: the
 # photo uses tikzpicture and tcolorbox[skins] pulls tikz).
 # ---------------------------------------------------------------------------
-FROM node:20-slim AS texbase
+FROM node:22-slim AS texbase
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
       texlive-xetex \
