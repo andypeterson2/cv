@@ -19,20 +19,20 @@
     "@cloudflare/workers-oauth-provider": "^0.10.3",
     "@cv/constants": "file:../shared",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "agents": "^0.22.0"
+    "agents": "^0.23.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "@cloudflare/workers-types": "^5.20260911.1",
+    "@cloudflare/workers-types": "^5.20260918.1",
     "@eslint/js": "^10.0.1",
     "eslint": "^10.10.0",
-    "eslint-plugin-sonarjs": "^4.2.0",
+    "eslint-plugin-sonarjs": "^4.2.1",
     "globals": "^16.5.0",
-    "prettier": "^3.9.6",
+    "prettier": "^3.9.8",
     "typescript": "^6.0.3",
     "typescript-eslint": "~8.70.0",
     "vitest": "^4.1.9",
-    "wrangler": "^4.131.0"
+    "wrangler": "^4.134.0"
   },
   "prettier": {
     "semi": true,
