@@ -214,3 +214,39 @@ describe('layout ids', () => {
     db.deleteLayout(storedId, owner);
   });
 });
+
+describe('symbolic links in an uploaded bundle', () => {
+  // extract-zip (2.0.1, no patched release) creates symlink entries from the archive.
+  // It blocks a write *through* one, but the link itself lands on disk, and staging
+  // used to copy what it pointed at. The upload is refused before anything reads it.
+  function makeSymlinkZip(name, target) {
+    const dir = fs.mkdtempSync(path.join(tmp, 'sl-'));
+    fs.mkdirSync(path.join(dir, 'templates'));
+    fs.mkdirSync(path.join(dir, 'class'));
+    fs.writeFileSync(path.join(dir, 'layout.json'), MANIFEST());
+    fs.writeFileSync(path.join(dir, 'templates/document.tex.njk'), 'x');
+    fs.symlinkSync(target, path.join(dir, 'class/innocent.sty'));
+    const zipPath = path.join(tmp, name);
+    execFileSync('zip', ['-qr', '--symlinks', zipPath, '.'], { cwd: dir });
+    return zipPath;
+  }
+
+  it.skipIf(!hasZip)('422s a bundle carrying a link, and installs nothing', async () => {
+    const secret = path.join(tmp, 'outside-secret.txt');
+    fs.writeFileSync(secret, 'SECRET-FILE-CONTENTS');
+    const before = db.listLayouts(db.ownerUserId()).length;
+
+    const { status, body } = await uploadZip(makeSymlinkZip('symlink.zip', secret));
+
+    expect(status).toBe(422);
+    expect(JSON.stringify(body)).toMatch(/symbolic link/);
+    expect(db.listLayouts(db.ownerUserId()).length).toBe(before); // nothing installed
+    expect(fs.readFileSync(secret, 'utf8')).toBe('SECRET-FILE-CONTENTS'); // untouched
+  });
+
+  it.skipIf(!hasZip)('422s a link pointing at a directory too', async () => {
+    const { status, body } = await uploadZip(makeSymlinkZip('symlink-dir.zip', tmp));
+    expect(status).toBe(422);
+    expect(JSON.stringify(body)).toMatch(/symbolic link/);
+  });
+});
