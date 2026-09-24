@@ -19,6 +19,7 @@ import { Validator } from '@cfworker/json-schema';
 import { env } from 'cloudflare:workers';
 import { signingSecret, signPayload } from './sign';
 import { cvCtx } from './cv-ctx';
+import { currentOriginSecret } from './origin-secret';
 
 const enc = encodeURIComponent;
 
@@ -54,7 +55,7 @@ function cvConfig(): {
           'CF-Access-Client-Secret': e.CF_ACCESS_CLIENT_SECRET,
         }
       : {};
-  return { base, originSecret: e.CV_ORIGIN_SECRET, accessHeaders };
+  return { base, originSecret: currentOriginSecret(e.CV_ORIGIN_SECRET), accessHeaders };
 }
 
 type ApiOpts = { expectBinary?: boolean };
