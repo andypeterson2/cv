@@ -44,6 +44,24 @@ function resolveInBundle(layoutDir, relPath) {
 }
 
 /**
+ * Reject a bundle tree containing a symbolic link.
+ *
+ * A link resolves against the server's filesystem rather than the bundle, and the
+ * staging step copies what a link points at rather than the link itself, so one
+ * placed in an uploaded bundle reads a file the bundle was never given. A bundle
+ * has no legitimate use for a link, so the whole upload is refused.
+ */
+function assertNoSymlinks(dir, root = dir) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isSymbolicLink()) {
+      throw new LayoutError(`Bundle contains a symbolic link: ${path.relative(root, full)}`);
+    }
+    if (entry.isDirectory()) assertNoSymlinks(full, root);
+  }
+}
+
+/**
  * Read + parse a bundle's manifest and run cheap structural checks.
  * @returns {{ dir: string, manifest: object }}
  */
@@ -90,4 +108,4 @@ function entryTemplateFor(manifest, kind, layoutDir = null) {
   return rel;
 }
 
-module.exports = { loadLayout, resolveInBundle, entryTemplateFor };
+module.exports = { loadLayout, resolveInBundle, entryTemplateFor, assertNoSymlinks };

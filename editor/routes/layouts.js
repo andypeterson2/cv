@@ -9,7 +9,7 @@ const { clientIp } = require('../lib/client-ip');
 const { AppError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
 const { verifyLayout, gatherSamples } = require('../lib/render/verify');
-const { loadLayout } = require('../lib/render/loader');
+const { loadLayout, assertNoSymlinks } = require('../lib/render/loader');
 const { bundleChecksum } = require('../lib/render/seed');
 const { uploadedLayoutDir, layoutDirForRow, DEFAULT_LAYOUT_ID } = require('../lib/render/layouts');
 const { SLUG_PATTERN } = require('@cv/constants');
@@ -125,6 +125,14 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         } catch (e) {
           throw new AppError('Could not read the zip: ' + e.message, 400);
         }
+        // extract-zip creates symlink entries from the archive; refuse the upload
+        // before the manifest, the security scan or the install touch the tree.
+        try {
+          assertNoSymlinks(work);
+        } catch (e) {
+          throw new AppError('Invalid bundle: ' + e.message, 422);
+        }
+
         const root = findBundleRoot(work);
         if (!root)
           throw new AppError(

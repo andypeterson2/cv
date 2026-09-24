@@ -16,11 +16,13 @@ const { buildContext } = require('./context');
 const { renderTemplate, renderInWorker } = require('./engine');
 const { loadLayout, entryTemplateFor } = require('./loader');
 
+// lstat keeps a symbolic link out of the copy, so staging carries what the bundle
+// itself contains.
 function copyDirFlat(srcDir, destDir) {
   if (!srcDir || !fs.existsSync(srcDir)) return;
   for (const name of fs.readdirSync(srcDir)) {
     const src = path.join(srcDir, name);
-    if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(destDir, name));
+    if (fs.lstatSync(src).isFile()) fs.copyFileSync(src, path.join(destDir, name));
   }
 }
 

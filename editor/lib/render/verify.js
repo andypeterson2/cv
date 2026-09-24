@@ -53,12 +53,13 @@ function scanPathTraversal(content) {
   return hits;
 }
 
+// lstat so a link is neither followed nor scanned; staging ignores links too.
 function walkFiles(dir, out = []) {
   for (const name of fs.readdirSync(dir)) {
     const full = path.join(dir, name);
-    const st = fs.statSync(full);
+    const st = fs.lstatSync(full);
     if (st.isDirectory()) walkFiles(full, out);
-    else if (SCANNABLE.test(name)) out.push(full);
+    else if (st.isFile() && SCANNABLE.test(name)) out.push(full);
   }
   return out;
 }

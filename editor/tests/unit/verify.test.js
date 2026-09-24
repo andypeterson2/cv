@@ -263,3 +263,76 @@ describe('bundle path confinement', () => {
     expect(loadLayout(dir).manifest.id).toBe('u7-modern');
   });
 });
+
+describe('bundle symbolic links', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { assertNoSymlinks } = require('../../lib/render/loader');
+
+  let root;
+  let bundle;
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'sym-'));
+    fs.mkdirSync(path.join(root, 'secret'));
+    fs.writeFileSync(path.join(root, 'secret/creds.txt'), 'SECRET');
+    bundle = path.join(root, 'bundle');
+    fs.mkdirSync(path.join(bundle, 'class'), { recursive: true });
+    fs.mkdirSync(path.join(bundle, 'templates'));
+    fs.writeFileSync(path.join(bundle, 'class/real.sty'), '% ok');
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it('accepts a tree with no links', () => {
+    expect(() => assertNoSymlinks(bundle)).not.toThrow();
+  });
+
+  it('refuses a link to a file outside the bundle', () => {
+    fs.symlinkSync(path.join(root, 'secret/creds.txt'), path.join(bundle, 'class/evil.sty'));
+    expect(() => assertNoSymlinks(bundle)).toThrow(/symbolic link: class\/evil\.sty/);
+  });
+
+  it('refuses a link nested deeper in the tree', () => {
+    fs.mkdirSync(path.join(bundle, 'class/deep'));
+    fs.symlinkSync(path.join(root, 'secret'), path.join(bundle, 'class/deep/out'));
+    expect(() => assertNoSymlinks(bundle)).toThrow(/symbolic link: class\/deep\/out/);
+  });
+
+  it('refuses a dangling link, which never resolves anywhere', () => {
+    fs.symlinkSync(path.join(root, 'gone'), path.join(bundle, 'class/dangling.sty'));
+    expect(() => assertNoSymlinks(bundle)).toThrow(/symbolic link/);
+  });
+
+  it('staging does not copy what a link points at', () => {
+    // The step that made this exploitable: statSync followed the link and copied
+    // the target's bytes into the build directory as a real file.
+    fs.symlinkSync(path.join(root, 'secret/creds.txt'), path.join(bundle, 'class/evil.sty'));
+    const build = fs.mkdtempSync(path.join(os.tmpdir(), 'build-'));
+    const { renderVariant } = require('../../lib/render/host');
+    // Drive copyDirFlat through the real render path.
+    fs.writeFileSync(
+      path.join(bundle, 'layout.json'),
+      JSON.stringify({
+        id: 'sym',
+        name: 'Sym',
+        engine: 'nunjucks',
+        contextVersion: 1,
+        kinds: ['cv'],
+        entry: { document: 'templates/document.tex.njk' },
+      }),
+    );
+    fs.writeFileSync(path.join(bundle, 'templates/document.tex.njk'), 'x');
+    renderVariant(makeKitchenSink({ variant: 'cv' }), build, { layoutDir: bundle });
+    expect(fs.existsSync(path.join(build, 'real.sty'))).toBe(true); // a real file still ships
+    expect(fs.existsSync(path.join(build, 'evil.sty'))).toBe(false); // the link does not
+    fs.rmSync(build, { recursive: true, force: true });
+  });
+
+  it('the security scan neither follows nor reads through a link', () => {
+    fs.symlinkSync(path.join(root, 'secret/creds.txt'), path.join(bundle, 'class/evil.sty'));
+    expect(securityScan(bundle)).toEqual([]);
+    // and the target's bytes are not what made it clean — a real copy would be scanned
+    fs.writeFileSync(path.join(bundle, 'class/shell.sty'), '\\write18{id}');
+    expect(securityScan(bundle).join()).toMatch(/write18/);
+  });
+});
