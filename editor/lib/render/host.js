@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { buildContext } = require('./context');
 const { renderTemplate, renderInWorker } = require('./engine');
-const { loadLayout, entryTemplateFor } = require('./loader');
+const { loadLayout, entryTemplateFor, resolveInBundle } = require('./loader');
 
 // lstat keeps a symbolic link out of the copy, so staging carries what the bundle
 // itself contains.
@@ -23,6 +23,18 @@ function copyDirFlat(srcDir, destDir) {
   for (const name of fs.readdirSync(srcDir)) {
     const src = path.join(srcDir, name);
     if (fs.lstatSync(src).isFile()) fs.copyFileSync(src, path.join(destDir, name));
+  }
+}
+
+// The manifest's classFiles is the list of support files that ship, so a bundle
+// carries nothing into a compile that it has not declared. Each path is resolved
+// inside the bundle and flattened to the build root, where a template \input{}s it
+// by name. A link is not a file here, so it never ships.
+function stageClassFiles(layoutDir, manifest, buildDir) {
+  for (const rel of manifest.classFiles || []) {
+    const src = resolveInBundle(layoutDir, rel);
+    if (!fs.existsSync(src) || !fs.lstatSync(src).isFile()) continue;
+    fs.copyFileSync(src, path.join(buildDir, path.basename(rel)));
   }
 }
 
@@ -58,7 +70,7 @@ function finish(buildDir, manifest, kind, tex, layoutDir, assetsDir) {
   fs.mkdirSync(buildDir, { recursive: true });
   // Class files go to the build root; project assets copy after the layout's own,
   // so the project wins on a name clash.
-  copyDirFlat(path.join(layoutDir, 'class'), buildDir);
+  stageClassFiles(layoutDir, manifest, buildDir);
   copyAssets(path.join(layoutDir, 'assets'), buildDir);
   copyAssets(assetsDir, buildDir);
   const mainPath = path.join(buildDir, mainTexName(manifest, kind));
