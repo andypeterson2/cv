@@ -25,8 +25,8 @@ const schema = {
       additionalProperties: false,
     },
     main: { type: 'string' },
-    // Verification checks each exists in the bundle; staging copies all of class/,
-    // so this list describes a bundle rather than selecting what ships.
+    // The support files that ship. Staging copies exactly these, and verification
+    // refuses a bundle whose class/ holds anything this list does not name.
     classFiles: { type: 'array', items: { type: 'string' } },
   },
   additionalProperties: true,

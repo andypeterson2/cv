@@ -303,13 +303,9 @@ describe('bundle symbolic links', () => {
     expect(() => assertNoSymlinks(bundle)).toThrow(/symbolic link/);
   });
 
-  it('staging does not copy what a link points at', () => {
-    // The step that made this exploitable: statSync followed the link and copied
-    // the target's bytes into the build directory as a real file.
+  it('staging refuses a declared link that leaves the bundle', () => {
+    // statSync used to follow the link and copy the target's bytes in as a real file.
     fs.symlinkSync(path.join(root, 'secret/creds.txt'), path.join(bundle, 'class/evil.sty'));
-    const build = fs.mkdtempSync(path.join(os.tmpdir(), 'build-'));
-    const { renderVariant } = require('../../lib/render/host');
-    // Drive copyDirFlat through the real render path.
     fs.writeFileSync(
       path.join(bundle, 'layout.json'),
       JSON.stringify({
@@ -319,12 +315,40 @@ describe('bundle symbolic links', () => {
         contextVersion: 1,
         kinds: ['cv'],
         entry: { document: 'templates/document.tex.njk' },
+        classFiles: ['class/real.sty', 'class/evil.sty'],
       }),
     );
     fs.writeFileSync(path.join(bundle, 'templates/document.tex.njk'), 'x');
+    const build = fs.mkdtempSync(path.join(os.tmpdir(), 'build-'));
+    const { renderVariant } = require('../../lib/render/host');
+    expect(() =>
+      renderVariant(makeKitchenSink({ variant: 'cv' }), build, { layoutDir: bundle }),
+    ).toThrow(/escapes its directory/);
+    expect(fs.existsSync(path.join(build, 'evil.sty'))).toBe(false);
+    fs.rmSync(build, { recursive: true, force: true });
+  });
+
+  it('staging skips a declared link that stays inside the bundle', () => {
+    // realpath stays in the bundle, so the jail passes it; lstat is what stops it.
+    fs.symlinkSync(path.join(bundle, 'class/real.sty'), path.join(bundle, 'class/alias.sty'));
+    fs.writeFileSync(
+      path.join(bundle, 'layout.json'),
+      JSON.stringify({
+        id: 'sym',
+        name: 'Sym',
+        engine: 'nunjucks',
+        contextVersion: 1,
+        kinds: ['cv'],
+        entry: { document: 'templates/document.tex.njk' },
+        classFiles: ['class/real.sty', 'class/alias.sty'],
+      }),
+    );
+    fs.writeFileSync(path.join(bundle, 'templates/document.tex.njk'), 'x');
+    const build = fs.mkdtempSync(path.join(os.tmpdir(), 'build-'));
+    const { renderVariant } = require('../../lib/render/host');
     renderVariant(makeKitchenSink({ variant: 'cv' }), build, { layoutDir: bundle });
-    expect(fs.existsSync(path.join(build, 'real.sty'))).toBe(true); // a real file still ships
-    expect(fs.existsSync(path.join(build, 'evil.sty'))).toBe(false); // the link does not
+    expect(fs.existsSync(path.join(build, 'real.sty'))).toBe(true);
+    expect(fs.existsSync(path.join(build, 'alias.sty'))).toBe(false);
     fs.rmSync(build, { recursive: true, force: true });
   });
 
@@ -334,5 +358,97 @@ describe('bundle symbolic links', () => {
     // and the target's bytes are not what made it clean — a real copy would be scanned
     fs.writeFileSync(path.join(bundle, 'class/shell.sty'), '\\write18{id}');
     expect(securityScan(bundle).join()).toMatch(/write18/);
+  });
+});
+
+describe('classFiles decides what ships', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+
+  let bundle;
+  beforeEach(() => {
+    bundle = fs.mkdtempSync(path.join(os.tmpdir(), 'cf-'));
+    fs.mkdirSync(path.join(bundle, 'class'));
+    fs.mkdirSync(path.join(bundle, 'templates'));
+    fs.writeFileSync(path.join(bundle, 'templates/document.tex.njk'), 'x');
+    fs.writeFileSync(path.join(bundle, 'class/declared.sty'), '% declared');
+  });
+  afterEach(() => fs.rmSync(bundle, { recursive: true, force: true }));
+
+  const manifest = (classFiles) =>
+    fs.writeFileSync(
+      path.join(bundle, 'layout.json'),
+      JSON.stringify({
+        id: 'cf',
+        name: 'Cf',
+        engine: 'nunjucks',
+        contextVersion: 1,
+        kinds: ['cv'],
+        entry: { document: 'templates/document.tex.njk' },
+        classFiles,
+      }),
+    );
+
+  const stage = () => {
+    const build = fs.mkdtempSync(path.join(os.tmpdir(), 'b-'));
+    const { renderVariant } = require('../../lib/render/host');
+    renderVariant(makeKitchenSink({ variant: 'cv' }), build, { layoutDir: bundle });
+    const out = fs.readdirSync(build).filter((n) => !n.endsWith('.tex'));
+    fs.rmSync(build, { recursive: true, force: true });
+    return out;
+  };
+
+  it('ships a declared file', () => {
+    manifest(['class/declared.sty']);
+    expect(stage()).toContain('declared.sty');
+  });
+
+  it('does not ship a file the manifest omits', () => {
+    fs.writeFileSync(path.join(bundle, 'class/stowaway.sty'), '% not declared');
+    manifest(['class/declared.sty']);
+    const staged = stage();
+    expect(staged).toContain('declared.sty');
+    expect(staged).not.toContain('stowaway.sty');
+  });
+
+  it('refuses a bundle whose class/ holds an undeclared file', async () => {
+    fs.writeFileSync(path.join(bundle, 'class/stowaway.sty'), '% not declared');
+    manifest(['class/declared.sty']);
+    const report = await verifyLayout(bundle, { compile: async () => ({ ok: true, pages: 1 }) });
+    const check = report.checks.find((c) => c.name === 'classFiles:complete');
+    expect(report.ok).toBe(false);
+    expect(check.ok).toBe(false);
+    expect(check.detail).toMatch(/stowaway\.sty/);
+  });
+
+  it('passes when the manifest names everything in class/', async () => {
+    manifest(['class/declared.sty']);
+    const report = await verifyLayout(bundle, { compile: async () => ({ ok: true, pages: 1 }) });
+    expect(report.checks.find((c) => c.name === 'classFiles:complete').ok).toBe(true);
+  });
+
+  it('a declared path may not reach outside the bundle', async () => {
+    manifest(['../escape.sty']);
+    const report = await verifyLayout(bundle, { compile: async () => ({ ok: true, pages: 1 }) });
+    expect(report.ok).toBe(false);
+    expect(report.checks.find((c) => c.name === 'classFile:../escape.sty').detail).toMatch(
+      /escapes its directory/,
+    );
+  });
+
+  it('the builtin bundles declare every file they carry', () => {
+    const root = path.join(__dirname, '..', '..', 'layouts');
+    for (const id of fs.readdirSync(root)) {
+      const dir = path.join(root, id);
+      if (!fs.statSync(dir).isDirectory()) continue;
+      const m = JSON.parse(fs.readFileSync(path.join(dir, 'layout.json'), 'utf8'));
+      const declared = new Set((m.classFiles || []).map((r) => path.basename(r)));
+      const present = fs.readdirSync(path.join(dir, 'class'));
+      expect({ id, undeclared: present.filter((n) => !declared.has(n)) }).toEqual({
+        id,
+        undeclared: [],
+      });
+    }
   });
 });
