@@ -95,6 +95,27 @@ function declaredFile(bundleDir, rel) {
   return { ok: exists, detail: exists ? rel : `missing ${rel}` };
 }
 
+/**
+ * Every file in class/ has to be named in classFiles, because classFiles is what
+ * ships. An undeclared file would sit in the bundle and never reach a compile, so
+ * the bundle is refused rather than installed in a state that loses it quietly.
+ */
+function classDirDeclared(bundleDir, manifest) {
+  const dir = path.join(bundleDir, 'class');
+  if (!fs.existsSync(dir)) return { ok: true, detail: 'no class/ directory' };
+  const declared = new Set((manifest.classFiles || []).map((r) => path.basename(r)));
+  const undeclared = fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((e) => !e.isDirectory() && !declared.has(e.name))
+    .map((e) => e.name);
+  return undeclared.length === 0
+    ? { ok: true, detail: `${declared.size} declared` }
+    : {
+        ok: false,
+        detail: `class/ holds files classFiles does not name: ${undeclared.join(', ')}`,
+      };
+}
+
 function staticChecks(bundleDir) {
   let manifest;
   try {
@@ -126,6 +147,7 @@ function staticChecks(bundleDir) {
   for (const rel of manifest.classFiles || []) {
     checks.push({ name: `classFile:${rel}`, ...declaredFile(bundleDir, rel) });
   }
+  checks.push({ name: 'classFiles:complete', ...classDirDeclared(bundleDir, manifest) });
   return { manifest, checks };
 }
 

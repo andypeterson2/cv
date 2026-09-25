@@ -41,7 +41,7 @@ top-level folder).
     "coverletter": "templates/coverletter.tex.njk"
   },
   "main": "{kind}.tex",         // rendered file name; {kind} → cv|resume|coverletter
-  "classFiles": ["class/my.cls"] // declared support files (verified to exist)
+  "classFiles": ["class/my.cls"] // the support files that ship — list every one
 }
 ```
 
@@ -125,7 +125,8 @@ are already applied. Render defensively — any field may be empty.
 
 On upload (and via `POST /api/layouts/:id/verify`), a candidate is checked:
 
-1. **Static** — manifest schema, `contextVersion` matches the host, declared `entry`/`classFiles` exist.
+1. **Static** — manifest schema, `contextVersion` matches the host, declared `entry`/`classFiles`
+   exist and stay inside the bundle, and `class/` holds nothing `classFiles` does not name.
 2. **Security** — rejects `\write18` and `\input`/`\openin`/`\openout` of absolute or `..` paths.
 3. **Dynamic** — renders a synthetic kitchen-sink fixture (every section type, all socials,
    LaTeX specials, a photo, a cover letter) **and your real CVs**, compiles each with
