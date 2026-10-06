@@ -4,6 +4,11 @@ version = "1.0.0"
 description = "Tooling config for the Python in this repo (tests/contract); the apps are Node"
 requires-python = ">=3.12"
 
+[project.optional-dependencies]
+# Authoring SDK for .railway/railway.py; only `railway config plan` and `apply`
+# import it, and nothing this repo ships installs this group.
+dev = ["railway-sdk>=0.4,<1.0"]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100
