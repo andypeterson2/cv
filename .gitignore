@@ -1,5 +1,6 @@
 .*
 !.git*
+!.railway/
 !.dashboard.yaml
 !.dockerignore
 !.nvmrc
