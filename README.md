@@ -8,7 +8,9 @@ This repository holds two services. `editor/` is the REST API and the compile pi
 
 Tags decide which content each variant includes. Suggestions rank the tags that already exist for a bullet, using a local all-MiniLM-L6-v2 int8 embedding blended 60/40 with votes from the person's eight most similar tagged bullets. They never invent a tag, and nothing is applied without a click.
 
-Measured by leave-one-out over 68 private résumé bullets, the neighbour votes take hit@3 from 86.8% to 91.2% and hit@1 from 60.3% to 67.6%. That text is not published, so the check is not reproducible from this repo.
+The blend weight, the eight neighbours and the starter-vocabulary cutoff were chosen by leave-one-out over 68 private résumé bullets and then scored on those same 68 rows, which makes the figure a fit rather than an estimate of how the suggester does on bullets it has not seen: hit@3 59/68 (86.8%) to 62/68 (91.2%), hit@1 41/68 (60.3%) to 46/68 (67.6%) — 3 and 5 bullets.
+
+`editor/scripts/eval-tag-suggest.cjs` re-measures the same comparison on a disjoint split instead. A seeded stratified half selects the parameters; the other half is scored once, and nothing in the selection step reads it. It prints hit@1 and hit@3 as item counts over the n of each half, for the embedding ranker alone and for the blend, because on a half of 34 one bullet moves a rate by 2.9 points. No held-out figure is quoted here yet, because the tag labels that evaluation needs are absent from every database still on hand — the live profile's 175 bullets carry none — so the rates could not be recomputed under the split. The bullet text is private in any case, so nobody without that corpus can regenerate them; the seed and the split rule are fixed in the script, so the same corpus always yields the same two halves.
 
 While a person has fewer than 30 tags of their own, suggestions also draw on a starter vocabulary (`editor/lib/seed-tags.json`) of 42 broad résumé categories plus ESCO technology, transversal and research skills. A starter tag joins the person's catalog, with its description, the first time it is used.
 
