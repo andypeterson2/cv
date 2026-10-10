@@ -18,24 +18,45 @@ const { readBundle, zipBundle, forgetZip, dirBytes } = require('../lib/render/bu
 const { assertBelow, assertLayoutBytes } = require('../lib/quota');
 const { downloadZip } = require('../lib/fetch-zip');
 const { pinCheck } = require('../lib/render/pin-check');
+const {
+  approvalProblems,
+  installRoot,
+  checkRepo,
+  linkSource,
+  syncNow,
+} = require('../lib/layout-sync');
 const { bundleChecksum } = require('../lib/render/seed');
 const { uploadedLayoutDir, layoutDirForRow, DEFAULT_LAYOUT_ID } = require('../lib/render/layouts');
 
-// The row id an upload is stored under. Two accounts may install the same manifest
-// id, so the stored id carries the installer; the manifest keeps its own id as
-// provenance. Treat the prefix as opaque: what a caller may reach is decided by the
-// row's user_id, never by reading a number back out of this string.
-function storedLayoutId(userId, manifestId) {
-  return `u${userId}-${manifestId}`;
+// The repository a layout comes from, as a caller may see it: its last error and
+// trust only to its author and the site owner.
+function presentSource(src, own) {
+  if (!src) return null;
+  const out = {
+    repo: `${src.owner}/${src.repo}`,
+    path: src.path,
+    track: src.track,
+    branch: src.branch,
+    lastSha: src.lastSha,
+    lastRef: src.lastRef,
+    lastCheckedAt: src.lastCheckedAt,
+  };
+  return own ? { ...out, lastError: src.lastError, trusted: src.trusted, shared: src.shared } : out;
 }
 
 // What a caller sees of a layout row: never another account's user id, and the
 // owner's review note and the disk size only on the caller's own rows.
-function present(layout, userId) {
+function present(layout, userId, db) {
   if (!layout) return layout;
   const { userId: owner, reviewNote, bytes, ...rest } = layout;
   const own = owner != null && owner === userId;
-  return own ? { ...rest, reviewNote, bytes, own } : { ...rest, own };
+  const reviewer = db && userId != null && userId === db.ownerUserId();
+  const source =
+    db && !layout.builtin
+      ? presentSource(db.getLayoutSource(layout.family), own || reviewer)
+      : null;
+  const shown = { ...rest, own, source };
+  return own ? { ...shown, reviewNote, bytes } : shown;
 }
 
 // The fixture compile limit a version must meet before the owner can approve it.
@@ -108,7 +129,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       res.json({
         layouts: getDb()
           .listLayouts(req.userId)
-          .map((l) => present(l, req.userId)),
+          .map((l) => present(l, req.userId, getDb())),
         default: defaultFor(req.userId),
         canReview: isOwner(req),
       });
@@ -124,7 +145,11 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         .listPendingLayouts()
         .map((l) => {
           const review = (l.report?.checks || []).find((c) => c.name === 'security:review');
-          return { ...present(l, req.userId), report: l.report, warnings: review?.warnings || [] };
+          return {
+            ...present(l, req.userId, getDb()),
+            report: l.report,
+            warnings: review?.warnings || [],
+          };
         });
       res.json({ pending, maxCompileMs: MAX_COMPILE_MS() });
     }),
@@ -177,31 +202,10 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
           },
         };
       }
-      const storedId = storedLayoutId(userId, manifest.id);
-      const existing = getDb().getLayout(storedId, userId);
-      if (!existing) assertBelow(getDb(), userId, 'layout');
-      const bytes = dirBytes(root);
-      assertLayoutBytes(getDb(), userId, bytes, existing ? existing.bytes : 0);
-      const replacedChecksum = existing ? existing.checksum : null;
-      const dest = uploadedLayoutDir(storedId);
-      fs.rmSync(dest, { recursive: true, force: true });
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.cpSync(root, dest, { recursive: true });
-      const row = upsertFromManifest(getDb(), manifest, {
-        id: storedId,
-        status: 'active',
-        source: 'upload',
-        checksum: bundleChecksum(dest),
-        report: publicReport(report),
-        userId,
-        bytes,
-      });
-      recordReport(storedId, userId, report);
-      if (replacedChecksum && replacedChecksum !== row.checksum)
-        forgetZip(replacedChecksum, getDb().layoutChecksumInUse(replacedChecksum));
+      const row = installRoot(getDb(), { root, manifest, userId, report });
       return {
         status: 201,
-        body: { success: true, layout: present(row, userId), report, missing },
+        body: { success: true, layout: present(row, userId, getDb()), report, missing },
       };
     } finally {
       fs.rmSync(work, { recursive: true, force: true });
@@ -222,8 +226,26 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
   // Upload a .zip bundle → extract (zip-slip-safe) → verify → install or reject.
   router.post('/', uploadRateLimit, upload.single('bundle'), fromUpload(false));
 
-  // The same verification without installing: what the bundle is missing.
-  router.post('/check', uploadRateLimit, upload.single('bundle'), fromUpload(true));
+  // The same verification without installing: what the bundle is missing. A JSON
+  // body checks a GitHub repo at a branch, tag or commit; multipart checks a zip.
+  router.post(
+    '/check',
+    uploadRateLimit,
+    wrap(async (req, res, next) => {
+      if (!req.is('application/json')) return next();
+      const b = req.body || {};
+      if (typeof b.repo !== 'string' || !b.repo) throw new AppError('repo is required', 400);
+      const result = await checkRepo(
+        getDb(),
+        req.userId,
+        { repo: b.repo, folder: typeof b.path === 'string' ? b.path : '', ref: b.ref || null },
+        { assetsDir: ASSETS_DIR },
+      );
+      res.json(result);
+    }),
+    upload.single('bundle'),
+    fromUpload(true),
+  );
 
   // Check or install a zip the server fetches from an https URL (for the MCP
   // connector, which cannot send a file).
@@ -242,6 +264,119 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
       }
+    }),
+  );
+
+  // GitHub sources. A layout comes from a public repository: the latest release or
+  // the head of a branch, optionally in a folder of that repository.
+  const sourceBody = (b) => ({
+    repo: b.repo,
+    folder: typeof b.path === 'string' ? b.path : '',
+    track: b.track || 'release',
+    branch: typeof b.branch === 'string' && b.branch ? b.branch : null,
+  });
+  const linkFailure = (res, e) => {
+    if (e.code !== 'verification_failed') throw e;
+    return res.status(422).json({
+      error: { code: e.code, message: e.message, details: e.details.report },
+      missing: e.details.missing,
+    });
+  };
+
+  router.post(
+    '/link',
+    uploadRateLimit,
+    wrap(async (req, res) => {
+      const b = req.body || {};
+      if (typeof b.repo !== 'string' || !b.repo) throw new AppError('repo is required', 400);
+      try {
+        const { row, missing } = await linkSource(
+          getDb(),
+          req.userId,
+          { ...sourceBody(b), layoutId: typeof b.layout_id === 'string' ? b.layout_id : null },
+          { assetsDir: ASSETS_DIR },
+        );
+        res.status(201).json({ success: true, layout: present(row, req.userId, getDb()), missing });
+      } catch (e) {
+        linkFailure(res, e);
+      }
+    }),
+  );
+
+  router.put(
+    '/:id/source',
+    uploadRateLimit,
+    wrap(async (req, res) => {
+      const layout = getDb().getLayout(req.params.id, req.userId);
+      if (!layout || layout.userId !== req.userId || layout.versionNo != null)
+        throw new NotFoundError('Layout not found');
+      const b = req.body || {};
+      try {
+        const { row, missing } = await linkSource(
+          getDb(),
+          req.userId,
+          { ...sourceBody(b), layoutId: layout.id },
+          { assetsDir: ASSETS_DIR },
+        );
+        res.json({ success: true, layout: present(row, req.userId, getDb()), missing });
+      } catch (e) {
+        linkFailure(res, e);
+      }
+    }),
+  );
+
+  router.delete(
+    '/:id/source',
+    wrap((req, res) => {
+      const layout = getDb().getLayout(req.params.id, req.userId);
+      if (!layout || layout.userId !== req.userId) throw new NotFoundError('Layout not found');
+      getDb().deleteLayoutSource(layout.family);
+      res.json({ success: true });
+    }),
+  );
+
+  // Check a linked layout for a newer commit now. Its author, or anyone the layout
+  // is shared with, may ask; each layout is checked at most once every 5 minutes.
+  router.post(
+    '/:id/sync',
+    wrap(async (req, res) => {
+      const layout = getDb().getLayout(req.params.id, req.userId);
+      if (!layout || !(layout.userId === req.userId || layout.state === 'public'))
+        throw new NotFoundError('Layout not found');
+      const result = await syncNow(getDb(), layout.family, { assetsDir: ASSETS_DIR });
+      res.json(result);
+    }),
+  );
+
+  // Check every layout the caller has linked; ones checked in the last 5 minutes are skipped.
+  router.post(
+    '/sync',
+    wrap(async (req, res) => {
+      const results = {};
+      for (const src of getDb().listUserLayoutSources(req.userId)) {
+        try {
+          results[src.family] = await syncNow(getDb(), src.family, { assetsDir: ASSETS_DIR });
+        } catch (e) {
+          results[src.family] = { changed: false, error: e.message };
+        }
+      }
+      res.json({ results });
+    }),
+  );
+
+  // The owner grants or revokes trust: a trusted layout's new versions go public
+  // without review when they pass every check.
+  router.post(
+    '/:id/trust',
+    wrap((req, res) => {
+      requireOwner(req);
+      const layout = getDb().getLayoutUnscoped(req.params.id);
+      if (!layout || !getDb().getLayoutSource(layout.family))
+        throw new NotFoundError('No linked layout with that id');
+      getDb().setLayoutSourceFlags(layout.family, {
+        trusted: Boolean(req.body && req.body.trusted),
+      });
+      res.json({ success: true, trusted: Boolean(req.body && req.body.trusted) });
     }),
   );
 
@@ -270,7 +405,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       const layout = getDb().getLayout(req.params.id, req.userId);
       if (!layout) throw new NotFoundError('Layout not found');
       const mine = getDb().getLayoutReport(layout.id, req.userId);
-      res.json({ ...present(layout, req.userId), myReport: mine ? mine.report : null });
+      res.json({ ...present(layout, req.userId, getDb()), myReport: mine ? mine.report : null });
     }),
   );
 
@@ -371,9 +506,12 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         compileMs: slowestCompile(report),
         bytes: dirBytes(dest),
       });
-      res
-        .status(201)
-        .json({ success: true, layout: present(getDb().getLayout(id, req.userId), req.userId) });
+      if (getDb().getLayoutSource(layout.family))
+        getDb().setLayoutSourceFlags(layout.family, { shared: true });
+      res.status(201).json({
+        success: true,
+        layout: present(getDb().getLayout(id, req.userId), req.userId, getDb()),
+      });
     }),
   );
 
@@ -408,17 +546,13 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         getDb().setLayoutState(layout.id, 'rejected', { note });
         return res.json({ success: true, state: 'rejected' });
       }
-      const problems = [];
-      const dir = uploadedLayoutDir(layout.id);
-      if (!fs.existsSync(dir) || bundleChecksum(dir) !== layout.checksum)
-        problems.push('the files changed since verification');
-      const pdf = (layout.report?.checks || []).filter((c) => c.name.startsWith('pdf:'));
-      if (pdf.length === 0 || pdf.some((c) => !c.ok || c.skipped))
-        problems.push('the PDF safety scan did not pass on every fixture');
-      if (layout.compileMs == null || layout.compileMs > MAX_COMPILE_MS())
-        problems.push(`a fixture took longer than ${MAX_COMPILE_MS()} ms to compile`);
+      const problems = approvalProblems(layout);
       if (problems.length) throw new AppError(`Cannot approve: ${problems.join('; ')}`, 409);
       getDb().setLayoutState(layout.id, 'public', { note, publishedAt: new Date().toISOString() });
+      // Approving a linked layout trusts it: later commits that pass every check go
+      // public without another review, until the owner revokes that.
+      if (getDb().getLayoutSource(layout.family))
+        getDb().setLayoutSourceFlags(layout.family, { trusted: true });
       res.json({ success: true, state: 'public' });
     }),
   );

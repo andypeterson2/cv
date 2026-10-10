@@ -1,4 +1,5 @@
 const pkg = require('../package.json');
+const { tokenState } = require('./github');
 
 /**
  * Build the standard `/health` body for the cv backend.
@@ -12,6 +13,10 @@ const pkg = require('../package.json');
  * Whatever it returns is world-readable, forever, to anyone who asks. So it states
  * liveness and nothing else: no data-shaped facts such as a profile count, which
  * would tell the internet how many CVs live here and which no consumer reads.
+ *
+ * `checks.github_token` is the one exception, as a single word (ok, expiring,
+ * invalid, unset, unchecked): the uptime monitor reads it to warn before the layout
+ * sync token lapses. It carries no date, token or count.
  */
 function buildHealth() {
   return {
@@ -19,6 +24,7 @@ function buildHealth() {
     service: 'cv',
     version: pkg.version,
     uptime_s: Math.round(process.uptime() * 10) / 10,
+    checks: { github_token: tokenState() },
   };
 }
 
