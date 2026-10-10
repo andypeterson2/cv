@@ -63,7 +63,7 @@ User ───── Profile ──┬── Personal info (per-profile key-valu
                     └── Variant (tag rules + section order + per-entry overrides)
 ```
 
-Every profile belongs to an account, and an account sees only its own. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
+Every profile belongs to an account, and an account sees only its own. Each account has storage limits (below); the site owner and the demo account have none, and `GET /api/usage` reports where an account stands. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
 
 A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification. An author can publish an upload: it is copied as the next numbered version, verified again, and listed for every account once the site owner approves it. Anyone may pin a public version to a variant or as their default and keeps it until they choose a newer one; unpublishing hides a version from the list without breaking anyone already using it.
 
@@ -123,6 +123,13 @@ Cost and abuse. Each compile spawns a XeLaTeX process, so these bound it.
 | `CV_COMPILE_TIMEOUT_MS` | `30000` | Per-compile timeout |
 | `CV_LAYOUT_MAX_COMPILE_MS` | `10000` | Slowest fixture compile a layout version may have and still be approved for sharing |
 | `CV_UPLOAD_RATE_MAX` | `5` | Layout uploads per minute per client |
+| `CV_ACCOUNT_QUOTA_MB` | `50` | Stored text plus layout files per account; writes past it return 413 (deletes always work) |
+| `CV_PROFILES_PER_ACCOUNT` | `20` | Profiles per account |
+| `CV_VERSIONS_PER_PROFILE` | `100` | Saved versions per profile |
+| `CV_LAYOUTS_PER_ACCOUNT` | `20` | Uploaded layouts and published versions per account |
+| `CV_PENDING_LAYOUTS` | `3` | Layout versions per account waiting for review |
+| `CV_BUNDLE_MAX_MB` | `50` | Unpacked size of one layout zip |
+| `CV_BUNDLE_MAX_FILES` | `2000` | Files in one layout zip |
 
 ## Testing
 

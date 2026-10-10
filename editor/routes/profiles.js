@@ -1,3 +1,4 @@
+const { assertBelow, assertVersionRoom } = require('../lib/quota');
 const express = require('express');
 const { validate } = require('../lib/schema');
 const { AppError, ConflictError, NotFoundError } = require('../lib/errors');
@@ -52,6 +53,7 @@ module.exports = function createProfilesRouter(getDb) {
     '/',
     validate('createProfile'),
     wrap((req, res) => {
+      assertBelow(getDb(), req.userId, 'profile');
       try {
         res.status(201).json({ id: Number(getDb().createProfile(req.body.name, req.userId)) });
       } catch (e) {
@@ -181,6 +183,7 @@ module.exports = function createProfilesRouter(getDb) {
     wrap((req, res) => {
       const id = intParam(req.params.pid, 'profile id');
       requireProfile(id, req.userId);
+      assertVersionRoom(getDb(), req.userId, id);
       const b = req.body || {};
       const vid = getDb().createVersion(id, b.label || '', b.branch || 'main', b.parent ?? null);
       res.status(201).json({ id: Number(vid) });

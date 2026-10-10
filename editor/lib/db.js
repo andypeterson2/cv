@@ -281,21 +281,21 @@ class CvDatabase {
       // Another account's row is listed only once public, and resolves (for pins
       // made while it was public) while public or unlisted.
       listLayouts: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.user_id IS NULL OR l.user_id = ? OR l.state = 'public' ORDER BY (l.source = 'builtin') DESC, l.family, l.version_no",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.user_id IS NULL OR l.user_id = ? OR l.state = 'public' ORDER BY (l.source = 'builtin') DESC, l.family, l.version_no",
       ),
       getLayout: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ? AND (l.user_id IS NULL OR l.user_id = ? OR l.state IN ('public', 'unlisted'))",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ? AND (l.user_id IS NULL OR l.user_id = ? OR l.state IN ('public', 'unlisted'))",
       ),
       upsertLayout:
-        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id, family, version_no, state, published_at, review_note, compile_ms)
-        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id, @family, @version_no, @state, @published_at, @review_note, @compile_ms)
+        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id, family, version_no, state, published_at, review_note, compile_ms, bytes)
+        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id, @family, @version_no, @state, @published_at, @review_note, @compile_ms, @bytes)
         ON CONFLICT(id) DO UPDATE SET
           name=excluded.name, version=excluded.version, engine=excluded.engine, kinds=excluded.kinds,
           status=excluded.status, source=excluded.source, manifest=excluded.manifest,
           checksum=excluded.checksum, report=excluded.report, verified_at=excluded.verified_at,
           user_id=excluded.user_id, family=excluded.family, version_no=excluded.version_no,
           state=excluded.state, published_at=excluded.published_at,
-          review_note=excluded.review_note, compile_ms=excluded.compile_ms`),
+          review_note=excluded.review_note, compile_ms=excluded.compile_ms, bytes=excluded.bytes`),
       setLayoutState: p(
         'UPDATE layouts SET state = ?, review_note = COALESCE(?, review_note), published_at = COALESCE(?, published_at) WHERE id = ?',
       ),
@@ -303,7 +303,7 @@ class CvDatabase {
         'SELECT COALESCE(MAX(version_no), 0) + 1 AS n FROM layouts WHERE family = ?',
       ),
       pendingLayouts: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.state = 'pending' ORDER BY l.created_at",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.state = 'pending' ORDER BY l.created_at",
       ),
       // `= ?` never matches a NULL owner, so the scoped delete cannot remove a
       // builtin however it is called.
@@ -311,16 +311,50 @@ class CvDatabase {
       // Unscoped — SYSTEM use only (the boot seed reconciling rows against disk, the
       // owner's review). Request handlers otherwise go through the scoped reads above.
       listAllLayouts: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id ORDER BY (l.source = 'builtin') DESC, l.id",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id ORDER BY (l.source = 'builtin') DESC, l.id",
       ),
       deleteLayoutUnscoped: p('DELETE FROM layouts WHERE id = ?'),
       getLayoutUnscoped: p(
-        'SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ?',
+        'SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ?',
       ),
 
+      layoutInUse: p(
+        "SELECT 1 FROM variants WHERE layout_id = @id UNION ALL SELECT 1 FROM settings WHERE key = 'layout.default' AND value = @id LIMIT 1",
+      ),
+      layoutChecksumInUse: p('SELECT 1 FROM layouts WHERE checksum = ? LIMIT 1'),
       layoutPinnedBy: p(
         'SELECT 1 FROM variants v JOIN profiles p ON p.id = v.profile_id WHERE v.layout_id = ? AND p.user_id = ? LIMIT 1',
       ),
+
+      // Per-account storage, counted against the account's quota
+      accountContentBytes: p(`SELECT
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(p.name), 0) + COALESCE(LENGTH(p.data), 0)), 0) FROM profiles p WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.key), 0) + COALESCE(LENGTH(x.value), 0)), 0) FROM profile_settings x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.slug), 0) + COALESCE(LENGTH(x.title), 0) + COALESCE(LENGTH(x.type), 0)), 0) FROM sections x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(e.fields), 0)), 0) FROM entries e JOIN sections x ON x.id = e.section_id JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(i.content), 0) + COALESCE(LENGTH(i.title), 0)), 0) FROM items i JOIN entries e ON e.id = i.entry_id JOIN sections x ON x.id = e.section_id JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(t.tag), 0)), 0) FROM entry_tags t JOIN entries e ON e.id = t.entry_id JOIN sections x ON x.id = e.section_id JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(t.tag), 0)), 0) FROM item_tags t JOIN items i ON i.id = t.item_id JOIN entries e ON e.id = i.entry_id JOIN sections x ON x.id = e.section_id JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(v.name), 0)), 0) FROM variants v JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(r.tag), 0)), 0) FROM variant_rules r JOIN variants v ON v.id = r.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(o.text_override), 0) + COALESCE(LENGTH(o.fields_override), 0)), 0) FROM entry_overrides o JOIN variants v ON v.id = o.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(o.text_override), 0)), 0) FROM item_overrides o JOIN variants v ON v.id = o.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(o.title), 0) + COALESCE(LENGTH(o.body), 0)), 0) FROM variant_letter_sections o JOIN variants v ON v.id = o.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(o.recipient_name), 0) + COALESCE(LENGTH(o.recipient_address), 0) + COALESCE(LENGTH(o.opening), 0) + COALESCE(LENGTH(o.closing), 0)), 0) FROM variant_letter_header o JOIN variants v ON v.id = o.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(o.key), 0) + COALESCE(LENGTH(o.value), 0)), 0) FROM variant_personal o JOIN variants v ON v.id = o.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(o.key), 0) + COALESCE(LENGTH(o.value), 0)), 0) FROM variant_settings o JOIN variants v ON v.id = o.variant_id JOIN profiles p ON p.id = v.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.alias), 0) + COALESCE(LENGTH(x.canonical), 0)), 0) FROM tag_aliases x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.tag), 0) + COALESCE(LENGTH(x.description), 0) + COALESCE(LENGTH(x.category), 0)), 0) FROM tag_catalog x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.tag), 0)), 0) FROM tag_events x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.label), 0) + COALESCE(LENGTH(x.doc), 0) + COALESCE(LENGTH(x.branch), 0) + COALESCE(LENGTH(x.tag), 0)), 0) FROM versions x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(x.fingerprint), 0)), 0) FROM linkedin_sync x JOIN profiles p ON p.id = x.profile_id WHERE p.user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(key), 0) + COALESCE(LENGTH(value), 0)), 0) FROM settings WHERE user_id = @u) +
+        (SELECT COALESCE(SUM(COALESCE(LENGTH(report), 0)), 0) FROM layout_reports WHERE user_id = @u) AS bytes`),
+      accountLayoutUsage: p(
+        "SELECT COALESCE(SUM(bytes), 0) AS bytes, COUNT(*) AS n, SUM(state = 'pending') AS pending FROM layouts WHERE user_id = @u",
+      ),
+      accountProfileCount: p('SELECT COUNT(*) AS n FROM profiles WHERE user_id = @u'),
+      countVersions: p('SELECT COUNT(*) AS n FROM versions WHERE profile_id = ?'),
 
       // Per-account verification reports (they may quote that account's résumé text)
       getLayoutReport: p(
@@ -508,6 +542,21 @@ class CvDatabase {
   // placeholder sub — owner adoption rewrites the owner's sub to a real Google id, but
   // the role never changes, so these (and their caches) survive it.
   /** The account that owns the public demo — resolved once, then cached. */
+  /** What an account stores: text in its profiles and settings, and its layout files. */
+  accountUsage(userId) {
+    const u = { u: userId };
+    const layouts = this._stmts.accountLayoutUsage.get(u);
+    return {
+      contentBytes: this._stmts.accountContentBytes.get(u).bytes,
+      layoutBytes: layouts.bytes,
+      layouts: layouts.n,
+      pendingLayouts: layouts.pending || 0,
+      profiles: this._stmts.accountProfileCount.get(u).n,
+    };
+  }
+  countVersions(profileId) {
+    return this._stmts.countVersions.get(profileId).n;
+  }
   /** True for a profile the '@system' account owns: the demo, readable by anyone. */
   isPublicProfile(id) {
     const owner = this.profileUserId(id);

@@ -14,7 +14,8 @@ const {
   slowestCompile,
   summarizeReport,
 } = require('../lib/render/verify');
-const { readBundle, zipBundle } = require('../lib/render/bundle');
+const { readBundle, zipBundle, forgetZip, dirBytes } = require('../lib/render/bundle');
+const { assertBelow, assertLayoutBytes } = require('../lib/quota');
 const { downloadZip } = require('../lib/fetch-zip');
 const { pinCheck } = require('../lib/render/pin-check');
 const { bundleChecksum } = require('../lib/render/seed');
@@ -38,7 +39,7 @@ function present(layout, userId) {
 // The fixture compile limit a version must meet before the owner can approve it.
 const MAX_COMPILE_MS = () => Number(process.env.CV_LAYOUT_MAX_COMPILE_MS) || 10000;
 
-function upsertFromManifest(db, manifest, { id, status, source, checksum, report, userId }) {
+function upsertFromManifest(db, manifest, { id, status, source, checksum, report, userId, bytes }) {
   return db.upsertLayout({
     id,
     name: manifest.name || manifest.id,
@@ -52,6 +53,7 @@ function upsertFromManifest(db, manifest, { id, status, source, checksum, report
     report,
     verified_at: new Date().toISOString(),
     userId,
+    bytes,
   });
 }
 
@@ -174,6 +176,11 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         };
       }
       const storedId = storedLayoutId(userId, manifest.id);
+      const existing = getDb().getLayout(storedId, userId);
+      if (!existing) assertBelow(getDb(), userId, 'layout');
+      const bytes = dirBytes(root);
+      assertLayoutBytes(getDb(), userId, bytes, existing ? existing.bytes : 0);
+      const replacedChecksum = existing ? existing.checksum : null;
       const dest = uploadedLayoutDir(storedId);
       fs.rmSync(dest, { recursive: true, force: true });
       fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -185,8 +192,11 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         checksum: bundleChecksum(dest),
         report: publicReport(report),
         userId,
+        bytes,
       });
       recordReport(storedId, userId, report);
+      if (replacedChecksum && replacedChecksum !== row.checksum)
+        forgetZip(replacedChecksum, getDb().layoutChecksumInUse(replacedChecksum));
       return {
         status: 201,
         body: { success: true, layout: present(row, userId), report, missing },
@@ -313,6 +323,13 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       if (!layout || layout.userId !== req.userId) throw new NotFoundError('Layout not found');
       if (layout.versionNo != null) throw new AppError('Publish the upload, not a version', 409);
       if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
+      assertBelow(getDb(), req.userId, 'layout');
+      assertBelow(getDb(), req.userId, 'pending');
+      assertLayoutBytes(
+        getDb(),
+        req.userId,
+        layout.bytes || dirBytes(uploadedLayoutDir(layout.id)),
+      );
       const n = getDb().nextLayoutVersion(layout.family);
       const id = `${layout.id}@${n}`;
       const dest = uploadedLayoutDir(id);
@@ -350,6 +367,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         versionNo: n,
         state: 'pending',
         compileMs: slowestCompile(report),
+        bytes: dirBytes(dest),
       });
       res
         .status(201)
@@ -410,13 +428,15 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       if (!layout) throw new NotFoundError('Layout not found');
       if (layout.source === 'builtin') throw new AppError('Cannot delete a builtin layout', 409);
       if (layout.userId !== req.userId) throw new NotFoundError('Layout not found');
-      // A version others may have pinned stays on disk and becomes unlisted.
-      if (layout.versionNo != null && ['public', 'unlisted'].includes(layout.state)) {
+      // A public version is withdrawn first; once unlisted and used by nobody, it can go.
+      const shared = layout.versionNo != null && ['public', 'unlisted'].includes(layout.state);
+      if (shared && (layout.state === 'public' || getDb().layoutInUse(layout.id))) {
         getDb().setLayoutState(layout.id, 'unlisted');
         return res.json({ success: true, unlisted: true });
       }
       fs.rmSync(uploadedLayoutDir(layout.id), { recursive: true, force: true });
       getDb().deleteLayout(layout.id, req.userId); // also reverts referencing variants to NULL
+      forgetZip(layout.checksum, getDb().layoutChecksumInUse(layout.checksum));
       if (getDb().getDefaultLayoutId(req.userId) === layout.id) {
         getDb().setDefaultLayoutId(DEFAULT_LAYOUT_ID, req.userId);
       }

@@ -37,6 +37,7 @@ function rowToLayout(r, full = false) {
     publishedAt: r.published_at ?? null,
     reviewNote: r.review_note ?? null,
     compileMs: r.compile_ms ?? null,
+    bytes: r.bytes ?? 0,
     author: r.source === 'builtin' ? null : r.author_name || 'an account',
   };
   if (full) {
@@ -95,6 +96,15 @@ class LayoutStore {
     return Boolean(this._stmts.layoutPinnedBy.get(layoutId, userId));
   }
 
+  /** Whether any account's variant or default uses `layoutId`. */
+  layoutInUse(layoutId) {
+    return Boolean(this._stmts.layoutInUse.get({ id: layoutId }));
+  }
+
+  layoutChecksumInUse(checksum) {
+    return Boolean(this._stmts.layoutChecksumInUse.get(checksum));
+  }
+
   nextLayoutVersion(family) {
     return this._stmts.nextLayoutVersion.get(family).n;
   }
@@ -135,6 +145,7 @@ class LayoutStore {
       published_at: keep('publishedAt', null),
       review_note: keep('reviewNote', null),
       compile_ms: keep('compileMs', null),
+      bytes: keep('bytes', 0),
       id: l.id,
       name: l.name || l.id,
       version: l.version ?? null,

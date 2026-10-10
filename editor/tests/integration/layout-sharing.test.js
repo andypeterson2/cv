@@ -10,6 +10,8 @@ const http = require('http');
 
 const STORE = fs.mkdtempSync(path.join(os.tmpdir(), 'layouts-share-'));
 process.env.CV_LAYOUTS_DIR = STORE;
+process.env.CV_LAYOUTS_PER_ACCOUNT = '100';
+process.env.CV_PENDING_LAYOUTS = '100';
 
 const CvDatabase = require('../../lib/db');
 const { seedBuiltinLayouts, bundleChecksum } = require('../../lib/render/seed');
@@ -334,4 +336,14 @@ describe.skipIf(!canCompile)('publishing (real compile)', () => {
       (await request('POST', `/api/layouts/${enc(`${id}@1`)}/publish`, {}, author)).status,
     ).toBe(409);
   }, 300_000);
+});
+
+describe('freeing space', () => {
+  test('an unlisted version nobody uses can be deleted for real', async () => {
+    const id = layout(`${root}@40`, { versionNo: 40, state: 'unlisted' });
+    const res = await request('DELETE', `/api/layouts/${enc(id)}`, undefined, author);
+    expect(res.body).toEqual({ success: true });
+    expect(db.getLayoutUnscoped(id)).toBe(null);
+    expect(fs.existsSync(path.join(STORE, id))).toBe(false);
+  });
 });
