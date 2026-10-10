@@ -1,5 +1,5 @@
 /**
- * Neighbour votes: a person's similar tagged bullets lift their tags, the
+ * Neighbour votes: a profile's similar tagged bullets lift their tags, the
  * bullet itself never votes, and too little history leaves the base scores.
  */
 const { withNeighbours, ALPHA, MIN_EXAMPLES } = require('../../lib/neighbour-scorer');
@@ -28,7 +28,7 @@ const base = async () => [
 ];
 
 describe('withNeighbours', () => {
-  test("similar tagged bullets carry the person's own tag to new text", async () => {
+  test("similar tagged bullets carry the profile's own tag to new text", async () => {
     const scorer = withNeighbours(base, embed, examples);
     const out = await scorer('Ran Grover search on IBM hardware', candidates);
     const top = [...out].sort((a, b) => b.score - a.score)[0];

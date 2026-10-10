@@ -12,9 +12,9 @@ let uid;
 beforeEach(() => {
   db = new CvDatabase(':memory:');
   db.clearAllContent();
-  pid = db.createPerson('Test Person');
-  uid = db.personUserId(pid);
-  db.setPersonal(pid, { firstName: 'Test', lastName: 'Person' });
+  pid = db.createProfile('Test Profile');
+  uid = db.profileUserId(pid);
+  db.setPersonal(pid, { firstName: 'Test', lastName: 'Profile' });
 });
 
 afterEach(() => {
@@ -93,13 +93,13 @@ describe('variant settings — export, import, versions', () => {
   test('round-trips through export and import', () => {
     const v = db.createVariant(pid, 'Tight', 'resume');
     db.setVariantSettings(v, { 'spacing.marginTop': { num: 5, unit: 'mm' } });
-    const data = db.getPersonExport(pid);
+    const data = db.getProfileExport(pid);
     expect(data.variants.find((x) => x.name === 'Tight').settings).toEqual({
       'spacing.marginTop': { num: 5, unit: 'mm' },
     });
 
-    const copy = db.createPerson('Copy');
-    db.importPersonData(copy, data);
+    const copy = db.createProfile('Copy');
+    db.importProfileData(copy, data);
     const nv = db.getVariants(copy).find((x) => x.name === 'Tight');
     expect(db.getVariantSettings(nv.id)).toEqual({ 'spacing.marginTop': { num: 5, unit: 'mm' } });
   });

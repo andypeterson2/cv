@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://andypeterson.dev/api-contract/health.schema.json",
   "title": "Service health response",
-  "description": "Body returned by GET /health (and the CV alias GET /api/health) for every backend. Extra service-specific keys (e.g. persons, clients) are allowed.",
+  "description": "Body returned by GET /health (and the CV alias GET /api/health) for every backend. Extra service-specific keys (e.g. profiles, clients) are allowed.",
   "type": "object",
   "required": ["status", "service"],
   "properties": {

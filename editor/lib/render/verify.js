@@ -292,25 +292,25 @@ async function verifyLayout(bundleDir, opts = {}) {
 
 /**
  * Build real-data smoke samples from a single account's own résumés: up to maxSamples
- * resolved variants (one per kind per person of theirs). Passed to verifyLayout so a
+ * resolved variants (one per kind per profile of theirs). Passed to verifyLayout so a
  * candidate is tested against the shapes that account's data produces as well as
  * fixtures.
  *
  * Scoped to `userId` because a candidate bundle's templates are untrusted and run over
- * whatever is passed here, and the report — person ids, and the xelatex log on failure
+ * whatever is passed here, and the report — profile ids, and the xelatex log on failure
  * — goes back to whoever uploaded it. Without a userId there are no samples.
  */
 function gatherSamples(db, { userId = null, maxSamples = 6 } = {}) {
   const samples = [];
   if (userId == null) return samples;
   try {
-    for (const person of db.getPersonsForUser(userId)) {
+    for (const profile of db.getProfilesForUser(userId)) {
       const seenKinds = new Set();
-      for (const v of db.getVariants(person.id)) {
+      for (const v of db.getVariants(profile.id)) {
         if (seenKinds.has(v.kind)) continue;
         seenKinds.add(v.kind);
         try {
-          samples.push({ label: `real:${person.id}:${v.kind}`, data: db.resolveVariant(v.id) });
+          samples.push({ label: `real:${profile.id}:${v.kind}`, data: db.resolveVariant(v.id) });
         } catch {
           /* skip unresolvable variant */
         }

@@ -51,7 +51,7 @@ class TestContractSurface:
 
     def test_error_envelope_on_validation_failure(self):
         """A rejected body is an error like any other, not its own shape."""
-        status, body = http_post(BASE, "/api/persons", {"name": ""})
+        status, body = http_post(BASE, "/api/profiles", {"name": ""})
         assert status == 400, f"expected 400 for an empty name, got {status}"
         assert_matches("error", body)
         assert body["error"]["code"] == "bad_request"
@@ -72,7 +72,7 @@ class TestRateLimitEnvelope:
 
 
 class TestReadShapes:
-    """Normalized read endpoints: persons → sections → entries → items + variants."""
+    """Normalized read endpoints: profiles → sections → entries → items + variants."""
 
     def test_catalog_section_types(self):
         status, body = http_get(BASE, "/api/catalog")
@@ -80,19 +80,19 @@ class TestReadShapes:
         assert isinstance(body.get("validSectionTypes"), list)
         assert "experience" in body["validSectionTypes"]
 
-    def test_persons_list_shape(self):
-        status, body = http_get(BASE, "/api/persons")
+    def test_profiles_list_shape(self):
+        status, body = http_get(BASE, "/api/profiles")
         assert status == 200
-        assert isinstance(body.get("persons"), list)
+        assert isinstance(body.get("profiles"), list)
 
-    def test_person_main_shape(self):
-        persons = http_get(BASE, "/api/persons")[1].get("persons", [])
-        if not persons:
-            pytest.skip("no persons available to read a main")
-        pid = persons[0]["id"]
-        status, body = http_get(BASE, f"/api/persons/{pid}")
+    def test_profile_main_shape(self):
+        profiles = http_get(BASE, "/api/profiles")[1].get("profiles", [])
+        if not profiles:
+            pytest.skip("no profiles available to read a main")
+        pid = profiles[0]["id"]
+        status, body = http_get(BASE, f"/api/profiles/{pid}")
         assert status == 200
-        for key in ("person", "personal", "sections", "variants"):
+        for key in ("profile", "personal", "sections", "variants"):
             assert key in body, f"main is missing '{key}'"
         assert isinstance(body["sections"], list)
         assert isinstance(body["variants"], list)

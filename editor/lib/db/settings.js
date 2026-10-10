@@ -1,6 +1,6 @@
 /**
  * Settings methods for CvDatabase, mixed onto the prototype. Style/spacing/fonts are
- * per-user in `settings`; personal info is per-person in `person_settings`; the
+ * per-user in `settings`; personal info is per-profile in `profile_settings`; the
  * cover-letter header is per-variant. Methods run with `this` === the CvDatabase
  * instance, so they use its prepared statements + db.
  *
@@ -37,29 +37,29 @@ module.exports = {
     tx(Object.entries(map));
   },
 
-  // Person settings (personal.* / coverletter.*)
-  getPersonSettings(personId, prefix) {
-    const rows = this._stmts.getPersonSettings.all(personId, prefix ? prefix + '.' : '');
+  // Profile settings (personal.* / coverletter.*)
+  getProfileSettings(profileId, prefix) {
+    const rows = this._stmts.getProfileSettings.all(profileId, prefix ? prefix + '.' : '');
     return rowsToSettings(rows);
   },
 
-  setPersonSettings(personId, map) {
+  setProfileSettings(profileId, map) {
     const tx = this.db.transaction(() => {
       for (const [key, val] of Object.entries(map)) {
-        this._stmts.upsertPersonSetting.run(personId, key, val == null ? null : String(val));
+        this._stmts.upsertProfileSetting.run(profileId, key, val == null ? null : String(val));
       }
     });
     tx();
   },
 
   /** personal.* settings → flat object with the prefix stripped. */
-  getPersonal(personId) {
-    return stripPrefix(this.getPersonSettings(personId, 'personal'), 'personal.');
+  getPersonal(profileId) {
+    return stripPrefix(this.getProfileSettings(profileId, 'personal'), 'personal.');
   },
 
-  setPersonal(personId, fields) {
+  setPersonal(profileId, fields) {
     const map = {};
     for (const [k, v] of Object.entries(fields)) map['personal.' + k] = v;
-    this.setPersonSettings(personId, map);
+    this.setProfileSettings(profileId, map);
   },
 };

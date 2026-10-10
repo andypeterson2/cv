@@ -228,8 +228,8 @@ describe('gatherSamples scoping', () => {
     const db = new CvDatabase(':memory:');
     const a = db.upsertUser({ googleSub: 'g-a', email: 'a@x.test' });
     const b = db.upsertUser({ googleSub: 'g-b', email: 'b@x.test' });
-    const pa = db.createPerson('A person', a);
-    const pb = db.createPerson('B person', b);
+    const pa = db.createProfile('A profile', a);
+    const pb = db.createProfile('B profile', b);
     db.createSection(pa, 'exp', 'experience', 'Experience');
     db.createSection(pb, 'exp', 'experience', 'Experience');
     db.createVariant(pa, 'VA', 'cv');
@@ -238,14 +238,14 @@ describe('gatherSamples scoping', () => {
     const labels = (uid) => gatherSamples(db, { userId: uid }).map((s) => s.label);
     expect(labels(a)).toEqual([`real:${pa}:cv`]);
     expect(labels(b)).toEqual([`real:${pb}:cv`]);
-    // A report handed to one account must not name another account's person.
+    // A report handed to one account must not name another account's profile.
     expect(labels(a).join()).not.toContain(String(pb));
     db.close();
   });
 
   it('yields nothing when no account is named', () => {
     const db = new CvDatabase(':memory:');
-    db.createPerson('Someone', db.ownerUserId());
+    db.createProfile('Someone', db.ownerUserId());
     expect(gatherSamples(db)).toEqual([]);
     db.close();
   });

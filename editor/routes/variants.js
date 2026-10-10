@@ -8,7 +8,6 @@ const { rateLimit } = require('express-rate-limit');
 const { clientIp } = require('../lib/client-ip');
 const { queuedCompile } = require('../lib/render/latex');
 const { ownedResourceGuard } = require('../lib/owned-resource');
-const { publicPersonIdSet } = require('../lib/public-persons');
 
 function intId(value, label = 'id') {
   const n = parseInt(value, 10);
@@ -48,8 +47,6 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   const ASSETS_DIR = path.join(projectRoot, 'assets');
 
   const guardVariant = ownedResourceGuard(getDb, 'variant', 'Variant');
-  // The main-document compile is person-keyed, so it checks the person itself.
-  const PUBLIC_PERSON_IDS = publicPersonIdSet(process.env.CV_PUBLIC_PERSON_IDS || '1');
 
   // Fetch a variant the caller may act on, or 404. `userId` comes from attachUser.
   const requireVariant = (id, userId, opts) => {
@@ -117,9 +114,9 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       }
       if (typeof layoutId !== 'string')
         throw new AppError('layout_id must be a string or null', 400);
-      // Resolved against the person's owner, the same account the compile will read
+      // Resolved against the profile's owner, the same account the compile will read
       // it as, so a variant can only be bound to a layout it can actually use.
-      const layout = getDb().getLayout(layoutId, getDb().personUserId(v.personId));
+      const layout = getDb().getLayout(layoutId, getDb().profileUserId(v.profileId));
       if (!layout) throw new NotFoundError('Layout not found');
       if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
       if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
@@ -274,7 +271,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     }),
   );
 
-  // A null value drops that override, so the field inherits the person value
+  // A null value drops that override, so the field inherits the profile value
   // again; an empty string is kept and suppresses the field for this variant.
   router.patch(
     '/:id/personal',
@@ -419,7 +416,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
         kind: variant.kind,
         // Layout: the variant's own layout_id ?? the owner's default ?? builtin.
         selectLayoutFor: () =>
-          selectLayout(getDb(), variant, getDb().personUserId(variant.personId)),
+          selectLayout(getDb(), variant, getDb().profileUserId(variant.profileId)),
         filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
       },
       res,
@@ -428,14 +425,14 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   }
 
   // The full "main" document — the whole CV with no variant lens (getDb().resolveMain).
-  // Person-keyed; the path ends in /pdf so the /api auth gate treats it as a compile GET
-  // (gated regardless of person — a CPU/DoS lever), same as the variant compile.
+  // Profile-keyed; the path ends in /pdf so the /api auth gate treats it as a compile GET
+  // (gated regardless of profile — a CPU/DoS lever), same as the variant compile.
   function compileMain(pid, userId, res, { inline }) {
-    let compileData, person;
+    let compileData, profile;
     try {
-      person = getDb().getPersonForUser(pid, userId);
-      if (!person && PUBLIC_PERSON_IDS.has(String(pid))) person = getDb().getPerson(pid);
-      if (!person) return compileFail(res, 404, 'not_found', 'Person not found');
+      profile = getDb().getProfileForUser(pid, userId);
+      if (!profile && getDb().isPublicProfile(pid)) profile = getDb().getProfile(pid);
+      if (!profile) return compileFail(res, 404, 'not_found', 'Profile not found');
       compileData = getDb().resolveMain(pid);
     } catch (e) {
       return compileFail(res, 500, 'internal_error', 'Resolution failed: ' + e.message);
@@ -443,12 +440,12 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     return runCompile(
       compileData,
       {
-        buildRoot: path.join(projectRoot, 'build', 'persons', String(pid)),
+        buildRoot: path.join(projectRoot, 'build', 'profiles', String(pid)),
         kind: 'cv',
         // The full document has no per-variant layout → the owner's default ?? builtin.
         selectLayoutFor: () =>
-          selectLayout(getDb(), { layoutId: null, kind: 'cv' }, getDb().personUserId(pid)),
-        filename: `${slugifyName(person.name)}.pdf`,
+          selectLayout(getDb(), { layoutId: null, kind: 'cv' }, getDb().profileUserId(pid)),
+        filename: `${slugifyName(profile.name)}.pdf`,
       },
       res,
       { inline },
@@ -458,7 +455,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // /main/:pid/pdf (3 segments) can't collide with /:id/pdf (2 segments); registered
   // first for clarity.
   router.get('/main/:pid/pdf', compileRateLimit, compileQuota, (req, res) =>
-    compileMain(intId(req.params.pid, 'person id'), req.userId, res, { inline: true }),
+    compileMain(intId(req.params.pid, 'profile id'), req.userId, res, { inline: true }),
   );
   router.get('/:id/pdf', compileRateLimit, compileQuota, (req, res) =>
     compileVariant(intId(req.params.id, 'variant id'), req.userId, res, { inline: true }),

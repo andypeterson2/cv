@@ -1,5 +1,5 @@
 /**
- * Export / import / seeding for CvDatabase. Per-person export uses the normalized
+ * Export / import / seeding for CvDatabase. Per-profile export uses the normalized
  * "new" shape (overrides addressed by position so backups survive re-import);
  * import dispatches between the new shape and the legacy {documents} shape, and
  * seeding materializes Jane Doe on an empty DB. Mixed onto the CvDatabase
@@ -10,16 +10,16 @@ const { getLatexType, normalizeType } = require('../latex-type-map');
 const { JANE_DOE_DATA } = require('../seed-data');
 
 class ImportExport {
-  getPersonExport(personId) {
-    const person = this.getPerson(personId);
-    if (!person) return null;
+  getProfileExport(profileId) {
+    const profile = this.getProfile(profileId);
+    if (!profile) return null;
 
     // Overrides reference entry/item ids; export them by POSITION (section
     // slug + indices) so a backup is portable across re-import (where ids change).
     const entryPos = new Map(); // entryId -> { slug, ei }
     const itemPos = new Map(); // itemId -> { slug, ei, ii }
 
-    const sections = this.getSections(personId).map((s) => {
+    const sections = this.getSections(profileId).map((s) => {
       const full = this.getSection(s.id);
       full.entries.forEach((e, ei) => {
         entryPos.set(e.id, { slug: full.slug, ei });
@@ -38,7 +38,7 @@ class ImportExport {
       };
     });
 
-    const variants = this.getVariants(personId).map((v) => {
+    const variants = this.getVariants(profileId).map((v) => {
       const eov = this.getEntryOverrides(v.id);
       const iov = this.getItemOverrides(v.id);
       const entryOverrides = [];
@@ -88,12 +88,12 @@ class ImportExport {
     });
 
     return {
-      name: person.name,
-      personal: this.getPersonal(personId),
+      name: profile.name,
+      personal: this.getPersonal(profileId),
       sections,
       variants,
-      tagAliases: this.getTagAliases(personId),
-      tagCatalog: this.getTagCatalog(personId),
+      tagAliases: this.getTagAliases(profileId),
+      tagCatalog: this.getTagCatalog(profileId),
     };
   }
 
@@ -103,26 +103,26 @@ class ImportExport {
   }
 
   /**
-   * Import a per-person blob into an (empty) person. Dispatches on shape:
+   * Import a per-profile blob into an (empty) profile. Dispatches on shape:
    * `variants` present → new normalized export; otherwise the legacy
    * {documents, resume_included} shape.
    */
-  importPersonData(personId, data) {
-    if (Array.isArray(data.variants)) return this._importNewShape(personId, data);
-    return this.importLegacyData(personId, data);
+  importProfileData(profileId, data) {
+    if (Array.isArray(data.variants)) return this._importNewShape(profileId, data);
+    return this.importLegacyData(profileId, data);
   }
 
-  _importNewShape(personId, data) {
+  _importNewShape(profileId, data) {
     // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 30; export mirrors the import walk
     const tx = this.db.transaction(() => {
-      if (data.personal) this.setPersonal(personId, data.personal);
+      if (data.personal) this.setPersonal(profileId, data.personal);
 
       // Content, tracking ids by position for override mapping.
       const sectionIdBySlug = {};
       const entryIdByPos = {}; // `${slug}#${ei}` -> entryId
       const itemIdByPos = {}; // `${slug}#${ei}#${ii}` -> itemId
       for (const sec of data.sections || []) {
-        const sectionId = this.createSection(personId, sec.slug, sec.type, sec.title || '');
+        const sectionId = this.createSection(profileId, sec.slug, sec.type, sec.title || '');
         sectionIdBySlug[sec.slug] = sectionId;
         (sec.entries || []).forEach((e, ei) => {
           const entryId = this.createEntry(sectionId, e.fields || {});
@@ -137,7 +137,7 @@ class ImportExport {
       }
 
       for (const v of data.variants || []) {
-        const variantId = this.createVariant(personId, v.name, v.kind);
+        const variantId = this.createVariant(profileId, v.name, v.kind);
         if (v.rules) this.setVariantRules(variantId, v.rules);
         if (Array.isArray(v.sections)) {
           this.setVariantSections(
@@ -186,7 +186,7 @@ class ImportExport {
       for (const al of data.tagAliases || []) {
         const a = normTag(al.alias);
         const c = normTag(al.canonical);
-        if (a && c && a !== c) this._stmts.upsertAlias.run(personId, a, c, al.source || 'manual');
+        if (a && c && a !== c) this._stmts.upsertAlias.run(profileId, a, c, al.source || 'manual');
       }
 
       // Catalog (already-canonical tags; plain upsert).
@@ -194,7 +194,7 @@ class ImportExport {
         const t = normTag(ce.tag);
         if (t)
           this._stmts.upsertCatalogTag.run(
-            personId,
+            profileId,
             t,
             ce.description ?? null,
             ce.category ?? null,
@@ -208,24 +208,24 @@ class ImportExport {
 
   /** Seed Jane Doe once, on a truly empty database. */
   seedJaneDoe() {
-    if (this._stmts.countPersons.get().cnt > 0) return;
+    if (this._stmts.countProfiles.get().cnt > 0) return;
     // The demo belongs to the '@system' account (migration 018) so it stays the
     // public, un-owned CV every logged-out visitor sees.
-    const id = this.createPerson('Jane Doe', this.systemUserId());
+    const id = this.createProfile('Jane Doe', this.systemUserId());
     this.importLegacyData(id, JANE_DOE_DATA);
   }
 
   /**
    * Materialize a legacy export blob ({personal, sections, documents:{cv,resume},
-   * coverletter}) into the normalized model for an existing (empty) person,
+   * coverletter}) into the normalized model for an existing (empty) profile,
    * deriving CV / Resume / Cover Letter variants. Mirrors migration 007's
-   * per-person backfill. Used for seeding and importing legacy backups.
+   * per-profile backfill. Used for seeding and importing legacy backups.
    */
-  importLegacyData(personId, data) {
+  importLegacyData(profileId, data) {
     // eslint-disable-next-line sonarjs/cognitive-complexity -- grandfathered at 56; the import walks the whole document tree — split when next touched
     const tx = this.db.transaction(() => {
       // personal (the cover-letter header is applied to the letter variant below)
-      if (data.personal) this.setPersonal(personId, data.personal);
+      if (data.personal) this.setPersonal(profileId, data.personal);
 
       const blobSections = Array.isArray(data.sections) ? data.sections : [];
       const cvDoc = data.documents && Array.isArray(data.documents.cv) ? data.documents.cv : [];
@@ -249,7 +249,7 @@ class ImportExport {
       for (const slug of orderedSlugs) {
         const sec = blobSections.find((s) => s.id === slug);
         const type = normalizeType(sec.type);
-        const sectionId = this.createSection(personId, slug, type, sec.title || '');
+        const sectionId = this.createSection(profileId, slug, type, sec.title || '');
         sectionIdBySlug[slug] = sectionId;
         const paragraph = getLatexType(type) === 'cvparagraph';
 
@@ -267,11 +267,11 @@ class ImportExport {
       }
 
       // CV variant
-      const cvId = this.createVariant(personId, 'CV', 'cv');
+      const cvId = this.createVariant(profileId, 'CV', 'cv');
       this.setVariantSections(cvId, mapDocToVariantSections(cvDoc, sectionIdBySlug));
 
       // Resume variant
-      const resumeId = this.createVariant(personId, 'Resume', 'resume');
+      const resumeId = this.createVariant(profileId, 'Resume', 'resume');
       this.setVariantSections(resumeId, mapDocToVariantSections(resumeDoc, sectionIdBySlug));
       for (const sec of blobSections) {
         for (const e of sec.entries || []) {
@@ -299,7 +299,7 @@ class ImportExport {
           ? data.coverletter.sections
           : [];
       if (clSections.length) {
-        const clId = this.createVariant(personId, 'Cover Letter', 'coverletter');
+        const clId = this.createVariant(profileId, 'Cover Letter', 'coverletter');
         for (const s of clSections) this.createLetterSection(clId, s.title || '', s.body || '');
         if (data.coverletter) this.setLetterHeader(clId, data.coverletter); // header (ignores `sections`)
       }
@@ -307,10 +307,10 @@ class ImportExport {
     tx();
   }
 
-  /** Convenience for tests: remove all persons (cascades to all content). */
+  /** Convenience for tests: remove all profiles (cascades to all content). */
   clearAllContent() {
     const tx = this.db.transaction(() => {
-      for (const pp of this._stmts.getPersons.all()) this._stmts.deletePerson.run(pp.id);
+      for (const pp of this._stmts.getProfiles.all()) this._stmts.deleteProfile.run(pp.id);
     });
     tx();
   }

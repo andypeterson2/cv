@@ -10,7 +10,7 @@ const pkg = require('./package.json');
 
 // Route modules
 const createSettingsRouter = require('./routes/settings');
-const createPersonsRouter = require('./routes/persons');
+const createProfilesRouter = require('./routes/profiles');
 const createSectionsRouter = require('./routes/sections');
 const createEntriesRouter = require('./routes/entries');
 const createItemsRouter = require('./routes/items');
@@ -53,7 +53,7 @@ app.getDb = function () {
 // (catalog + health) is last.
 const API_ROUTERS = [
   ['/api/settings', createSettingsRouter(getDb)],
-  ['/api/persons', createPersonsRouter(getDb)],
+  ['/api/profiles', createProfilesRouter(getDb)],
   ['/api/sections', createSectionsRouter(getDb)],
   ['/api/entries', createEntriesRouter(getDb)],
   ['/api/items', createItemsRouter(getDb)],
@@ -173,23 +173,22 @@ app.get('/api', (req, res) => {
 // Optional app-level auth on the API (defense in depth; the backend is also
 // directly reachable on its public URL, so this is the real gate). No-op unless
 // CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated. Public demo
-// persons (e.g. the Jane Doe seed, id 1) stay readable unauthenticated; any other
-// person's reads + all writes + the /pdf compile require the token.
+// profiles (those the '@system' account owns, i.e. the Jane Doe seed) stay readable unauthenticated; any other
+// profile's reads + all writes + the /pdf compile require the token.
 app.use(
   '/api',
   tokenAuth(process.env.CV_EDITOR_TOKEN, {
-    publicPersonIds: process.env.CV_PUBLIC_PERSON_IDS || '1',
     getDb,
     originSecret: process.env.CV_ORIGIN_SECRET,
   }),
 );
 
 // Resolve the request → `req.userId`, after the token gate so only allowed requests
-// reach it; every route reads it and the person layer scopes by it.
+// reach it; every route reads it and the profile layer scopes by it.
 app.use('/api', attachUser(getDb));
 
 // Mount routers — every content route is id-addressable; there is no active
-// person / session state.
+// profile / session state.
 
 for (const [prefix, router] of API_ROUTERS) app.use(prefix, router);
 

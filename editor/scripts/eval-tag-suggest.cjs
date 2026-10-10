@@ -2,7 +2,7 @@
 /**
  * Held-out measurement of the tag suggester.
  *
- * Reads one person's tagged bullets, splits them into two halves with a fixed
+ * Reads one profile's tagged bullets, splits them into two halves with a fixed
  * seed, selects the neighbour-vote parameters (blend weight, K, and whether the
  * starter vocabulary is in play) on the FIRST half, and scores hit@1 / hit@3 on
  * the SECOND half, which no selection step reads. Both arms run the same code
@@ -16,7 +16,7 @@
  *  - Scoring: each second-half bullet is scored against a vote pool of the whole
  *    first half, so no scored bullet is ever in its own pool and no second-half
  *    tag votes for another.
- *  - Candidate vocabulary is the person's full tag set, which exists before any
+ *  - Candidate vocabulary is the profile's full tag set, which exists before any
  *    one bullet is tagged; usage counts, which only break ties, come from the
  *    pool side alone. Both arms get the identical candidate list.
  *
@@ -24,12 +24,12 @@
  * and the protocol are fixed here; the rows are not in this repository, and
  * without them the printed rates cannot be regenerated.
  *
- * It takes either a database path plus a person id, or the JSON an export of
- * that person writes:
+ * It takes either a database path plus a profile id, or the JSON an export of
+ * that profile writes:
  *
- *   node scripts/eval-tag-suggest.cjs --db ../cv.db --person 5
- *   node scripts/eval-tag-suggest.cjs --export <exported-person JSON>
- *   node scripts/eval-tag-suggest.cjs --db ../cv.db --person 5 --seed 2
+ *   node scripts/eval-tag-suggest.cjs --db ../cv.db --profile 5
+ *   node scripts/eval-tag-suggest.cjs --export <exported-profile JSON>
+ *   node scripts/eval-tag-suggest.cjs --db ../cv.db --profile 5 --seed 2
  *
  * Needs the optional @huggingface/transformers dependency and the MiniLM model
  * cache; CV_EMBED_OFFLINE=1 forbids a runtime download.
@@ -50,13 +50,13 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 2) {
     const key = argv[i].replace(/^--/, '');
     const val = argv[i + 1];
-    if (key === 'seed' || key === 'person') out[key] = Number(val);
+    if (key === 'seed' || key === 'profile') out[key] = Number(val);
     else out[key] = val;
   }
   return out;
 }
 
-/** Bullets with text and at least one tag, from a person's export JSON. */
+/** Bullets with text and at least one tag, from a profile's export JSON. */
 function bulletsFromExport(doc) {
   const rows = [];
   for (const s of doc.sections || []) {
@@ -71,7 +71,7 @@ function bulletsFromExport(doc) {
 }
 
 /** The same bullets straight from SQLite, for a database that is not exported. */
-function bulletsFromDb(dbPath, personId) {
+function bulletsFromDb(dbPath, profileId) {
   const Database = require('better-sqlite3');
   const db = new Database(path.resolve(dbPath), { readonly: true });
   try {
@@ -82,10 +82,10 @@ function bulletsFromDb(dbPath, personId) {
            JOIN entries e ON e.id = i.entry_id
            JOIN sections s ON s.id = e.section_id
            JOIN item_tags it ON it.item_id = i.id
-          WHERE s.person_id = ?
+          WHERE s.profile_id = ?
           ORDER BY i.id, it.tag`,
       )
-      .all(personId);
+      .all(profileId);
     const byItem = new Map();
     for (const r of rows) {
       const text = (r.content || '').trim();
@@ -152,9 +152,9 @@ function splitHalves(rows, seed) {
 }
 
 /**
- * Candidate list: every tag the person uses, with counts from the pool side
+ * Candidate list: every tag the profile uses, with counts from the pool side
  * only. `withSeed` adds the starter vocabulary, which serving does while the
- * person's own tag count is under SEED_UNTIL.
+ * profile's own tag count is under SEED_UNTIL.
  */
 function buildCandidates(allRows, pool, withSeed) {
   const counts = new Map();
@@ -243,10 +243,10 @@ async function main() {
   if (args.export) {
     rows = bulletsFromExport(JSON.parse(require('node:fs').readFileSync(args.export, 'utf8')));
   } else if (args.db) {
-    if (!args.person) throw new Error('--db needs --person <id>');
-    rows = bulletsFromDb(args.db, args.person);
+    if (!args.profile) throw new Error('--db needs --profile <id>');
+    rows = bulletsFromDb(args.db, args.profile);
   } else {
-    throw new Error('pass --export <json> or --db <path> --person <id>');
+    throw new Error('pass --export <json> or --db <path> --profile <id>');
   }
 
   if (rows.length < 8) {
@@ -280,7 +280,7 @@ async function main() {
   );
   console.log(
     `serving uses: blend weight ${ALPHA}, k ${K}, ` +
-      `starter vocabulary under ${SEED_UNTIL} tags of the person's own`,
+      `starter vocabulary under ${SEED_UNTIL} tags of the profile's own`,
   );
   console.log(line('selection half fit', { ...chosen }));
   console.log('held-out half:');

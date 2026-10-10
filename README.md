@@ -6,13 +6,13 @@ This repository holds two services. `editor/` is the REST API and the compile pi
 
 ## Tag suggestions
 
-Tags decide which content each variant includes. Suggestions rank the tags that already exist for a bullet, using a local all-MiniLM-L6-v2 int8 embedding blended 60/40 with votes from the person's eight most similar tagged bullets. They never invent a tag, and nothing is applied without a click.
+Tags decide which content each variant includes. Suggestions rank the tags that already exist for a bullet, using a local all-MiniLM-L6-v2 int8 embedding blended 60/40 with votes from the profile's eight most similar tagged bullets. They never invent a tag, and nothing is applied without a click.
 
 The blend weight, the eight neighbours and the starter-vocabulary cutoff were chosen by leave-one-out over 68 private résumé bullets and then scored on those same 68 rows, which makes the figure a fit rather than an estimate of how the suggester does on bullets it has not seen: hit@3 59/68 (86.8%) to 62/68 (91.2%), hit@1 41/68 (60.3%) to 46/68 (67.6%) — 3 and 5 bullets.
 
 `editor/scripts/eval-tag-suggest.cjs` re-measures the same comparison on a disjoint split instead. A seeded stratified half selects the parameters; the other half is scored once, and nothing in the selection step reads it. It prints hit@1 and hit@3 as item counts over the n of each half, for the embedding ranker alone and for the blend, because on a half of 34 one bullet moves a rate by 2.9 points. No held-out figure is quoted here yet, because the tag labels that evaluation needs are absent from every database still on hand — the live profile's 175 bullets carry none — so the rates could not be recomputed under the split. The bullet text is private in any case, so nobody without that corpus can regenerate them; the seed and the split rule are fixed in the script, so the same corpus always yields the same two halves.
 
-While a person has fewer than 30 tags of their own, suggestions also draw on a starter vocabulary (`editor/lib/seed-tags.json`) of 42 broad résumé categories plus ESCO technology, transversal and research skills. A starter tag joins the person's catalog, with its description, the first time it is used.
+While a profile has fewer than 30 tags of their own, suggestions also draw on a starter vocabulary (`editor/lib/seed-tags.json`) of 42 broad résumé categories plus ESCO technology, transversal and research skills. A starter tag joins the profile's catalog, with its description, the first time it is used.
 
 ## Running it locally
 
@@ -58,12 +58,12 @@ CV_DOMAIN=cv.example.com CV_USER=me CV_PASS_HASH='<bcrypt-hash>' \
 ## Data model
 
 ```
-User ───── Person ──┬── Personal info (per-person key-value settings)
+User ───── Profile ──┬── Personal info (per-profile key-value settings)
                     ├── Section ──── Entry ──── Item (bullet point)
                     └── Variant (tag rules + section order + per-entry overrides)
 ```
 
-Every person belongs to an account, and an account sees only its own. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its person, so a shared or public profile looks the same to every reader.
+Every profile belongs to an account, and an account sees only its own. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
 
 A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification.
 
@@ -81,7 +81,7 @@ The shape, by prefix:
 |---|---|
 | `/api/health`, `/api/catalog` | Liveness, and the static catalogs the UI renders pickers from |
 | `/api/settings` | Style, spacing and fonts for the calling account |
-| `/api/persons`, `/api/persons/:id/…` | Profiles, and everything scoped to one: personal info, sections, variants, versions, tags, import/export, LinkedIn sync |
+| `/api/profiles`, `/api/profiles/:id/…` | Profiles, and everything scoped to one: personal info, sections, variants, versions, tags, import/export, LinkedIn sync |
 | `/api/sections/:id`, `/api/entries/:id`, `/api/items/:id` | The id-addressed content tree, plus tags |
 | `/api/variants/:id/…` | Tag rules, section order, per-entry overrides, cover-letter paragraphs, `/resolve`, and the compile routes |
 | `/api/layouts` | List, upload, verify, delete, and the account's default |
@@ -107,7 +107,6 @@ Access. With none of these set the API is open, which is what local dev and the 
 | `CV_EDITOR_TOKEN` | *(unset)* | Shared owner token. Unset disables the check entirely |
 | `CV_ORIGIN_SECRET` | *(unset)* | Front-door secret. Accepts a comma-separated set so it can be rotated one sender at a time |
 | `CV_ORIGIN_SECRET_ENFORCE` | `false` | `true` rejects a request without a valid secret; until then a miss is logged and allowed |
-| `CV_PUBLIC_PERSON_IDS` | `1` | Profiles readable without authentication (the demo) |
 | `OWNER_EMAIL`, `OWNER_NAME` | *(unset)* | The Google address that adopts the owner account on first sign-in |
 | `CV_PROD_ORIGIN` | `https://andypeterson.dev` | Browser origin allowed by CORS |
 | `CV_CORS_ORIGINS` | *(none)* | Extra comma-separated exact origins |
