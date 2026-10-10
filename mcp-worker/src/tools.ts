@@ -7,8 +7,8 @@
  *     runtime forbids → @cfworker/json-schema (a zero-eval interpreter).
  *   - cv_get_pdf / cv_download_layout: a Worker has no filesystem, so they return a
  *     short-lived signed link the Worker serves.
- *   - cv_install_layout / cv_check_layout: take an https URL the cv backend fetches,
- *     since a tool call cannot carry a zip.
+ *   - layouts come from public GitHub repositories the cv backend fetches
+ *     (cv_link_layout_repo, cv_check_layout), since a tool call cannot carry a zip.
  *
  * Config (CV_EDITOR_URL + CV_ORIGIN_SECRET) comes from the Worker env, read at call
  * time via the `cloudflare:workers` global env.
@@ -129,11 +129,16 @@ export async function fetchVariantPdf(variantId: number | string): Promise<Array
 
 // Shared schema fragments (verbatim from the stdio catalog).
 const profileId = { type: 'integer', description: 'Profile id (from cv_list_profiles)' };
-const zipUrl = {
+const repoArg = {
   type: 'string',
-  pattern: '^https://',
-  maxLength: 2000,
-  description: 'https URL of the layout .zip',
+  minLength: 3,
+  maxLength: 300,
+  description: 'Public GitHub repository: owner/repo or a github.com link',
+};
+const folderArg = {
+  type: 'string',
+  maxLength: 300,
+  description: 'Folder in the repository holding layout.json (omit for the repo root)',
 };
 const variantId = {
   type: 'integer',
@@ -909,7 +914,8 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_list_layouts',
     description:
-      'List the layouts you can use and your default: {layouts:[{id,name,kinds,status,source,builtin,own,author,family,versionNo,state,updateAvailable}], default, canReview}. ' +
+      'List the layouts you can use and your default: {layouts:[{id,name,kinds,status,builtin,own,author,family,versionNo,state,updateAvailable,source}], default, canReview}. ' +
+      'source is the GitHub repo a layout follows ({repo, path, track, branch, lastSha, lastCheckedAt}, plus lastError on yours), or null for a builtin or an unlinked upload. ' +
       'Builtins, your own uploads and versions, and other accounts\' public versions (id like "u3-modern@2"). state is private | pending | public | unlisted | rejected. ' +
       'updateAvailable names a newer public version of the same layout; pinning it is opt-in. "awesome-cv" is the builtin default. Pick one per variant with ' +
       'cv_set_variant_layout, or change your default with cv_set_default_layout.',
@@ -953,28 +959,74 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_check_layout',
     description:
-      'Check a layout zip without installing it: the cv server downloads it from an https URL (public hosts only, up to 25 MB), ' +
-      'verifies it against the layout contract and your own résumés, and returns {ok, missing:[plain-language problems], report}.',
+      'Check a layout in a public GitHub repository without installing it: the cv server downloads the repo at ref ' +
+      '(a branch, tag or commit; the default branch if omitted), verifies the layout in path (the repo root if omitted) ' +
+      'against the layout contract and your own résumés, and returns {ok, missing:[plain-language problems], report, sha}.',
     inputSchema: {
       type: 'object',
-      properties: { url: zipUrl },
-      required: ['url'],
+      properties: { repo: repoArg, path: folderArg, ref: { type: 'string', maxLength: 200 } },
+      required: ['repo'],
       additionalProperties: false,
     },
-    handler: (a) => api('POST', '/api/layouts/from-url', { url: a.url, dryRun: true }),
+    handler: (a) => api('POST', '/api/layouts/check', { repo: a.repo, path: a.path, ref: a.ref }),
   },
   {
-    name: 'cv_install_layout',
+    name: 'cv_link_layout_repo',
     description:
-      'Install a layout from a zip at an https URL (public hosts only, up to 25 MB). It is verified first and installed as ' +
-      'your private layout only if it passes; on failure the error lists what is missing. Re-installing the same manifest id replaces it.',
+      'Install a layout from a public GitHub repository and keep it updated: track "release" follows the latest release, ' +
+      'track "branch" follows the head of branch (the default branch if omitted). It is verified first and installed only if it ' +
+      'passes; on failure the error lists what is missing. The server checks it daily (and on cv_sync_layout); your own documents ' +
+      'follow each passing commit. Pass layout_id to change the repo of an existing layout or link an uploaded one (it must hold the same layout id).',
     inputSchema: {
       type: 'object',
-      properties: { url: zipUrl },
-      required: ['url'],
+      properties: {
+        repo: repoArg,
+        path: folderArg,
+        track: { type: 'string', enum: ['release', 'branch'] },
+        branch: { type: 'string', maxLength: 200 },
+        layout_id: layoutId,
+      },
+      required: ['repo', 'track'],
       additionalProperties: false,
     },
-    handler: (a) => api('POST', '/api/layouts/from-url', { url: a.url }),
+    handler: (a) => {
+      const body = { repo: a.repo, path: a.path, track: a.track, branch: a.branch };
+      return a.layout_id
+        ? api('PUT', `/api/layouts/${enc(a.layout_id)}/source`, body)
+        : api('POST', '/api/layouts/link', body);
+    },
+  },
+  {
+    name: 'cv_sync_layout',
+    description:
+      'Check a GitHub-linked layout for a newer release or commit now (at most once every 5 minutes per layout). Returns ' +
+      '{changed, version?, error?}; a commit that fails verification leaves the layout on its last good one.',
+    inputSchema: {
+      type: 'object',
+      properties: { layout_id: layoutId },
+      required: ['layout_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('POST', `/api/layouts/${enc(a.layout_id)}/sync`, {}),
+  },
+  {
+    name: 'cv_sync_layouts',
+    description:
+      'Check every layout you have linked to GitHub for updates now: {results:{layout_id:{changed, version?, error?}}}.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: () => api('POST', '/api/layouts/sync', {}),
+  },
+  {
+    name: 'cv_unlink_layout_repo',
+    description:
+      'Stop updating one of your layouts from GitHub. It keeps its current files and pins but no longer changes.',
+    inputSchema: {
+      type: 'object',
+      properties: { layout_id: layoutId },
+      required: ['layout_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('DELETE', `/api/layouts/${enc(a.layout_id)}/source`),
   },
   {
     name: 'cv_publish_layout',
@@ -1037,6 +1089,19 @@ const toolDefs: ToolDef[] = [
       'Site owner only: the layout versions waiting for review, with their fixture reports, raw-PDF warnings and compile times.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: () => api('GET', '/api/layouts/review'),
+  },
+  {
+    name: 'cv_trust_layout',
+    description:
+      'Site owner only: trust or stop trusting a GitHub-linked layout. New versions of a trusted layout go public on their own ' +
+      'when they pass every check; untrusted ones wait for cv_review_layout. Approving a version trusts its layout.',
+    inputSchema: {
+      type: 'object',
+      properties: { layout_id: layoutId, trusted: { type: 'boolean' } },
+      required: ['layout_id', 'trusted'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('POST', `/api/layouts/${enc(a.layout_id)}/trust`, { trusted: a.trusted }),
   },
   {
     name: 'cv_review_layout',

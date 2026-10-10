@@ -7,9 +7,9 @@ import { cvCtx } from '../src/cv-ctx';
 // Worker runtime — proves the tool catalog + the Workers-safe validator behave
 // like the stdio server before that server is deleted.
 describe('cv tool catalog (moved into the Worker)', () => {
-  it('exposes exactly 69 tools, each cv_*-prefixed with a description + schema', () => {
-    expect(TOOL_COUNT).toBe(69);
-    expect(tools.length).toBe(69);
+  it('exposes exactly 73 tools, each cv_*-prefixed with a description + schema', () => {
+    expect(TOOL_COUNT).toBe(73);
+    expect(tools.length).toBe(73);
     for (const t of tools) {
       expect(t.name).toMatch(/^cv_/);
       expect(typeof t.description).toBe('string');
@@ -43,6 +43,7 @@ describe('cv tool catalog (moved into the Worker)', () => {
     }
     expect(names.has('cv_switch_to_profile')).toBe(false);
     expect(names.has('cv_import_data')).toBe(false);
+    expect(names.has('cv_install_layout')).toBe(false); // layouts come from GitHub repos
   });
 
   it('rejects malformed args (via @cfworker/json-schema, zero-eval / Workers-safe)', () => {
@@ -82,9 +83,16 @@ describe('cv tool catalog (moved into the Worker)', () => {
       }).valid,
     ).toBe(true);
     expect(validate('cv_set_variant_settings', { variant_id: 19, settings: {} }).valid).toBe(false);
-    expect(validate('cv_install_layout', { url: 'http://x.test/a.zip' }).valid).toBe(false);
-    expect(validate('cv_install_layout', { url: 'https://x.test/a.zip' }).valid).toBe(true);
-    expect(validate('cv_check_layout', { url: 'https://x.test/a.zip' }).valid).toBe(true);
+    expect(validate('cv_check_layout', { url: 'https://x.test/a.zip' }).valid).toBe(false);
+    expect(validate('cv_check_layout', { repo: 'ada/modern', ref: 'v2' }).valid).toBe(true);
+    expect(validate('cv_link_layout_repo', { repo: 'ada/modern', track: 'nightly' }).valid).toBe(
+      false,
+    );
+    expect(
+      validate('cv_link_layout_repo', { repo: 'ada/modern', track: 'branch', branch: 'main' })
+        .valid,
+    ).toBe(true);
+    expect(validate('cv_trust_layout', { layout_id: 'u1-a', trusted: true }).valid).toBe(true);
     expect(validate('cv_review_layout', { layout_id: 'u1-a@1', decision: 'maybe' }).valid).toBe(
       false,
     );
@@ -122,6 +130,21 @@ describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
     expect(calls[0].headers.get('x-user-id')).toBe('7');
     expect(calls[0].headers.get('x-origin-secret')).toBe('test-origin-secret');
     expect(calls[0].headers.get('authorization')).toBeNull(); // the shared owner token is gone
+  });
+
+  it('cv_link_layout_repo links a new layout, or relinks one given its id', async () => {
+    await cvCtx.run({ cvUserId: 7 }, () =>
+      callTool('cv_link_layout_repo', { repo: 'ada/modern', track: 'release' }),
+    );
+    await cvCtx.run({ cvUserId: 7 }, () =>
+      callTool('cv_link_layout_repo', {
+        repo: 'ada/modern',
+        track: 'release',
+        layout_id: 'u7-modern',
+      }),
+    );
+    expect(calls[0].url).toMatch(/\/api\/layouts\/link$/);
+    expect(calls[1].url).toMatch(/\/api\/layouts\/u7-modern\/source$/);
   });
 
   it('cv_set_variant_settings PATCHes the variant settings route', async () => {
