@@ -77,3 +77,40 @@ test('refuses a branch name that would escape the URL path', () => {
   expect(() => github.assertRef('../../x')).toThrow(/not a valid/);
   expect(github.assertRef('feature/new-look')).toBe('feature/new-look');
 });
+
+describe('token health', () => {
+  afterEach(() => {
+    delete process.env.GITHUB_TOKEN;
+    gh.options.badToken = null;
+    gh.options.tokenExpiry = null;
+    github.resetTokenState();
+  });
+
+  test('unset without a token, ok with one that is far from expiry', async () => {
+    expect(github.tokenState()).toBe('unset');
+    process.env.GITHUB_TOKEN = 'good';
+    expect(github.tokenState()).toBe('unchecked');
+    gh.options.tokenExpiry = '2099-01-01 00:00:00 UTC';
+    expect(await github.checkToken()).toBe('ok');
+  });
+
+  test('expiring within a week, in either header format', async () => {
+    process.env.GITHUB_TOKEN = 'good';
+    const soon = new Date(Date.now() + 3 * 24 * 3600 * 1000);
+    const pad = (n) => String(n).padStart(2, '0');
+    const utc = `${soon.getUTCFullYear()}-${pad(soon.getUTCMonth() + 1)}-${pad(soon.getUTCDate())} 12:00:00`;
+    gh.options.tokenExpiry = `${utc} UTC`;
+    expect(await github.checkToken()).toBe('expiring');
+    github.resetTokenState();
+    gh.options.tokenExpiry = `${utc} -0700`;
+    expect(await github.checkToken()).toBe('expiring');
+  });
+
+  test('a refused token is reported and dropped, and calls carry on without it', async () => {
+    process.env.GITHUB_TOKEN = 'bad';
+    gh.options.badToken = 'bad';
+    expect(await github.getRepo('ada', 'modern')).toMatchObject({ defaultBranch: 'main' });
+    expect(github.tokenState()).toBe('invalid');
+    expect(await github.getRepo('ada', 'modern')).toMatchObject({ defaultBranch: 'main' });
+  });
+});
