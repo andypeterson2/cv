@@ -17,6 +17,8 @@ const createItemsRouter = require('./routes/items');
 const createVariantsRouter = require('./routes/variants');
 const createDataRouter = require('./routes/data');
 const { storageGuard } = require('./lib/quota');
+const { scheduleSweeps } = require('./lib/build-sweep');
+const { CV_LAYOUTS_DIR } = require('./lib/render/layouts');
 const createLayoutsRouter = require('./routes/layouts');
 const createAuthRouter = require('./routes/auth');
 const { seedBuiltinLayouts } = require('./lib/render/seed');
@@ -233,6 +235,10 @@ if (require.main === module) {
     console.log(`Project root: ${PROJECT_ROOT}`);
     console.log(`Database: ${DB_PATH}`);
     warmSeedEmbeddings();
+    scheduleSweeps({
+      buildDir: path.join(PROJECT_ROOT, 'build'),
+      zipCacheDir: path.join(CV_LAYOUTS_DIR, '.zips'),
+    });
   });
 }
 
