@@ -57,8 +57,8 @@ describe('tokenAuth', () => {
     expect(invoke(mw, 'DELETE', '/api/profiles/1', 'Bearer nope').status).toBe(401);
   });
 
-  test('public-profile allowlist: demo profile reads open, other profiles gated (model C)', () => {
-    const mw = tokenAuth('secret', { publicProfileIds: '1' });
+  test('public profile: demo profile reads open, other profiles gated (model C)', () => {
+    const mw = tokenAuth('secret', { getDb: () => ({ isPublicProfile: (id) => id === 1 }) });
     // public demo profile (1) — reads open, no token needed
     expect(invoke(mw, 'GET', '/api/profiles/1').nexted).toBe(true);
     expect(invoke(mw, 'GET', '/api/profiles/1/personal').nexted).toBe(true);
@@ -85,8 +85,9 @@ describe('tokenAuth', () => {
       };
       return (owners[kind] && owners[kind][id]) || null;
     },
+    isPublicProfile: (id) => id === 1,
   };
-  const gated = tokenAuth('secret', { publicProfileIds: '1', getDb: () => db });
+  const gated = tokenAuth('secret', { getDb: () => db });
 
   test('id-addressed resources gate by their owning profile, not just /profiles/<id>', () => {
     // The leak this fixes: /variants/:id/resolve returned a non-public profile's whole CV, ungated.

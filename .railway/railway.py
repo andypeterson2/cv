@@ -32,7 +32,6 @@ def main(_ctx=None):
             "CV_EDITOR_TOKEN": preserve(),
             "CV_ORIGIN_SECRET": preserve(),
             "CV_ORIGIN_SECRET_ENFORCE": preserve(),
-            "CV_PUBLIC_PROFILE_IDS": preserve(),
             "HOST": preserve(),
             "OWNER_EMAIL": preserve(),
         },

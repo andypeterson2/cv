@@ -8,7 +8,6 @@ const { rateLimit } = require('express-rate-limit');
 const { clientIp } = require('../lib/client-ip');
 const { queuedCompile } = require('../lib/render/latex');
 const { ownedResourceGuard } = require('../lib/owned-resource');
-const { publicProfileIdSet } = require('../lib/public-profiles');
 
 function intId(value, label = 'id') {
   const n = parseInt(value, 10);
@@ -48,8 +47,6 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   const ASSETS_DIR = path.join(projectRoot, 'assets');
 
   const guardVariant = ownedResourceGuard(getDb, 'variant', 'Variant');
-  // The main-document compile is profile-keyed, so it checks the profile itself.
-  const PUBLIC_PROFILE_IDS = publicProfileIdSet(process.env.CV_PUBLIC_PROFILE_IDS || '1');
 
   // Fetch a variant the caller may act on, or 404. `userId` comes from attachUser.
   const requireVariant = (id, userId, opts) => {
@@ -434,7 +431,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     let compileData, profile;
     try {
       profile = getDb().getProfileForUser(pid, userId);
-      if (!profile && PUBLIC_PROFILE_IDS.has(String(pid))) profile = getDb().getProfile(pid);
+      if (!profile && getDb().isPublicProfile(pid)) profile = getDb().getProfile(pid);
       if (!profile) return compileFail(res, 404, 'not_found', 'Profile not found');
       compileData = getDb().resolveMain(pid);
     } catch (e) {

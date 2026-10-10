@@ -6,7 +6,6 @@
  * cross-user id looks exactly like a missing one and leaks nothing.
  */
 const { NotFoundError } = require('./errors');
-const { publicProfileIdSet } = require('./public-profiles');
 
 /**
  * @param {Function} getDb - the CvDatabase accessor the router holds
@@ -15,13 +14,12 @@ const { publicProfileIdSet } = require('./public-profiles');
  * @returns {(id: number, userId: number|null, opts?: {write?: boolean}) => number} the owning profile id
  */
 function ownedResourceGuard(getDb, kind, label) {
-  const publicIds = publicProfileIdSet(process.env.CV_PUBLIC_PROFILE_IDS || '1');
   return (id, userId, { write = true } = {}) => {
     const db = getDb();
     const profileId = db.ownerProfileId(kind, id);
     if (profileId == null) throw new NotFoundError(`${label} not found`);
     if (db.getProfileForUser(profileId, userId)) return profileId;
-    if (!write && publicIds.has(String(profileId))) return profileId;
+    if (!write && db.isPublicProfile(profileId)) return profileId;
     throw new NotFoundError(`${label} not found`);
   };
 }

@@ -483,6 +483,11 @@ class CvDatabase {
   // placeholder sub — owner adoption rewrites the owner's sub to a real Google id, but
   // the role never changes, so these (and their caches) survive it.
   /** The account that owns the public demo — resolved once, then cached. */
+  /** True for a profile the '@system' account owns: the demo, readable by anyone. */
+  isPublicProfile(id) {
+    const owner = this.profileUserId(id);
+    return owner != null && owner === this.systemUserId();
+  }
   systemUserId() {
     return (this._systemUserId ??= this._stmts.userIdByRole.get('system')?.id ?? null);
   }

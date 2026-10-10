@@ -173,12 +173,11 @@ app.get('/api', (req, res) => {
 // Optional app-level auth on the API (defense in depth; the backend is also
 // directly reachable on its public URL, so this is the real gate). No-op unless
 // CV_EDITOR_TOKEN is set, so local dev + tests stay unauthenticated. Public demo
-// profiles (e.g. the Jane Doe seed, id 1) stay readable unauthenticated; any other
+// profiles (those the '@system' account owns, i.e. the Jane Doe seed) stay readable unauthenticated; any other
 // profile's reads + all writes + the /pdf compile require the token.
 app.use(
   '/api',
   tokenAuth(process.env.CV_EDITOR_TOKEN, {
-    publicProfileIds: process.env.CV_PUBLIC_PROFILE_IDS || '1',
     getDb,
     originSecret: process.env.CV_ORIGIN_SECRET,
   }),
