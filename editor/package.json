@@ -21,7 +21,7 @@
     "@cv/constants": "file:../shared",
     "ajv": "^8.20.0",
     "archiver": "^7.0.1",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.0",
