@@ -33,7 +33,7 @@ function combineUnits(obj) {
 function rowToSection(s) {
   return {
     id: s.id,
-    personId: s.person_id,
+    profileId: s.profile_id,
     slug: s.slug,
     type: s.type,
     title: s.title,
@@ -44,7 +44,7 @@ function rowToSection(s) {
 function rowToVariant(v) {
   return {
     id: v.id,
-    personId: v.person_id,
+    profileId: v.profile_id,
     name: v.name,
     kind: v.kind,
     created_at: v.created_at,

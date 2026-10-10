@@ -1,9 +1,9 @@
 /**
- * Version history for CvDatabase. A checkpoint captures the person's
- * authoritative export blob; restore clears the person's content and
- * re-imports the blob — keeping the person row (and its version history) intact.
- * Deleting the person instead would cascade its versions away, so restore never
- * touches the persons/versions rows, only content.
+ * Version history for CvDatabase. A checkpoint captures the profile's
+ * authoritative export blob; restore clears the profile's content and
+ * re-imports the blob — keeping the profile row (and its version history) intact.
+ * Deleting the profile instead would cascade its versions away, so restore never
+ * touches the profiles/versions rows, only content.
  *
  * Mixed onto the CvDatabase prototype; methods run with
  * `this` === the CvDatabase instance, sharing its prepared statements + db handle.
@@ -11,14 +11,14 @@
 
 class Versions {
   /**
-   * Snapshot the person's current content as a checkpoint on `branch`, descending
+   * Snapshot the profile's current content as a checkpoint on `branch`, descending
    * from `parent`. Returns the new id, or null.
    */
-  createVersion(personId, label = '', branch = 'main', parent = null) {
-    const doc = this.getPersonExport(personId);
+  createVersion(profileId, label = '', branch = 'main', parent = null) {
+    const doc = this.getProfileExport(profileId);
     if (!doc) return null;
     return this._stmts.insertVersion.run(
-      personId,
+      profileId,
       label || '',
       JSON.stringify(doc),
       Date.now(),
@@ -27,9 +27,9 @@ class Versions {
     ).lastInsertRowid;
   }
 
-  /** Checkpoints for a person, newest first — metadata only (the doc blob is omitted). */
-  listVersions(personId) {
-    return this._stmts.versionsByPerson.all(personId).map((r) => ({
+  /** Checkpoints for a profile, newest first — metadata only (the doc blob is omitted). */
+  listVersions(profileId) {
+    return this._stmts.versionsByProfile.all(profileId).map((r) => ({
       id: r.id,
       label: r.label,
       createdAt: r.created_at,
@@ -40,20 +40,20 @@ class Versions {
   }
 
   /** Set (or clear, with a falsy value) a checkpoint's frozen provenance tag. */
-  setTag(personId, versionId, tag) {
+  setTag(profileId, versionId, tag) {
     const value = tag && String(tag).trim() ? String(tag).trim() : null;
-    return this._stmts.setVersionTag.run(value, versionId, personId).changes > 0;
+    return this._stmts.setVersionTag.run(value, versionId, profileId).changes > 0;
   }
 
-  /** The stored document blob for one checkpoint (scoped to the person), or null. */
-  getVersionDoc(personId, versionId) {
-    const row = this._stmts.versionDoc.get(versionId, personId);
+  /** The stored document blob for one checkpoint (scoped to the profile), or null. */
+  getVersionDoc(profileId, versionId) {
+    const row = this._stmts.versionDoc.get(versionId, profileId);
     return row ? JSON.parse(row.doc) : null;
   }
 
-  /** One checkpoint in full — metadata + parsed doc, scoped to the person — or null. */
-  getVersion(personId, versionId) {
-    const row = this._stmts.versionFull.get(versionId, personId);
+  /** One checkpoint in full — metadata + parsed doc, scoped to the profile — or null. */
+  getVersion(profileId, versionId) {
+    const row = this._stmts.versionFull.get(versionId, profileId);
     return row
       ? {
           id: row.id,
@@ -68,34 +68,34 @@ class Versions {
   }
 
   /**
-   * Restore a checkpoint: clear the person's content, then re-import the blob — one
-   * transaction (importPersonData's own transaction nests as a savepoint). The
-   * person row and its versions survive; only the content is replaced. Returns
-   * false if the version doesn't exist for this person.
+   * Restore a checkpoint: clear the profile's content, then re-import the blob — one
+   * transaction (importProfileData's own transaction nests as a savepoint). The
+   * profile row and its versions survive; only the content is replaced. Returns
+   * false if the version doesn't exist for this profile.
    */
-  restoreVersion(personId, versionId) {
-    const doc = this.getVersionDoc(personId, versionId);
+  restoreVersion(profileId, versionId) {
+    const doc = this.getVersionDoc(profileId, versionId);
     if (!doc) return false;
     const tx = this.db.transaction(() => {
-      this._resetPersonContent(personId);
-      this.importPersonData(personId, doc);
+      this._resetProfileContent(profileId);
+      this.importProfileData(profileId, doc);
     });
     tx();
     return true;
   }
 
   /**
-   * Delete a person's content while keeping the person row. Deleting sections and
+   * Delete a profile's content while keeping the profile row. Deleting sections and
    * variants cascades to entries/items/*_tags/*_overrides and rules/sections/
    * letters/header (every child FK is ON DELETE CASCADE); the three flat
-   * per-person tables are cleared directly. persons + versions are untouched.
+   * per-profile tables are cleared directly. profiles + versions are untouched.
    */
-  _resetPersonContent(personId) {
-    this._stmts.clearSections.run(personId);
-    this._stmts.clearVariants.run(personId);
-    this._stmts.clearPersonSettings.run(personId); // personal.* + coverletter.*
-    this._stmts.clearTagAliases.run(personId);
-    this._stmts.clearTagCatalog.run(personId);
+  _resetProfileContent(profileId) {
+    this._stmts.clearSections.run(profileId);
+    this._stmts.clearVariants.run(profileId);
+    this._stmts.clearProfileSettings.run(profileId); // personal.* + coverletter.*
+    this._stmts.clearTagAliases.run(profileId);
+    this._stmts.clearTagCatalog.run(profileId);
   }
 }
 

@@ -17,8 +17,8 @@ const fuzzy = require('../fuzzy');
 const { getLatexType } = require('../latex-type-map');
 
 class VariantStore {
-  getVariants(personId) {
-    return this._stmts.getVariants.all(personId).map(rowToVariant);
+  getVariants(profileId) {
+    return this._stmts.getVariants.all(profileId).map(rowToVariant);
   }
 
   getVariant(id) {
@@ -26,9 +26,9 @@ class VariantStore {
     return v ? rowToVariant(v) : null;
   }
 
-  createVariant(personId, name, kind) {
+  createVariant(profileId, name, kind) {
     if (!KINDS.includes(kind)) throw new Error(`Invalid variant kind: ${kind}`);
-    return this._stmts.insertVariant.run(personId, name, kind).lastInsertRowid;
+    return this._stmts.insertVariant.run(profileId, name, kind).lastInsertRowid;
   }
 
   updateVariant(id, { name }) {
@@ -52,7 +52,7 @@ class VariantStore {
 
   /** Replace a variant's tag rules. Include wins if a tag appears in both. */
   setVariantRules(variantId, { include = [], exclude = [] } = {}) {
-    const pid = this._stmts.getVariant.get(variantId)?.person_id;
+    const pid = this._stmts.getVariant.get(variantId)?.profile_id;
     const canon = (t) => this._canonicalTag(pid, t);
     const tx = this.db.transaction(() => {
       this._stmts.clearVariantRules.run(variantId);
@@ -70,7 +70,7 @@ class VariantStore {
 
   /**
    * Author-time fuzzy expansion of a variant's include rules. For each current
-   * include tag, fuzzy-match the person's vocabulary and ADD every tag scoring
+   * include tag, fuzzy-match the profile's vocabulary and ADD every tag scoring
    * >= threshold to the include set, writing the concrete expanded list back.
    *
    * This is the only bridge between fuzzy matching and what a variant renders —
@@ -80,7 +80,7 @@ class VariantStore {
    * @returns {before, after, added:[{tag, from, score, via}]}
    */
   expandVariantRules(variantId, { threshold = 0.6, limit = 25 } = {}) {
-    const pid = this._stmts.getVariant.get(variantId)?.person_id;
+    const pid = this._stmts.getVariant.get(variantId)?.profile_id;
     const rules = this.getVariantRules(variantId);
     const before = [...rules.include];
     const have = new Set(before);
@@ -266,7 +266,7 @@ class VariantStore {
 
   /**
    * Upsert overrides from a flat map of unprefixed keys. A null value drops the
-   * override, so the field inherits the person value again.
+   * override, so the field inherits the profile value again.
    */
   setVariantPersonal(variantId, fields) {
     const tx = this.db.transaction(() => {
@@ -325,7 +325,7 @@ class VariantStore {
   }
 
   /**
-   * Style/spacing/fonts for a document, read from the account that owns the person it
+   * Style/spacing/fonts for a document, read from the account that owns the profile it
    * belongs to, with the variant's own overrides on top. The result depends on the
    * document alone, so every reader sees the same thing and the public demo renders
    * identically for all of them. Keys set nowhere are filled from the defaults by the
@@ -351,12 +351,12 @@ class VariantStore {
     return this.db.transaction(() => {
       const v = this._stmts.getVariant.get(variantId);
       if (!v) throw new Error('Variant not found');
-      const personId = v.person_id;
-      // Variant overrides win over the person's personal.* fields, so a variant
+      const profileId = v.profile_id;
+      // Variant overrides win over the profile's personal.* fields, so a variant
       // can carry its own tagline.
-      const personal = { ...this.getPersonal(personId), ...this.getVariantPersonal(variantId) };
+      const personal = { ...this.getPersonal(profileId), ...this.getVariantPersonal(variantId) };
       const { style, spacing, fonts } = this._renderSettings(
-        this.personUserId(personId),
+        this.profileUserId(profileId),
         variantId,
       );
 
@@ -391,7 +391,7 @@ class VariantStore {
           .sort((a, b) => a.sortOrder - b.sortOrder)
           .map((r) => r.sectionId);
       } else {
-        sectionRefs = this.getSections(personId).map((s) => s.id);
+        sectionRefs = this.getSections(profileId).map((s) => s.id);
       }
 
       const sections = [];
@@ -451,15 +451,15 @@ class VariantStore {
    * no include/exclude rules and no per-entry/item overrides. Backs the base-compile
    * route so an owner can preview the whole CV as well as a named variant.
    */
-  resolveMain(personId) {
+  resolveMain(profileId) {
     return this.db.transaction(() => {
-      const person = this.getPerson(personId);
-      if (!person) throw new Error('Person not found');
-      const personal = this.getPersonal(personId);
-      const { style, spacing, fonts } = this._renderSettings(this.personUserId(personId));
+      const profile = this.getProfile(profileId);
+      if (!profile) throw new Error('Profile not found');
+      const personal = this.getPersonal(profileId);
+      const { style, spacing, fonts } = this._renderSettings(this.profileUserId(profileId));
 
       const sections = [];
-      for (const s of this.getSections(personId)) {
+      for (const s of this.getSections(profileId)) {
         const section = this.getSection(s.id);
         if (!section) continue;
 

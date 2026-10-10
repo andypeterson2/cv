@@ -47,7 +47,7 @@ beforeAll(async () => {
   db.clearAllContent();
   seedBuiltinLayouts(db);
   app.setDb(db);
-  pid = db.createPerson('Test');
+  pid = db.createProfile('Test');
   await new Promise((resolve) => {
     server = app.listen(0, () => {
       port = server.address().port;

@@ -1,5 +1,5 @@
 /**
- * The ownership layer under `persons`: these pin per-user isolation at the data
+ * The ownership layer under `profiles`: these pin per-user isolation at the data
  * layer, which is the property the whole feature rests on.
  */
 const CvDatabase = require('../../lib/db');
@@ -24,44 +24,51 @@ describe('multi-tenancy — accounts + backfill', () => {
   });
 
   test('the seeded demo (Jane Doe) belongs to @system, not the owner', () => {
-    const jane = db.getPersons().find((p) => p.name === 'Jane Doe');
+    const jane = db.getProfiles().find((p) => p.name === 'Jane Doe');
     expect(jane).toBeTruthy();
-    expect(db.personUserId(jane.id)).toBe(db.systemUserId());
+    expect(db.profileUserId(jane.id)).toBe(db.systemUserId());
   });
 
-  test('createPerson defaults ownership to the owner account', () => {
-    const pid = db.createPerson('My CV');
-    expect(db.personUserId(pid)).toBe(db.ownerUserId());
+  test('createProfile defaults ownership to the owner account', () => {
+    const pid = db.createProfile('My CV');
+    expect(db.profileUserId(pid)).toBe(db.ownerUserId());
+  });
+
+  test('only profiles the @system account owns are public', () => {
+    const jane = db.getProfiles().find((p) => p.name === 'Jane Doe');
+    expect(db.isPublicProfile(jane.id)).toBe(true);
+    expect(db.isPublicProfile(db.createProfile('My CV'))).toBe(false);
+    expect(db.isPublicProfile(999999)).toBe(false);
   });
 });
 
 describe('multi-tenancy — per-user isolation', () => {
-  test('a user only sees, reads, renames, and deletes their own persons', () => {
+  test('a user only sees, reads, renames, and deletes their own profiles', () => {
     const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com', name: 'A' });
     const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com', name: 'B' });
-    const pa = db.createPerson('A resume', a);
-    const pb = db.createPerson('B resume', b);
+    const pa = db.createProfile('A resume', a);
+    const pb = db.createProfile('B resume', b);
 
     // List scoping — each user sees only their own.
-    expect(db.getPersonsForUser(a).map((p) => p.id)).toEqual([pa]);
-    expect(db.getPersonsForUser(b).map((p) => p.id)).toEqual([pb]);
+    expect(db.getProfilesForUser(a).map((p) => p.id)).toEqual([pa]);
+    expect(db.getProfilesForUser(b).map((p) => p.id)).toEqual([pb]);
 
     // Cross-user reads return null, so nothing leaks about what exists.
-    expect(db.getPersonForUser(pb, a)).toBeNull();
+    expect(db.getProfileForUser(pb, a)).toBeNull();
     expect(db.getMainForUser(pb, a)).toBeNull();
     expect(db.getMainForUser(pb, b)).toBeTruthy();
-    expect(db.personUserId(pb)).toBe(b);
+    expect(db.profileUserId(pb)).toBe(b);
 
     // Cross-user writes no-op; the owner's writes take effect.
-    expect(db.renamePersonForUser(pb, 'hijacked', a)).toBe(false);
-    expect(db.renamePersonForUser(pb, 'renamed', b)).toBe(true);
-    expect(db.getPersonForUser(pb, b).name).toBe('renamed');
+    expect(db.renameProfileForUser(pb, 'hijacked', a)).toBe(false);
+    expect(db.renameProfileForUser(pb, 'renamed', b)).toBe(true);
+    expect(db.getProfileForUser(pb, b).name).toBe('renamed');
 
-    // A stranger's delete no-ops; the owner's removes the person.
-    expect(db.deletePersonForUser(pb, a)).toBe(false);
-    expect(db.getPersonForUser(pb, b)).toBeTruthy();
-    expect(db.deletePersonForUser(pb, b)).toBe(true);
-    expect(db.getPersonForUser(pb, b)).toBeNull();
+    // A stranger's delete no-ops; the owner's removes the profile.
+    expect(db.deleteProfileForUser(pb, a)).toBe(false);
+    expect(db.getProfileForUser(pb, b)).toBeTruthy();
+    expect(db.deleteProfileForUser(pb, b)).toBe(true);
+    expect(db.getProfileForUser(pb, b)).toBeNull();
   });
 
   test('upsertUser creates a row, then updates the profile for the same google_sub', () => {
@@ -122,7 +129,7 @@ describe('multi-tenancy — owner adoption', () => {
   test('first sign-in matching OWNER_EMAIL adopts the @owner account AND its résumés', () => {
     process.env.OWNER_EMAIL = 'me@example.com';
     const ownerId = db.ownerUserId();
-    const mine = db.createPerson('My real CV'); // defaults to the owner account
+    const mine = db.createProfile('My real CV'); // defaults to the owner account
     expect(db.getUser(ownerId).google_sub).toBe('@owner');
 
     const uid = db.upsertUser({
@@ -134,9 +141,9 @@ describe('multi-tenancy — owner adoption', () => {
     expect(db.getUser(ownerId).google_sub).toBe('google-real-123'); // relinked to Google
     expect(db.getUser(ownerId).name).toBe('Me');
     // The pre-existing résumé is still theirs, and the role-based lookup still resolves.
-    expect(db.personUserId(mine)).toBe(ownerId);
+    expect(db.profileUserId(mine)).toBe(ownerId);
     expect(db.ownerUserId()).toBe(ownerId);
-    expect(db.getPersonsForUser(uid).map((p) => p.id)).toContain(mine);
+    expect(db.getProfilesForUser(uid).map((p) => p.id)).toContain(mine);
   });
 
   test('a second owner sign-in is a normal profile update, not a new account', () => {
@@ -169,7 +176,7 @@ describe('multi-tenancy — owner adoption', () => {
 
   test('late adoption: an owner who signed in BEFORE OWNER_EMAIL was set is folded in on re-login', () => {
     const ownerId = db.ownerUserId();
-    const pre = db.createPerson('My real CV'); // owner's pre-existing résumé
+    const pre = db.createProfile('My real CV'); // owner's pre-existing résumé
 
     // 1. Owner signs in while OWNER_EMAIL is unset → a stray ordinary account, no adoption.
     delete process.env.OWNER_EMAIL;
@@ -179,7 +186,7 @@ describe('multi-tenancy — owner adoption', () => {
       name: 'Me',
     });
     expect(strayId).not.toBe(ownerId);
-    const theirs = db.createPerson('Draft made on the stray account', strayId);
+    const theirs = db.createProfile('Draft made on the stray account', strayId);
     expect(db.getUser(ownerId).google_sub).toBe('@owner'); // placeholder still unclaimed
 
     // 2. OWNER_EMAIL gets configured; the same Google account signs in again.
@@ -195,7 +202,7 @@ describe('multi-tenancy — owner adoption', () => {
     expect(db.getUser(ownerId).google_sub).toBe('google-real-123');
     expect(db.getUserByGoogleSub('google-real-123').id).toBe(ownerId); // later logins hit the owner
     expect(db.getUser(strayId)).toBeNull(); // stray account gone
-    const mine = db.getPersonsForUser(ownerId).map((p) => p.id);
+    const mine = db.getProfilesForUser(ownerId).map((p) => p.id);
     expect(mine).toContain(pre); // the pre-existing owner résumé
     expect(mine).toContain(theirs); // and anything made under the stray account
     expect(db.ownerUserId()).toBe(ownerId);
@@ -230,22 +237,22 @@ describe('per-user résumé-name uniqueness (migration 020)', () => {
   test('two accounts can share a résumé name; one account still cannot duplicate its own', () => {
     const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com', name: 'A' });
     const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com', name: 'B' });
-    const pa = db.createPerson('Resume', a);
-    const pb = db.createPerson('Resume', b); // same name, different account → allowed now (was a global-UNIQUE conflict)
+    const pa = db.createProfile('Resume', a);
+    const pb = db.createProfile('Resume', b); // same name, different account → allowed now (was a global-UNIQUE conflict)
     expect(pa).not.toBe(pb);
-    expect(db.getPersonForUser(pa, a).name).toBe('Resume');
-    expect(db.getPersonForUser(pb, b).name).toBe('Resume');
-    expect(() => db.createPerson('Resume', a)).toThrow(/UNIQUE/); // same account → still rejected (app maps this to a 409)
+    expect(db.getProfileForUser(pa, a).name).toBe('Resume');
+    expect(db.getProfileForUser(pb, b).name).toBe('Resume');
+    expect(() => db.createProfile('Resume', a)).toThrow(/UNIQUE/); // same account → still rejected (app maps this to a 409)
   });
 
-  test('the rebuild preserves persons + ids and keeps child FKs bound', () => {
+  test('the rebuild preserves profiles + ids and keeps child FKs bound', () => {
     const Database = require('better-sqlite3');
     const fs = require('fs');
     const path = require('path');
     const dir = path.join(__dirname, '../../migrations');
     const raw = new Database(':memory:');
     raw.pragma('foreign_keys = ON');
-    // Apply every migration before 020, so persons still has the OLD global UNIQUE(name).
+    // Apply every migration before 020, so profiles still has the OLD global UNIQUE(name).
     raw.exec(
       `CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT (datetime('now')))`,
     );
@@ -258,7 +265,7 @@ describe('per-user résumé-name uniqueness (migration 020)', () => {
       else require(path.join(dir, f))(raw);
       raw.prepare('INSERT INTO _migrations (name) VALUES (?)').run(f);
     }
-    // Seed two accounts, two persons, and a child section under the first person.
+    // Seed two accounts, two profiles, and a child section under the first profile.
     raw
       .prepare(
         "INSERT INTO users (google_sub, email, name, role) VALUES ('u1','1',NULL,'user'),('u2','2',NULL,'user')",
@@ -275,7 +282,7 @@ describe('per-user résumé-name uniqueness (migration 020)', () => {
 
     require('../../migrations/020_persons_per_user_unique')(raw);
 
-    // Rows, ids, and columns survive; the child still points at its person; no dangling FKs.
+    // Rows, ids, and columns survive; the child still points at its profile; no dangling FKs.
     expect(raw.prepare('SELECT COUNT(*) AS n FROM persons').get().n).toBe(2);
     expect(raw.prepare('SELECT name, user_id FROM persons WHERE id = ?').get(pAlpha)).toEqual({
       name: 'Alpha',
@@ -323,7 +330,7 @@ describe('per-user settings (migration 023)', () => {
 
   test('an account with no rows resolves a document to the style defaults', () => {
     const a = db.upsertUser({ googleSub: 'sub-a', email: 'a@x.com' });
-    const pid = db.createPerson('Theirs', a);
+    const pid = db.createProfile('Theirs', a);
     db.createSection(pid, 'exp', 'experience', 'Experience');
     expect(db.resolveMain(pid).style).toEqual({});
   });
@@ -333,7 +340,7 @@ describe('per-user settings (migration 023)', () => {
     const b = db.upsertUser({ googleSub: 'sub-b', email: 'b@x.com' });
     db.setSettings({ 'style.accentColor': 'awesome-red' }, a);
     db.setSettings({ 'style.accentColor': 'awesome-pink' }, b);
-    const pid = db.createPerson('Theirs', a);
+    const pid = db.createProfile('Theirs', a);
     const sid = db.createSection(pid, 'exp', 'experience', 'Experience');
     db.createEntry(sid, { title: 'T' });
     expect(db.resolveMain(pid).style.accentColor).toBe('awesome-red');
@@ -455,7 +462,7 @@ describe('per-user layouts (migration 024)', () => {
 
     require('../../migrations/024_layouts_per_user')(raw);
 
-    // The layout belongs to the owner after the backfill; the variant's person does not.
+    // The layout belongs to the owner after the backfill; the variant's profile does not.
     expect(raw.prepare("SELECT user_id FROM layouts WHERE id='shared'").get().user_id).toBe(
       ownerId,
     );

@@ -15,7 +15,7 @@ let variantId;
 beforeEach(() => {
   db = new CvDatabase(':memory:');
   db.clearAllContent(); // drop seeded Jane Doe → blank slate
-  pid = db.createPerson('Test Person');
+  pid = db.createProfile('Test Profile');
   const sec = db.createSection(pid, 'experience', 'experience', 'Experience');
   entryA = db.createEntry(sec, {
     position: 'Engineer',
@@ -77,7 +77,7 @@ test('marking a subset stamps only those; the rest stay new', () => {
   expect(by[entryB]).toBe('new');
 });
 
-test('linkedinPersonForVariant resolves the owner', () => {
-  expect(db.linkedinPersonForVariant(variantId)).toBe(pid);
-  expect(db.linkedinPersonForVariant(999999)).toBe(null);
+test('linkedinProfileForVariant resolves the owner', () => {
+  expect(db.linkedinProfileForVariant(variantId)).toBe(pid);
+  expect(db.linkedinProfileForVariant(999999)).toBe(null);
 });

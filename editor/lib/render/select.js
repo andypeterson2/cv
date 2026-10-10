@@ -16,7 +16,7 @@ const { DEFAULT_LAYOUT_ID, builtinLayoutDir, layoutDirForRow } = require('./layo
 /**
  * @param {object} db - CvDatabase instance
  * @param {object} variant - a variant row (with .layoutId, .kind)
- * @param {number|null} userId - the account that owns the variant's person
+ * @param {number|null} userId - the account that owns the variant's profile
  * @returns {{ id: string, dir: string, fallback: boolean }}
  */
 function selectLayout(db, variant, userId = null) {

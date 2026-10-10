@@ -11,8 +11,8 @@ let pid;
 beforeEach(() => {
   db = new CvDatabase(':memory:');
   db.clearAllContent();
-  pid = db.createPerson('Test Person');
-  db.setPersonal(pid, { firstName: 'Test', lastName: 'Person', position: 'Person Tagline' });
+  pid = db.createProfile('Test Profile');
+  db.setPersonal(pid, { firstName: 'Test', lastName: 'Profile', position: 'Profile Tagline' });
 });
 
 afterEach(() => {
@@ -54,12 +54,12 @@ describe('variant personal overrides — storage', () => {
 });
 
 describe('variant personal overrides — resolveVariant merge', () => {
-  test('no override inherits the person value', () => {
+  test('no override inherits the profile value', () => {
     const v = db.createVariant(pid, 'CV', 'cv');
-    expect(db.resolveVariant(v).personal.position).toBe('Person Tagline');
+    expect(db.resolveVariant(v).personal.position).toBe('Profile Tagline');
   });
 
-  test('an override wins over the person value', () => {
+  test('an override wins over the profile value', () => {
     const v = db.createVariant(pid, 'CV', 'cv');
     db.setVariantPersonal(v, { position: 'Variant Tagline' });
     expect(db.resolveVariant(v).personal.position).toBe('Variant Tagline');
@@ -71,7 +71,7 @@ describe('variant personal overrides — resolveVariant merge', () => {
     expect(db.resolveVariant(v).personal.position).toBe('');
   });
 
-  test('unrelated personal fields still come from the person', () => {
+  test('unrelated personal fields still come from the profile', () => {
     const v = db.createVariant(pid, 'CV', 'cv');
     db.setVariantPersonal(v, { position: 'Variant Tagline' });
     expect(db.resolveVariant(v).personal.firstName).toBe('Test');
@@ -83,10 +83,10 @@ describe('variant personal overrides — resolveVariant merge', () => {
     expect(db.resolveVariant(v).personal.position).toBe('Letter Tagline');
   });
 
-  test('resolveMain keeps the person value — it has no variant lens', () => {
+  test('resolveMain keeps the profile value — it has no variant lens', () => {
     const v = db.createVariant(pid, 'CV', 'cv');
     db.setVariantPersonal(v, { position: 'Variant Tagline' });
-    expect(db.resolveMain(pid).personal.position).toBe('Person Tagline');
+    expect(db.resolveMain(pid).personal.position).toBe('Profile Tagline');
   });
 });
 
@@ -95,19 +95,19 @@ describe('variant personal overrides — export / import', () => {
     const a = db.createVariant(pid, 'A', 'cv');
     db.createVariant(pid, 'B', 'resume');
     db.setVariantPersonal(a, { position: 'A Tagline' });
-    const exported = db.getPersonExport(pid);
+    const exported = db.getProfileExport(pid);
     const byName = Object.fromEntries(exported.variants.map((v) => [v.name, v.personal]));
     expect(byName.A).toEqual({ position: 'A Tagline' });
     expect(byName.B).toEqual({});
   });
 
-  test('import restores the overrides on the new person', () => {
+  test('import restores the overrides on the new profile', () => {
     const a = db.createVariant(pid, 'A', 'cv');
     db.setVariantPersonal(a, { position: 'A Tagline', quote: '' });
-    const exported = db.getPersonExport(pid);
+    const exported = db.getProfileExport(pid);
 
-    const pid2 = db.createPerson('Imported');
-    db.importPersonData(pid2, exported);
+    const pid2 = db.createProfile('Imported');
+    db.importProfileData(pid2, exported);
     const v2 = db.getVariants(pid2).find((v) => v.name === 'A');
     expect(db.getVariantPersonal(v2.id)).toEqual({ position: 'A Tagline', quote: '' });
     expect(db.resolveVariant(v2.id).personal.position).toBe('A Tagline');

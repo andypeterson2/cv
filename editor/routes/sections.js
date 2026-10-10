@@ -13,8 +13,8 @@ function intId(value) {
 module.exports = function createSectionsRouter(getDb) {
   const router = express.Router();
 
-  // Ownership gate: writes need the caller to own the section's person, reads also
-  // pass for a public person. `userId` comes from attachUser (req.userId).
+  // Ownership gate: writes need the caller to own the section's profile, reads also
+  // pass for a public profile. `userId` comes from attachUser (req.userId).
   const requireSection = ownedResourceGuard(getDb, 'section', 'Section');
 
   router.get(
