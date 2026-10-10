@@ -62,11 +62,11 @@ class TestRateLimitEnvelope:
     """Kept last: it spends the upload limiter's window for this process."""
 
     def test_error_envelope_on_rate_limit(self):
-        # The limiter answers before multer, so a bodyless POST is enough to reach it.
+        # The limiter answers before the handler, so an empty check is enough to reach it.
         limit = 5  # CV_UPLOAD_RATE_MAX default
-        statuses = [http_post(BASE, "/api/layouts")[0] for _ in range(limit + 2)]
+        statuses = [http_post(BASE, "/api/layouts/check", {})[0] for _ in range(limit + 2)]
         assert 429 in statuses, f"expected the upload limiter to fire, saw {statuses}"
-        body = next(b for st, b in (http_post(BASE, "/api/layouts"),) if st == 429)
+        body = next(b for st, b in (http_post(BASE, "/api/layouts/check", {}),) if st == 429)
         assert_matches("error", body)
         assert body["error"]["code"] == "rate_limited"
 

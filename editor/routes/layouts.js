@@ -1,8 +1,6 @@
 const express = require('express');
-const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const multer = require('multer');
 const { rateLimit } = require('express-rate-limit');
 const { clientIp } = require('../lib/client-ip');
 const { AppError, NotFoundError } = require('../lib/errors');
@@ -12,19 +10,11 @@ const {
   gatherSamples,
   publicReport,
   slowestCompile,
-  summarizeReport,
 } = require('../lib/render/verify');
-const { readBundle, zipBundle, forgetZip, dirBytes } = require('../lib/render/bundle');
+const { zipBundle, forgetZip, dirBytes } = require('../lib/render/bundle');
 const { assertBelow, assertLayoutBytes } = require('../lib/quota');
-const { downloadZip } = require('../lib/fetch-zip');
 const { pinCheck } = require('../lib/render/pin-check');
-const {
-  approvalProblems,
-  installRoot,
-  checkRepo,
-  linkSource,
-  syncNow,
-} = require('../lib/layout-sync');
+const { approvalProblems, checkRepo, linkSource, syncNow } = require('../lib/layout-sync');
 const { bundleChecksum } = require('../lib/render/seed');
 const { uploadedLayoutDir, layoutDirForRow, DEFAULT_LAYOUT_ID } = require('../lib/render/layouts');
 
@@ -81,8 +71,9 @@ function upsertFromManifest(db, manifest, { id, status, source, checksum, report
 }
 
 /**
- * Layouts API: upload (gated by the verification harness), on-demand re-verify,
- * and delete, plus list / get / default selection.
+ * Layouts API: link public GitHub repositories (verified before anything is
+ * installed), sync, publish, review, re-verify and delete, plus list / get /
+ * default selection.
  *
  * Every route is scoped to `req.userId`. An account sees the builtins plus its own
  * uploads, and an id belonging to someone else reads as missing.
@@ -91,7 +82,6 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
   const router = express.Router();
   const ASSETS_DIR = path.join(projectRoot, 'assets');
 
-  const upload = multer({ dest: os.tmpdir(), limits: { fileSize: 25 * 1024 * 1024, files: 1 } });
   const uploadRateLimit = rateLimit({
     windowMs: 60 * 1000,
     max: Number(process.env.CV_UPLOAD_RATE_MAX) || 5,
@@ -174,65 +164,12 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
     }),
   );
 
-  /**
-   * Verify the zip at `zipPath` as the caller's layout and, unless `dryRun`, install
-   * it. Returns the HTTP status and body; nothing is installed unless verification
-   * passes. `missing` lists what to fix, in plain sentences.
-   */
-  async function checkOrInstall(zipPath, userId, { dryRun }) {
-    const { work, root, manifest } = await readBundle(zipPath, getDb());
-    try {
-      const report = await verifyLayout(root, {
-        assetsDir: ASSETS_DIR,
-        samples: gatherSamples(getDb(), { userId }),
-        compileKey: userId,
-      });
-      const missing = summarizeReport(report, manifest);
-      if (dryRun) return { status: 200, body: { ok: report.ok, missing, report } };
-      if (!report.ok) {
-        return {
-          status: 422,
-          body: {
-            error: {
-              code: 'verification_failed',
-              message: 'Layout failed verification',
-              details: report,
-            },
-            missing,
-          },
-        };
-      }
-      const row = installRoot(getDb(), { root, manifest, userId, report });
-      return {
-        status: 201,
-        body: { success: true, layout: present(row, userId, getDb()), report, missing },
-      };
-    } finally {
-      fs.rmSync(work, { recursive: true, force: true });
-    }
-  }
-
-  const fromUpload = (dryRun) =>
-    wrap(async (req, res) => {
-      if (!req.file) throw new AppError('Expected a .zip bundle in form field "bundle"', 400);
-      try {
-        const { status, body } = await checkOrInstall(req.file.path, req.userId, { dryRun });
-        res.status(status).json(body);
-      } finally {
-        fs.rmSync(req.file.path, { force: true });
-      }
-    });
-
-  // Upload a .zip bundle → extract (zip-slip-safe) → verify → install or reject.
-  router.post('/', uploadRateLimit, upload.single('bundle'), fromUpload(false));
-
-  // The same verification without installing: what the bundle is missing. A JSON
-  // body checks a GitHub repo at a branch, tag or commit; multipart checks a zip.
+  // Verify a layout in a public GitHub repo at a branch, tag or commit without
+  // installing it: what it is missing, in plain sentences.
   router.post(
     '/check',
     uploadRateLimit,
-    wrap(async (req, res, next) => {
-      if (!req.is('application/json')) return next();
+    wrap(async (req, res) => {
       const b = req.body || {};
       if (typeof b.repo !== 'string' || !b.repo) throw new AppError('repo is required', 400);
       const result = await checkRepo(
@@ -242,28 +179,6 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         { assetsDir: ASSETS_DIR },
       );
       res.json(result);
-    }),
-    upload.single('bundle'),
-    fromUpload(true),
-  );
-
-  // Check or install a zip the server fetches from an https URL (for the MCP
-  // connector, which cannot send a file).
-  router.post(
-    '/from-url',
-    uploadRateLimit,
-    wrap(async (req, res) => {
-      const url = req.body && req.body.url;
-      if (typeof url !== 'string' || !url) throw new AppError('url is required', 400);
-      const dryRun = Boolean(req.body.dryRun);
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-url-'));
-      try {
-        const file = await downloadZip(url, path.join(dir, 'bundle.zip'));
-        const { status, body } = await checkOrInstall(file, req.userId, { dryRun });
-        res.status(status).json(body);
-      } finally {
-        fs.rmSync(dir, { recursive: true, force: true });
-      }
     }),
   );
 
@@ -459,6 +374,11 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       const layout = getDb().getLayout(req.params.id, req.userId);
       if (!layout || layout.userId !== req.userId) throw new NotFoundError('Layout not found');
       if (layout.versionNo != null) throw new AppError('Publish the upload, not a version', 409);
+      if (!getDb().getLayoutSource(layout.family))
+        throw new AppError(
+          'Link this layout to a public GitHub repository before publishing it',
+          409,
+        );
       if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
       assertBelow(getDb(), req.userId, 'layout');
       assertBelow(getDb(), req.userId, 'pending');
