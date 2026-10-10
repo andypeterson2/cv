@@ -79,6 +79,7 @@ class ImportExport {
         personal: this.getVariantPersonal(v.id),
         // style/spacing/fonts overrides, keyed prefixed; {} when the variant has none
         settings: this.getVariantSettings(v.id),
+        layout: this._exportedLayout(v.layoutId),
         letterSections:
           v.kind === 'coverletter'
             ? this.getLetterSections(v.id).map((s) => ({ title: s.title, body: s.body }))
@@ -95,6 +96,23 @@ class ImportExport {
       tagAliases: this.getTagAliases(profileId),
       tagCatalog: this.getTagCatalog(profileId),
     };
+  }
+
+  /** A variant's layout pin as exported: enough to find the same version again. */
+  _exportedLayout(layoutId) {
+    if (!layoutId) return null;
+    const l = this.getLayoutUnscoped(layoutId);
+    return l ? { id: l.id, family: l.family, versionNo: l.versionNo } : null;
+  }
+
+  /**
+   * Re-pin an imported variant when the importing account can still compile that
+   * layout (a builtin, its own, or a public or unlisted version); otherwise the
+   * variant uses the default.
+   */
+  _importLayoutPin(profileId, variantId, layoutId) {
+    const layout = this.getLayout(layoutId, this.profileUserId(profileId));
+    if (layout && layout.status === 'active') this.setVariantLayout(variantId, layoutId);
   }
 
   _slugForSection(sectionId) {
@@ -174,6 +192,7 @@ class ImportExport {
           this.setVariantPersonal(variantId, v.personal);
         if (v.settings && Object.keys(v.settings).length)
           this.setVariantSettings(variantId, v.settings);
+        if (v.layout && v.layout.id) this._importLayoutPin(profileId, variantId, v.layout.id);
         for (const s of v.letterSections || [])
           this.createLetterSection(variantId, s.title || '', s.body || '');
         // per-variant header; older exports carried it once at the top level (data.coverletter)
