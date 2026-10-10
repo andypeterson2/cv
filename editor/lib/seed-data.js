@@ -74,6 +74,15 @@ const JANE_DOE_DATA = {
               resumeIncluded: true,
               title: 'Team mentoring',
             },
+            {
+              id: 6,
+              entry_id: 2,
+              sort_order: 2,
+              content:
+                'Shipped in-app chat and last-mile delivery tracking for a nationally recognized grocery client, holding a 4.9-star rating and 99.9\\% on-time updates',
+              resumeIncluded: true,
+              title: 'Delivery tracking',
+            },
           ],
         },
         {
@@ -104,6 +113,15 @@ const JANE_DOE_DATA = {
                 'Developed automated testing pipeline reducing QA cycle from 2 weeks to 3 days',
               resumeIncluded: true,
               title: 'Testing pipeline',
+            },
+            {
+              id: 7,
+              entry_id: 3,
+              sort_order: 2,
+              content:
+                'Rescheduled nightly batch jobs and wrote troubleshooting runbooks, cutting p95 latency from 800 ms → 120 ms (≈ 6× faster) and saving £40k a year',
+              resumeIncluded: true,
+              title: 'Batch performance',
             },
           ],
         },
@@ -167,6 +185,47 @@ const JANE_DOE_DATA = {
           fields: { category: 'Tools', skills: 'Docker, Kubernetes, Git, CI/CD, AWS' },
           items: [],
         },
+        {
+          id: 9,
+          section_id: 'skills',
+          sort_order: 3,
+          resumeIncluded: true,
+          fields: {
+            category: 'Theory',
+            skills: 'Algorithms, set notation (∈, ∪, ∩), λ-calculus, 360° code review',
+          },
+          items: [],
+        },
+      ],
+    },
+    {
+      id: 'leadership',
+      type: 'leadership',
+      title: 'Leadership',
+      entries: [
+        {
+          id: 8,
+          section_id: 'leadership',
+          sort_order: 0,
+          resumeIncluded: true,
+          fields: {
+            position: 'President',
+            organization: 'Women in Computing',
+            location: 'Anytown, ST',
+            date: '2017 -- 2019',
+          },
+          items: [
+            {
+              id: 8,
+              entry_id: 8,
+              sort_order: 0,
+              content:
+                'Grew the club’s membership to 200 and ran 12 hackathons with ≥ 90\\% attendance',
+              resumeIncluded: true,
+              title: 'Club growth',
+            },
+          ],
+        },
       ],
     },
   ],
@@ -176,6 +235,7 @@ const JANE_DOE_DATA = {
       { sectionId: 'experience', enabled: true, sortOrder: 1, resumeParagraphText: null },
       { sectionId: 'education', enabled: true, sortOrder: 2, resumeParagraphText: null },
       { sectionId: 'skills', enabled: true, sortOrder: 3, resumeParagraphText: null },
+      { sectionId: 'leadership', enabled: true, sortOrder: 4, resumeParagraphText: null },
     ],
     resume: [
       {
@@ -209,6 +269,12 @@ const JANE_DOE_DATA = {
         sort_order: 1,
         title: 'Experience',
         body: 'In my current role at Acme Technologies, I have led the migration of a monolithic application to a microservices architecture, resulting in significant improvements in deployment speed and system reliability.',
+      },
+      {
+        id: 3,
+        sort_order: 2,
+        title: 'Availability',
+        body: 'I am available for full-time, on-site work and can start within two weeks; my last team went from weekly → daily releases.',
       },
     ],
   },

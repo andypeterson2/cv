@@ -27,6 +27,9 @@ const { renderVariantIsolated } = require('./host');
 const { queuedCompile } = require('./latex');
 const { CONTEXT_VERSION } = require('./context');
 const { makeKitchenSink } = require('./fixtures/kitchen-sink');
+const { buildContext } = require('./context');
+const { extractText, checkText } = require('./text-check');
+const { SYMBOLS } = require('../symbols');
 
 const SCANNABLE = /\.(tex|cls|sty|fd|njk)$/i;
 
@@ -153,6 +156,17 @@ function staticChecks(bundleDir) {
 
 // dynamic checks
 
+// Kitchen sink plus short bullets that between them hold every palette symbol.
+function symbolSink() {
+  const data = makeKitchenSink({ variant: 'cv' });
+  const glyphs = [...new Set(SYMBOLS.map((x) => x.glyph))];
+  for (let i = 0; i < glyphs.length; i += 8) {
+    const row = glyphs.slice(i, i + 8).join(' ');
+    data.sections[0].entries[0].items.push({ content: `Symbol row ${i / 8 + 1}: ${row}` });
+  }
+  return data;
+}
+
 function fixtureSamples() {
   return [
     { label: 'fixture:cv', data: makeKitchenSink({ variant: 'cv' }) },
@@ -165,22 +179,57 @@ function fixtureSamples() {
         style: { fontFamily: 'roboto', accentColor: 'custom', customHex: '#3366CC' },
       }),
     },
-  ];
+    {
+      label: 'fixture:plain-alt',
+      data: makeKitchenSink({ variant: 'cv', style: { headerAltText: 'plain' } }),
+    },
+    { label: 'fixture:symbols', data: symbolSink() },
+    {
+      label: 'fixture:symbols-roboto',
+      data: Object.assign(symbolSink(), { style: { fontFamily: 'roboto' } }),
+    },
+  ].map((sample) => ({ ...sample, textCheck: true }));
 }
 
 function tailLog(log) {
   return (log || '').split('\n').slice(-25).join('\n');
 }
 
-async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir }) {
+/**
+ * Compare the PDF's extractable text with the sample's source text, and flag
+ * characters the font could not draw (they would print as nothing).
+ */
+async function textCheck(sample, result, extract) {
+  const name = `text:${sample.label}`;
+  const text = result.pdfPath ? await extract(result.pdfPath) : null;
+  if (text == null) return { name, ok: true, detail: 'skipped (no pdftotext)', skipped: true };
+  const ctx = buildContext(sample.data);
+  const { issues } = checkText(ctx, text, { allowLabels: ctx.style.headerAltText !== 'plain' });
+  for (const m of new Set((result.log || '').match(/Missing character: There is no \S+/g) || [])) {
+    issues.unshift({ rule: 'missing-glyph', sample: m.split(' ').pop() });
+  }
+  if (issues.length === 0) return { name, ok: true, detail: 'extracted text matches source' };
+  return {
+    name,
+    ok: false,
+    detail: issues
+      .slice(0, 12)
+      .map((i) => `${i.rule}: ${i.sample}`)
+      .join('; '),
+  };
+}
+
+async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir, extract }) {
   const name = `compile:${sample.label}`;
   if (Array.isArray(manifest.kinds) && !manifest.kinds.includes(sample.data.variant)) {
-    return {
-      name,
-      ok: true,
-      detail: `skipped (kind ${sample.data.variant} unsupported)`,
-      skipped: true,
-    };
+    return [
+      {
+        name,
+        ok: true,
+        detail: `skipped (kind ${sample.data.variant} unsupported)`,
+        skipped: true,
+      },
+    ];
   }
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-'));
   try {
@@ -189,16 +238,19 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir })
       // Isolated render: the candidate's templates are untrusted (worker + timeout).
       mainTex = await renderVariantIsolated(sample.data, tmp, { layoutDir: bundleDir, assetsDir });
     } catch (e) {
-      return { name, ok: false, detail: `render failed: ${e.message}` };
+      return [{ name, ok: false, detail: `render failed: ${e.message}` }];
     }
     const result = await compile(tmp, mainTex);
-    if (!result.ok) return { name, ok: false, detail: 'xelatex failed', log: tailLog(result.log) };
+    if (!result.ok)
+      return [{ name, ok: false, detail: 'xelatex failed', log: tailLog(result.log) }];
     if ((result.pages || 0) < 1)
-      return { name, ok: false, detail: 'produced 0 pages', log: tailLog(result.log) };
+      return [{ name, ok: false, detail: 'produced 0 pages', log: tailLog(result.log) }];
     if (/Undefined control sequence/.test(result.log || '')) {
-      return { name, ok: false, detail: 'undefined control sequence', log: tailLog(result.log) };
+      return [{ name, ok: false, detail: 'undefined control sequence', log: tailLog(result.log) }];
     }
-    return { name, ok: true, detail: `${result.pages} page(s)` };
+    const checks = [{ name, ok: true, detail: `${result.pages} page(s)` }];
+    if (sample.textCheck) checks.push(await textCheck(sample, result, extract));
+    return checks;
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
@@ -208,13 +260,15 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir })
 
 /**
  * @param {string} bundleDir
- * @param {object} [opts] - { compile, assetsDir, samples:[{label,data}] }
- *   compile: (buildDir, mainTex) => Promise<{ok,pages,log}>  (default: real xelatex)
+ * @param {object} [opts] - { compile, extractText, assetsDir, samples:[{label,data}] }
+ *   compile: (buildDir, mainTex) => Promise<{ok,pages,log,pdfPath}>  (default: real xelatex)
+ *   extractText: (pdfPath) => Promise<string|null>  (default: pdftotext; null = skipped)
  *   samples: extra real-data resolved variants to smoke-compile
  * @returns {Promise<{ok, layoutId, checks}>}
  */
 async function verifyLayout(bundleDir, opts = {}) {
   const { compile = queuedCompile, assetsDir = null, samples = [] } = opts;
+  const extract = opts.extractText || extractText;
   const checks = [];
 
   const sec = securityScan(bundleDir);
@@ -229,7 +283,9 @@ async function verifyLayout(bundleDir, opts = {}) {
 
   if (checks.every((c) => c.ok) && st.manifest) {
     for (const sample of [...fixtureSamples(), ...samples]) {
-      checks.push(await dynamicCheck(bundleDir, st.manifest, sample, { compile, assetsDir }));
+      checks.push(
+        ...(await dynamicCheck(bundleDir, st.manifest, sample, { compile, assetsDir, extract })),
+      );
     }
   } else {
     checks.push({ name: 'compile', ok: false, detail: 'skipped — static/security checks failed' });

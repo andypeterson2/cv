@@ -114,6 +114,7 @@ function resolveAccent(style) {
 
 function buildStyle(styleIn) {
   const style = Object.assign({}, STYLE_DEFAULTS, styleIn);
+  style.headerAltText = style.headerAltText === 'plain' ? 'plain' : 'labeled';
   style.accent = resolveAccent(style);
   return style;
 }

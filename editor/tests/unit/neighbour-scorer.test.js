@@ -56,4 +56,41 @@ describe('withNeighbours', () => {
     const scorer = withNeighbours(base, embed, examples.slice(0, MIN_EXAMPLES - 1));
     expect(await scorer('Ran Grover search on IBM hardware', candidates)).toEqual(await base());
   });
+
+  test('a blend weight of 1 discards the votes', async () => {
+    const scorer = withNeighbours(base, embed, examples, { alpha: 1 });
+    expect(await scorer('Ran Grover search on IBM hardware', candidates)).toEqual(await base());
+  });
+
+  test('a swept blend weight replaces ALPHA in the score', async () => {
+    const scorer = withNeighbours(base, embed, examples, { alpha: 0.2 });
+    const out = await scorer('Ran Grover search on IBM hardware', candidates);
+    const qkd = out.find((r) => r.tag === 'qkd').score;
+    expect(qkd).toBeGreaterThan(0.2 * 0.1);
+    expect(qkd).toBeLessThanOrEqual(0.2 * 0.1 + 0.8);
+  });
+
+  test('k bounds how many neighbours vote', async () => {
+    const scorer = withNeighbours(base, embed, examples, { k: 1 });
+    const out = await scorer('Ran Grover search on IBM hardware', candidates);
+    // One neighbour votes, carrying both of its tags at the full share, so the
+    // web bullet is out of range and frontend keeps the bare base score.
+    expect(out.find((r) => r.tag === 'qkd').score).toBeCloseTo(ALPHA * 0.1 + (1 - ALPHA));
+    expect(out.find((r) => r.tag === 'simulation').score).toBeCloseTo(ALPHA * 0.3 + (1 - ALPHA));
+    expect(out.find((r) => r.tag === 'frontend').score).toBeCloseTo(ALPHA * 0.2);
+    // With every neighbour voting (the default k) the web bullet does get a share.
+    const all = await withNeighbours(
+      base,
+      embed,
+      examples,
+    )('Ran Grover search on IBM hardware', candidates);
+    expect(all.find((r) => r.tag === 'frontend').score).toBeGreaterThan(ALPHA * 0.2);
+  });
+
+  test('a lower minExamples lets a short history vote', async () => {
+    const short = examples.slice(0, MIN_EXAMPLES - 1);
+    const scorer = withNeighbours(base, embed, short, { minExamples: 1 });
+    const out = await scorer('Ran Grover search on IBM hardware', candidates);
+    expect(out.find((r) => r.tag === 'qkd').score).toBeGreaterThan(ALPHA * 0.1);
+  });
 });
