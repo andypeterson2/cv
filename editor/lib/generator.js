@@ -71,6 +71,7 @@ function generateSectionTex(section) {
 const { STYLE_DEFAULTS, SPACING_DEFAULTS, FONT_DEFAULTS } = require('./style-defaults');
 const ACCENT_COLORS = require('./accent-colors');
 const PRESET_COLOR_KEYS = ACCENT_COLORS.map((c) => c.key);
+const { symbolFallback } = require('./render/filters');
 
 function buildPreamble(style, spacing, fonts) {
   const s = Object.assign({}, STYLE_DEFAULTS, style);
@@ -104,7 +105,8 @@ function buildPreamble(style, spacing, fonts) {
 
   lines.push('\\setbool{acvSectionColorHighlight}{true}');
   lines.push('');
-  lines.push('\\renewcommand{\\acvHeaderSocialSep}{\\quad\\textbar\\quad}');
+  lines.push('\\renewcommand{\\acvHeaderSocialSep}{\\BeginAccSupp{ActualText={}}\\quad\\textbar\\quad\\EndAccSupp{}}');
+  lines.push(`\\renewcommand{\\acvAltMode}{${s.headerAltText === 'plain' ? 'plain' : 'labeled'}}`);
   lines.push('');
 
   // Font override
@@ -127,6 +129,13 @@ function buildPreamble(style, spacing, fonts) {
     lines.push(']');
     lines.push('');
   }
+
+  lines.push('\\XeTeXgenerateactualtext=1');
+  lines.push('\\hyphenpenalty=10000');
+  lines.push('\\exhyphenpenalty=10000');
+  lines.push('\\emergencystretch=3em');
+  lines.push(symbolFallback());
+  lines.push('');
 
   // Header spacing overrides — headerLineGap applies to name and position rows
   lines.push(`\\renewcommand{\\acvHeaderAfterNameSkip}{${sp.headerLineGap}}`);

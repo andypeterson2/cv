@@ -496,8 +496,12 @@
 % Use to execute conditional statements by checking empty string
 \newcommand*{\ifempty}[3]{\ifthenelse{\isempty{#1}}{#2}{#3}}
 
+% Extracted text of a header item: `labeled` gives "#1", `plain` gives the visible text #3.
+\newcommand{\acvAltMode}{labeled}
 \newcommand{\faAlt}[3]{%
-  \BeginAccSupp{ActualText={#1}}%
+  \ifthenelse{\equal{\acvAltMode}{plain}}%
+    {\BeginAccSupp{ActualText={#3}}}%
+    {\BeginAccSupp{ActualText={#1}}}%
     \mbox{#2\acvHeaderIconSep#3}%
   \EndAccSupp{}%
 }
@@ -751,7 +755,7 @@
 % Define a line of cv information (reference)
 % Usage: \cvreference{<name>}{<relation>}{<phone>}{<email>}
 \newcommand*{\cvreference}[4]{%
-  \skilltypestyle{#1} & \skillsetstyle{#2} & \skillsetstyle{\faPhone\ \href{tel:#3}{#3}} & \skillsetstyle{\faEnvelope\ \href{mailto:#4}{#4}} \\
+  \skilltypestyle{#1} & \skillsetstyle{#2} & \skillsetstyle{\BeginAccSupp{ActualText={}}\faPhone\EndAccSupp{}\ \href{tel:#3}{#3}} & \skillsetstyle{\BeginAccSupp{ActualText={}}\faEnvelope\EndAccSupp{}\ \href{mailto:#4}{#4}} \\
 }
 
 % Define an environment for cventry

@@ -13,6 +13,7 @@ module.exports = function createDataRouter(getDb) {
       identityExtras: require('../lib/identity-extras'),
       accentColors: require('../lib/accent-colors'),
       styleDefaults: require('../lib/style-defaults'),
+      symbols: require('../lib/symbols').SYMBOLS,
       latexTypeMap: LATEX_TYPE_MAP,
       validSectionTypes: VALID_SEMANTIC_TYPES,
     });

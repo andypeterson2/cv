@@ -15,7 +15,8 @@
 
 \setbool{acvSectionColorHighlight}{true}
 
-\renewcommand{\acvHeaderSocialSep}{\quad\textbar\quad}
+\renewcommand{\acvHeaderSocialSep}{\BeginAccSupp{ActualText={}}\quad\textbar\quad\EndAccSupp{}}
+\renewcommand{\acvAltMode}{<<style.headerAltText>>}
 
 <% if style.fontFamily == 'roboto' %>
 \setmainfont{Roboto}[
@@ -35,6 +36,13 @@
   FontFace={l}{it}{Font=*-LightItalic},
 ]
 <% endif %>
+% Text layer: extract the source characters, never split words, keep symbols visible
+\XeTeXgenerateactualtext=1
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+\emergencystretch=3em
+<< symbolFallback() >>
+
 % Header spacing overrides — headerLineGap applies to name and position rows
 \renewcommand{\acvHeaderAfterNameSkip}{<<spacing.headerLineGap>>}
 \renewcommand{\acvHeaderAfterPositionSkip}{<<spacing.headerLineGap>>}
