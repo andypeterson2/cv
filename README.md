@@ -65,7 +65,27 @@ User ───── Profile ──┬── Personal info (per-profile key-valu
 
 Every profile belongs to an account, and an account sees only its own. Each account has storage limits (below); the site owner and the demo account have none, and `GET /api/usage` reports where an account stands. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
 
-A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification. A layout can also be linked to a public GitHub repository, following its latest release or a branch: it is checked once a day and on request (at most every 5 minutes per layout), each new commit is verified before it replaces the last good one, and the author's own documents follow it. An author can publish an upload: it is copied as the next numbered version, verified again, and listed for every account once the site owner approves it. Anyone may pin a public version to a variant or as their default and keeps it until they choose a newer one; unpublishing hides a version from the list without breaking anyone already using it.
+A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and any other comes from a public GitHub repository (see *Hosting a layout on GitHub* below). An author can publish a linked layout: it is copied as the next numbered version, verified again, and listed for every account once the site owner approves it. Anyone may pin a public version to a variant or as their default and keeps it until they choose a newer one; unpublishing hides a version from the list without breaking anyone already using it.
+
+### Hosting a layout on GitHub
+
+A layout lives in a **public** GitHub repository: a `layout.json` manifest and its templates (`editor/layouts/README.md` describes the format), at the repository root or in a folder, so one repository can hold several. Link it from the Layouts drawer or with `cv_link_layout_repo`, choosing what it follows:
+
+- **Latest release:** each new GitHub release becomes the next version. Use this for anything other people rely on.
+- **A branch:** each new commit on the branch (the default branch if none is named) becomes the next version.
+
+Before linking, *Check* (or `cv_check_layout`) verifies the repository at any branch, tag or commit and lists what is missing without installing anything.
+
+The server checks every linked layout once a day, and anyone can ask for a check (at most once every 5 minutes per layout). Each new commit is downloaded and verified before it is used:
+
+- the security scan;
+- test compiles of sample documents and the author's own résumés;
+- the text-extraction check and the PDF safety scan;
+- storage limits.
+
+A commit that fails leaves the layout on its last good commit, and the author sees why. The author's own documents follow every passing commit. Other accounts stay on the version they chose until they update. The first published version waits for the site owner's review, and approving it *trusts* the layout: later versions that pass every check go public on their own, until the owner stops trusting it.
+
+The repository must stay public: a layout whose repository turns private stops updating. A repository containing symbolic links anywhere is refused. Layouts uploaded before GitHub hosting keep working, but cannot update or be published until they are linked to a repository holding the same layout id.
 
 ## API reference
 
@@ -84,7 +104,7 @@ The shape, by prefix:
 | `/api/profiles`, `/api/profiles/:id/…` | Profiles, and everything scoped to one: personal info, sections, variants, versions, tags, import/export, LinkedIn sync |
 | `/api/sections/:id`, `/api/entries/:id`, `/api/items/:id` | The id-addressed content tree, plus tags |
 | `/api/variants/:id/…` | Tag rules, section order, per-entry overrides, cover-letter paragraphs, `/resolve`, and the compile routes |
-| `/api/layouts` | List, check, upload (a file or an https URL), download, verify, publish, unpublish, delete, the owner's review queue, and the account's default |
+| `/api/layouts` | List, check, link to a GitHub repository, sync, download, verify, publish, unpublish, delete, the owner's review queue and trust, and the account's default |
 
 Errors share one body: `{"error": {"code": "...", "message": "...", "details": ...}}`, with the HTTP status carrying the class. The compile routes add `success` and the xelatex `log` beside it.
 
@@ -122,7 +142,7 @@ Cost and abuse. Each compile spawns a XeLaTeX process, so these bound it.
 | `CV_COMPILE_PER_USER` | `1` | Compiles one account may run at once; up to 3 more wait, beyond that the compile returns 429 |
 | `CV_COMPILE_TIMEOUT_MS` | `30000` | Per-compile timeout |
 | `CV_LAYOUT_MAX_COMPILE_MS` | `10000` | Slowest fixture compile a layout version may have and still be approved for sharing |
-| `CV_UPLOAD_RATE_MAX` | `5` | Layout uploads per minute per client |
+| `CV_UPLOAD_RATE_MAX` | `5` | Layout links, source changes and checks per minute per client |
 | `CV_ACCOUNT_QUOTA_MB` | `50` | Stored text plus layout files per account; writes past it return 413 (deletes always work) |
 | `CV_PROFILES_PER_ACCOUNT` | `20` | Profiles per account |
 | `CV_VERSIONS_PER_PROFILE` | `100` | Saved versions per profile |
