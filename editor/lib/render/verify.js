@@ -29,6 +29,7 @@ const { CONTEXT_VERSION } = require('./context');
 const { makeKitchenSink } = require('./fixtures/kitchen-sink');
 const { buildContext } = require('./context');
 const { extractText, checkText } = require('./text-check');
+const { scanPdf } = require('./pdf-scan');
 const { SYMBOLS } = require('../symbols');
 
 const SCANNABLE = /\.(tex|cls|sty|fd|njk)$/i;
@@ -78,6 +79,30 @@ function securityScan(bundleDir) {
     for (const v of scanPathTraversal(content)) violations.push(`${rel}: path traversal ${v}`);
   }
   return violations;
+}
+
+// Raw-PDF commands a reviewer should look at before a layout goes public. They are
+// not rejected outright: a layout may legitimately use \special for marked content.
+const REVIEW_PATTERNS = [
+  [
+    /pdf:\s*(fstream|ann|bann|obj|put|stream|docview|outline|dest)\b/,
+    'raw PDF object via \\special',
+  ],
+  [/\\pdf(annot|catalog|obj|literal|names)(?![a-zA-Z])/, 'pdfTeX object primitive'],
+];
+
+function reviewWarnings(bundleDir) {
+  const warnings = [];
+  if (!fs.existsSync(bundleDir)) return warnings;
+  for (const file of walkFiles(bundleDir)) {
+    const content = fs.readFileSync(file, 'utf-8');
+    const rel = path.relative(bundleDir, file);
+    for (const [re, what] of REVIEW_PATTERNS) {
+      const m = re.exec(content);
+      if (m) warnings.push(`${rel}: ${what} (${m[0]})`);
+    }
+  }
+  return warnings;
 }
 
 // static checks
@@ -215,7 +240,26 @@ async function textCheck(sample, result, extract) {
   };
 }
 
-async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir, extract }) {
+/** Look inside the compiled PDF for scripts, auto-run actions and embedded files. */
+async function pdfCheck(sample, result, scan) {
+  const name = `pdf:${sample.label}`;
+  let found;
+  try {
+    found = result.pdfPath ? await scan(result.pdfPath) : null;
+  } catch (e) {
+    return { name, ok: false, detail: `could not read the PDF: ${e.message.split('\n')[0]}` };
+  }
+  if (found == null) return { name, ok: true, detail: 'skipped (no qpdf)', skipped: true };
+  if (found.forbidden.length === 0) return { name, ok: true, detail: 'no active content' };
+  return { name, ok: false, detail: `active content: ${found.forbidden.join(', ')}` };
+}
+
+async function dynamicCheck(
+  bundleDir,
+  manifest,
+  sample,
+  { compile, assetsDir, extract, scan, compileKey },
+) {
   const name = `compile:${sample.label}`;
   if (Array.isArray(manifest.kinds) && !manifest.kinds.includes(sample.data.variant)) {
     return [
@@ -236,7 +280,7 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir, e
     } catch (e) {
       return [{ name, ok: false, detail: `render failed: ${e.message}` }];
     }
-    const result = await compile(tmp, mainTex);
+    const result = await compile(tmp, mainTex, { key: compileKey });
     if (!result.ok)
       return [{ name, ok: false, detail: 'xelatex failed', log: tailLog(result.log) }];
     if ((result.pages || 0) < 1)
@@ -244,8 +288,11 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir, e
     if (/Undefined control sequence/.test(result.log || '')) {
       return [{ name, ok: false, detail: 'undefined control sequence', log: tailLog(result.log) }];
     }
-    const checks = [{ name, ok: true, detail: `${result.pages} page(s)` }];
-    if (sample.textCheck) checks.push(await textCheck(sample, result, extract));
+    const checks = [{ name, ok: true, detail: `${result.pages} page(s)`, ms: result.ms }];
+    if (sample.textCheck) {
+      checks.push(await textCheck(sample, result, extract));
+      checks.push(await pdfCheck(sample, result, scan));
+    }
     return checks;
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -256,15 +303,19 @@ async function dynamicCheck(bundleDir, manifest, sample, { compile, assetsDir, e
 
 /**
  * @param {string} bundleDir
- * @param {object} [opts] - { compile, extractText, assetsDir, samples:[{label,data}] }
- *   compile: (buildDir, mainTex) => Promise<{ok,pages,log,pdfPath}>  (default: real xelatex)
+ * @param {object} [opts] - { compile, extractText, scanPdf, assetsDir, samples, compileKey }
+ *   compile: (buildDir, mainTex, {key}) => Promise<{ok,pages,log,pdfPath,ms}>  (default: real xelatex)
  *   extractText: (pdfPath) => Promise<string|null>  (default: pdftotext; null = skipped)
+ *   scanPdf: (pdfPath) => Promise<{forbidden}|null>  (default: qpdf; null = skipped)
+ *   compileKey: the account the compiles count against (per-account compile cap)
  *   samples: extra real-data resolved variants to smoke-compile
  * @returns {Promise<{ok, layoutId, checks}>}
  */
 async function verifyLayout(bundleDir, opts = {}) {
   const { compile = queuedCompile, assetsDir = null, samples = [] } = opts;
   const extract = opts.extractText || extractText;
+  const scan = opts.scanPdf || scanPdf;
+  const { compileKey = null } = opts;
   const checks = [];
 
   const sec = securityScan(bundleDir);
@@ -274,13 +325,27 @@ async function verifyLayout(bundleDir, opts = {}) {
     detail: sec.length ? sec.join('; ') : 'clean',
   });
 
+  const warnings = reviewWarnings(bundleDir);
+  checks.push({
+    name: 'security:review',
+    ok: true,
+    detail: warnings.length ? warnings.join('; ') : 'nothing to review',
+    warnings,
+  });
+
   const st = staticChecks(bundleDir);
   checks.push(...st.checks);
 
   if (checks.every((c) => c.ok) && st.manifest) {
     for (const sample of [...fixtureSamples(), ...samples]) {
       checks.push(
-        ...(await dynamicCheck(bundleDir, st.manifest, sample, { compile, assetsDir, extract })),
+        ...(await dynamicCheck(bundleDir, st.manifest, sample, {
+          compile,
+          assetsDir,
+          extract,
+          scan,
+          compileKey,
+        })),
       );
     }
   } else {

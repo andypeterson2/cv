@@ -119,3 +119,11 @@ describe('PUT /api/variants/:id/layout', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('POST /layouts/:id/verify on a shared layout', () => {
+  test("never changes a builtin's status, whatever the result", async () => {
+    const res = await request('POST', '/api/layouts/classic/verify');
+    expect(res.status).toBe(200);
+    expect(db.getLayout('classic', null).status).toBe('active');
+  }, 120_000);
+});

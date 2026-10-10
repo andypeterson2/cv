@@ -16,7 +16,7 @@ const crypto = require('crypto');
 const { BUILTIN_LAYOUTS_DIR, uploadedLayoutDir } = require('./layouts');
 const { loadLayout } = require('./loader');
 
-/** Stable hash of a bundle's manifest + template sources, for drift detection. */
+/** Stable hash of every file in a bundle (names and bytes), for drift detection. */
 function bundleChecksum(dir) {
   const h = crypto.createHash('sha256');
   const walk = (d) => {
@@ -24,7 +24,7 @@ function bundleChecksum(dir) {
       const full = path.join(d, name);
       const st = fs.statSync(full);
       if (st.isDirectory()) walk(full);
-      else if (/\.(njk|json)$/.test(name)) {
+      else {
         h.update(name);
         h.update(fs.readFileSync(full));
       }
