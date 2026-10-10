@@ -77,8 +77,14 @@ draw). Each preamble therefore needs, after fonts and `unicode-math` are loaded:
 ```
 
 `symbolFallback()` sets any palette symbol the current font lacks in DejaVu Sans.
-Wrap decorative icons in `\BeginAccSupp{ActualText={}}…\EndAccSupp{}` so they extract
-as nothing.
+To make content extract as other text (an icon as nothing, a social handle as its
+`soc.link`), emit raw marked content with generated actual text off; accsupp's
+`\BeginAccSupp` opens a graphics group that breaks extraction:
+
+```latex
+\begingroup\XeTeXgenerateactualtext=0 \pdfstringdef\x{TEXT}%
+\special{pdf:literal direct /Span<</ActualText(\x)>>BDC}CONTENT\special{pdf:literal direct EMC}\endgroup
+```
 
 ### Whitespace gotcha (important)
 
