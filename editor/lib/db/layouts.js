@@ -89,6 +89,12 @@ class LayoutStore {
     return layout.builtin || layout.userId === userId || layout.state === 'public';
   }
 
+  /** Whether one of `userId`'s variants, or their default, uses `layoutId`. */
+  hasLayoutPin(layoutId, userId) {
+    if (this.getDefaultLayoutId(userId) === layoutId) return true;
+    return Boolean(this._stmts.layoutPinnedBy.get(layoutId, userId));
+  }
+
   nextLayoutVersion(family) {
     return this._stmts.nextLayoutVersion.get(family).n;
   }

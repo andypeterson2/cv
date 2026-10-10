@@ -405,4 +405,54 @@ function slowestCompile(report) {
   return times.length ? Math.max(...times) : null;
 }
 
-module.exports = { verifyLayout, securityScan, gatherSamples, publicReport, slowestCompile };
+const KIND_OF_FIXTURE = { cv: 'cv', resume: 'resume', coverletter: 'coverletter' };
+
+/** One plain sentence per failed check, for someone fixing a bundle before upload. */
+function describeCheck(c) {
+  const where = c.name.slice(c.name.indexOf(':') + 1);
+  if (c.name === 'security') return `Not allowed: ${c.detail}`;
+  if (c.name.startsWith('manifest:')) return `layout.json: ${c.detail}`;
+  if (c.name.startsWith('entry:')) return `No template for ${c.name.slice(6)}: ${c.detail}`;
+  if (c.name.startsWith('classFile') || c.name === 'classFiles:complete')
+    return `Class files: ${c.detail}`;
+  if (c.name === 'compile') return `Not compiled: ${c.detail}`;
+  if (c.name.startsWith('compile:')) {
+    const first = (c.log || '').split('\n').find((l) => l.startsWith('!'));
+    return `${where} does not compile: ${c.detail}${first ? ` (${first.slice(2)})` : ''}`;
+  }
+  if (c.name.startsWith('text:')) return `${where} extracts wrongly: ${c.detail}`;
+  if (c.name.startsWith('pdf:')) return `${where} PDF has ${c.detail}`;
+  return `${c.name}: ${c.detail}`;
+}
+
+/**
+ * What a bundle is missing or gets wrong, in plain sentences: kinds it does not
+ * handle, failed checks, and review notes on raw PDF commands.
+ */
+function summarizeReport(report, manifest) {
+  const missing = [];
+  const kinds = Array.isArray(manifest?.kinds) ? manifest.kinds : [];
+  for (const kind of Object.keys(KIND_OF_FIXTURE)) {
+    if (manifest && !kinds.includes(kind))
+      missing.push(`Does not declare the ${kind} kind, so ${kind} documents use another layout`);
+  }
+  for (const c of report?.checks || []) missing.push(...checkLines(c));
+  return [...new Set(missing)];
+}
+
+function checkLines(c) {
+  if (c.name === 'security:review')
+    return (c.warnings || []).map((w) => `Needs review before sharing: ${w}`);
+  if (c.skipped && /no (qpdf|pdftotext)/.test(c.detail || ''))
+    return [`${c.name} was not checked on this server (${c.detail})`];
+  return !c.ok && !c.skipped ? [describeCheck(c)] : [];
+}
+
+module.exports = {
+  verifyLayout,
+  securityScan,
+  gatherSamples,
+  publicReport,
+  slowestCompile,
+  summarizeReport,
+};
