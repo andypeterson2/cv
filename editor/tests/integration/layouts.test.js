@@ -113,7 +113,13 @@ describe('PUT /api/variants/:id/layout', () => {
   });
 
   it('rejects a layout that does not support the variant kind', async () => {
-    db.upsertLayout({ id: 'cvonly', name: 'CV Only', kinds: ['cv'], source: 'upload' });
+    db.upsertLayout({
+      id: 'cvonly',
+      name: 'CV Only',
+      kinds: ['cv'],
+      source: 'upload',
+      userId: db.profileUserId(pid),
+    });
     const clv = db.createVariant(pid, 'Letter', 'coverletter');
     const res = await request('PUT', `/api/variants/${clv}/layout`, { layout_id: 'cvonly' });
     expect(res.status).toBe(409);

@@ -7,9 +7,10 @@
  * resort — e.g. an empty DB before the boot seed — we point at the builtin bundle
  * on disk so a compile never hard-fails on layout resolution.
  *
- * `variants.layout_id` is a plain TEXT reference with no ownership constraint, so
- * the visibility check here is the only thing stopping a variant compiling with
- * another account's templates.
+ * `variants.layout_id` is a plain TEXT reference with no ownership constraint.
+ * getLayout resolves a builtin, the owner's own row, or another account's public or
+ * unlisted version, so a pinned version keeps compiling after it is unpublished and
+ * another account's private, pending or rejected row never does.
  */
 const { DEFAULT_LAYOUT_ID, builtinLayoutDir, layoutDirForRow } = require('./layouts');
 
