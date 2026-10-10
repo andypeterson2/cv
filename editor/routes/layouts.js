@@ -166,6 +166,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         const report = await verifyLayout(root, {
           assetsDir: ASSETS_DIR,
           samples: gatherSamples(getDb(), { userId: req.userId }),
+          compileKey: req.userId,
         });
         if (!report.ok) {
           return res.status(422).json({
@@ -208,7 +209,9 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
   );
 
   // Re-run the contract gate on an installed layout (e.g. after data changes).
-  // A previously-active upload that now fails is marked invalid (→ falls back).
+  // A previously-active upload that now fails is marked invalid (→ falls back). Only
+  // the uploader's own row changes status: a builtin, or anyone else's layout, is
+  // shared, so one account's result must not switch it off for everybody.
   router.post(
     '/:id/verify',
     wrap(async (req, res) => {
@@ -217,7 +220,11 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       const report = await verifyLayout(layoutDirForRow(layout), {
         assetsDir: ASSETS_DIR,
         samples: gatherSamples(getDb(), { userId: req.userId }),
+        compileKey: req.userId,
       });
+      if (layout.source === 'builtin' || layout.userId !== req.userId) {
+        return res.json({ ok: report.ok, report });
+      }
       // Re-upsert under the row's own id and owner. The manifest carries the bare
       // id it was authored with, so upserting by that would insert a second row.
       upsertFromManifest(

@@ -150,6 +150,7 @@ describe('text check', () => {
   it('reports skipped when no extractor is available', async () => {
     const report = await verifyLayout(BUILTIN, {
       compile: pdfCompile,
+      scanPdf: async () => null,
       extractText: async () => null,
     });
     const text = report.checks.filter((c) => c.name.startsWith('text:'));
@@ -160,6 +161,7 @@ describe('text check', () => {
   it('fails when extracted text does not match the source', async () => {
     const report = await verifyLayout(BUILTIN, {
       compile: pdfCompile,
+      scanPdf: async () => null,
       extractText: async () => 'Ada Lovelace SENıOR',
     });
     expect(report.ok).toBe(false);
@@ -176,6 +178,7 @@ describe('text check', () => {
         log: 'Missing character: There is no ∈ (U+2208) in font Roboto',
         pdfPath: '/x.pdf',
       }),
+      scanPdf: async () => null,
       extractText: async () => '',
     });
     expect(checks.find((c) => c.name === 'text:fixture:symbols').detail).toMatch(
@@ -186,6 +189,7 @@ describe('text check', () => {
   it('runs only on fixtures, not on real-data samples', async () => {
     const { checks } = await verifyLayout(BUILTIN, {
       compile: pdfCompile,
+      scanPdf: async () => null,
       extractText: async () => null,
       samples: [{ label: 'real:1:cv', data: makeKitchenSink({ variant: 'cv' }) }],
     });
