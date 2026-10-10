@@ -36,9 +36,7 @@ function escTex(str) {
 function sanitizeLatex(text) {
   if (typeof text !== 'string' || text === '') return text || '';
   // Escape bare special chars not preceded by backslash
-  return text
-    .replace(/(?<!\\)([#$%&_])/g, '\\$1')
-    .replace(/(?<!\\)\^/g, '\\textasciicircum{}');
+  return text.replace(/(?<!\\)([#$%&_])/g, '\\$1').replace(/(?<!\\)\^/g, '\\textasciicircum{}');
 }
 
 /** Shorthand for sanitizeLatex */

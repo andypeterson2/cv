@@ -19,9 +19,7 @@
  */
 function sanitizeLatex(text) {
   if (typeof text !== 'string' || text === '') return text || '';
-  return text
-    .replace(/(?<!\\)([#$%&_])/g, '\\$1')
-    .replace(/(?<!\\)\^/g, '\\textasciicircum{}');
+  return text.replace(/(?<!\\)([#$%&_])/g, '\\$1').replace(/(?<!\\)\^/g, '\\textasciicircum{}');
 }
 
 module.exports = { sanitizeLatex };
