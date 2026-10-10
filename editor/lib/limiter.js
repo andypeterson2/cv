@@ -31,4 +31,32 @@ function createLimiter(maxConcurrent) {
   };
 }
 
-module.exports = { createLimiter };
+/**
+ * Per-key concurrency on top of a shared limiter: each key (an account) runs at
+ * most `maxPerKey` tasks at once and may queue at most `maxQueuedPerKey` more. A
+ * task over the queue cap is refused with an Error whose code is 'busy', so one
+ * account cannot fill the shared slots for everyone else.
+ */
+function createKeyedLimiter({ maxPerKey = 1, maxQueuedPerKey = 3 } = {}) {
+  const perKey = new Map();
+  return function run(key, task) {
+    if (key == null) return Promise.resolve().then(task);
+    let entry = perKey.get(key);
+    if (!entry) {
+      entry = { limit: createLimiter(maxPerKey), pending: 0 };
+      perKey.set(key, entry);
+    }
+    if (entry.pending >= maxPerKey + maxQueuedPerKey) {
+      const err = new Error('Too many compiles in progress for this account');
+      err.code = 'busy';
+      return Promise.reject(err);
+    }
+    entry.pending++;
+    return entry.limit(task).finally(() => {
+      entry.pending--;
+      if (entry.pending === 0) perKey.delete(key);
+    });
+  };
+}
+
+module.exports = { createLimiter, createKeyedLimiter };

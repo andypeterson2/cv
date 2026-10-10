@@ -9,13 +9,18 @@
 const fs = require('fs');
 const path = require('path');
 const { execFile } = require('child_process');
-const { createLimiter } = require('../limiter');
+const { createLimiter, createKeyedLimiter } = require('../limiter');
 
 const COMPILE_TIMEOUT_MS = Number(process.env.CV_COMPILE_TIMEOUT_MS) || 30000;
 const compileLimit = createLimiter(Number(process.env.CV_COMPILE_CONCURRENCY) || 2);
+const accountLimit = createKeyedLimiter({
+  maxPerKey: Number(process.env.CV_COMPILE_PER_USER) || 1,
+  maxQueuedPerKey: 3,
+});
 
-/** Run xelatex once in buildDir. Resolves {ok, pdfPath, log, pages}. Never rejects. */
+/** Run xelatex once in buildDir. Resolves {ok, pdfPath, log, pages, ms}. Never rejects. */
 function runLatex(buildDir, mainTexFile) {
+  const started = Date.now();
   return new Promise((resolve) => {
     execFile('fc-cache', ['-f', buildDir], { timeout: 5000 }, () => {
       execFile(
@@ -40,10 +45,11 @@ function runLatex(buildDir, mainTexFile) {
         (error, stdout, stderr) => {
           const log = stdout + (stderr ? '\n' + stderr : '');
           const pdfPath = path.join(buildDir, path.basename(mainTexFile, '.tex') + '.pdf');
+          const ms = Date.now() - started;
           if (error || !fs.existsSync(pdfPath)) {
-            resolve({ ok: false, pdfPath: null, log, pages: 0 });
+            resolve({ ok: false, pdfPath: null, log, pages: 0, ms });
           } else {
-            resolve({ ok: true, pdfPath, log, pages: pagesFromLog(log) });
+            resolve({ ok: true, pdfPath, log, pages: pagesFromLog(log), ms });
           }
         },
       );
@@ -57,9 +63,13 @@ function pagesFromLog(log) {
   return m ? parseInt(m[1], 10) : 0;
 }
 
-/** Queue a compile behind the shared concurrency cap. */
-function queuedCompile(buildDir, mainTexFile) {
-  return compileLimit(() => runLatex(buildDir, mainTexFile));
+/**
+ * Queue a compile behind the shared concurrency cap, and behind the account's own
+ * cap when `key` is given. Rejects with code 'busy' when that account already has
+ * too many compiles waiting.
+ */
+function queuedCompile(buildDir, mainTexFile, { key = null } = {}) {
+  return accountLimit(key, () => compileLimit(() => runLatex(buildDir, mainTexFile)));
 }
 
 module.exports = { queuedCompile };

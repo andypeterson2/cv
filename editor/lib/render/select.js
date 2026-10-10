@@ -17,7 +17,7 @@ const { DEFAULT_LAYOUT_ID, builtinLayoutDir, layoutDirForRow } = require('./layo
  * @param {object} db - CvDatabase instance
  * @param {object} variant - a variant row (with .layoutId, .kind)
  * @param {number|null} userId - the account that owns the variant's profile
- * @returns {{ id: string, dir: string, fallback: boolean }}
+ * @returns {{ id: string, dir: string, source: string, fallback: boolean }}
  */
 function selectLayout(db, variant, userId = null) {
   const candidates = [
@@ -34,10 +34,15 @@ function selectLayout(db, variant, userId = null) {
     // If the chosen layout doesn't support this kind, skip to the next candidate.
     if (variant && variant.kind && Array.isArray(row.kinds) && !row.kinds.includes(variant.kind))
       continue;
-    return { id, dir: layoutDirForRow(row), fallback: false };
+    return { id, dir: layoutDirForRow(row), source: row.source, fallback: false };
   }
 
-  return { id: DEFAULT_LAYOUT_ID, dir: builtinLayoutDir(DEFAULT_LAYOUT_ID), fallback: true };
+  return {
+    id: DEFAULT_LAYOUT_ID,
+    dir: builtinLayoutDir(DEFAULT_LAYOUT_ID),
+    source: 'builtin',
+    fallback: true,
+  };
 }
 
 module.exports = { selectLayout };

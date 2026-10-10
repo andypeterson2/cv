@@ -119,6 +119,7 @@ Cost and abuse. Each compile spawns a XeLaTeX process, so these bound it.
 | `CV_COMPILE_RATE_MAX` | `10` | Compiles per minute per client |
 | `CV_COMPILE_DAILY_LIMIT` | `100` | Compiles per account per UTC day (the owner is exempt) |
 | `CV_COMPILE_CONCURRENCY` | `2` | XeLaTeX processes allowed at once |
+| `CV_COMPILE_PER_USER` | `1` | Compiles one account may run at once; up to 3 more wait, beyond that the compile returns 429 |
 | `CV_COMPILE_TIMEOUT_MS` | `30000` | Per-compile timeout |
 | `CV_UPLOAD_RATE_MAX` | `5` | Layout uploads per minute per client |
 
