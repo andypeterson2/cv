@@ -33,6 +33,13 @@ describe('multi-tenancy — accounts + backfill', () => {
     const pid = db.createProfile('My CV');
     expect(db.profileUserId(pid)).toBe(db.ownerUserId());
   });
+
+  test('only profiles the @system account owns are public', () => {
+    const jane = db.getProfiles().find((p) => p.name === 'Jane Doe');
+    expect(db.isPublicProfile(jane.id)).toBe(true);
+    expect(db.isPublicProfile(db.createProfile('My CV'))).toBe(false);
+    expect(db.isPublicProfile(999999)).toBe(false);
+  });
 });
 
 describe('multi-tenancy — per-user isolation', () => {

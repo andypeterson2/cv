@@ -63,7 +63,7 @@ User ───── Profile ──┬── Personal info (per-profile key-valu
                     └── Variant (tag rules + section order + per-entry overrides)
 ```
 
-Every profile belongs to an account, and an account sees only its own. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader.
+Every profile belongs to an account, and an account sees only its own. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
 
 A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification.
 
@@ -107,7 +107,6 @@ Access. With none of these set the API is open, which is what local dev and the 
 | `CV_EDITOR_TOKEN` | *(unset)* | Shared owner token. Unset disables the check entirely |
 | `CV_ORIGIN_SECRET` | *(unset)* | Front-door secret. Accepts a comma-separated set so it can be rotated one sender at a time |
 | `CV_ORIGIN_SECRET_ENFORCE` | `false` | `true` rejects a request without a valid secret; until then a miss is logged and allowed |
-| `CV_PUBLIC_PROFILE_IDS` | `1` | Profiles readable without authentication (the demo) |
 | `OWNER_EMAIL`, `OWNER_NAME` | *(unset)* | The Google address that adopts the owner account on first sign-in |
 | `CV_PROD_ORIGIN` | `https://andypeterson.dev` | Browser origin allowed by CORS |
 | `CV_CORS_ORIGINS` | *(none)* | Extra comma-separated exact origins |

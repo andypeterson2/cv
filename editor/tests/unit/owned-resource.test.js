@@ -22,18 +22,14 @@ function fakeDb() {
     },
     getProfileForUser: (profileId, userId) =>
       userId === OWNER && profileId === PRIVATE_PROFILE ? { id: profileId } : null,
+    isPublicProfile: (profileId) => profileId === PUBLIC_PROFILE,
   };
 }
 
 let guard;
 beforeEach(() => {
-  process.env.CV_PUBLIC_PROFILE_IDS = String(PUBLIC_PROFILE);
   const db = fakeDb();
   guard = ownedResourceGuard(() => db, 'section', 'Section');
-});
-
-afterEach(() => {
-  delete process.env.CV_PUBLIC_PROFILE_IDS;
 });
 
 describe('ownedResourceGuard', () => {

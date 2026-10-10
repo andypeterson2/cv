@@ -10,8 +10,8 @@
  *     `/profiles/<id>/…` but the id-addressed resources hanging off it —
  *     `/variants/<id>` (its /resolve returns the whole CV), `/sections/<id>`,
  *     `/entries/<id>`, `/items/<id>` — so the owning profile is resolved for all of
- *     them (getDb().ownerProfileId) and gated unless that profile is on
- *     `publicProfileIds`. Non-profile globals (the profile LIST, /settings, /layouts,
+ *     them (getDb().ownerProfileId) and gated unless that profile is public
+ *     (getDb().isPublicProfile: owned by the '@system' demo account). Non-profile globals (the profile LIST, /settings, /layouts,
  *     /catalog, /health) stay open for the demo; ANYTHING ELSE is denied by default,
  *     so a new profile-data route can't silently leak while nobody's looking.
  *
@@ -19,10 +19,8 @@
  * (e.g. `/variants/10/resolve`); we tolerate a leading `/api` anyway for tests.
  */
 const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');
-const { publicProfileIdSet } = require('./public-profiles');
 
-function tokenAuth(token, { publicProfileIds = '', getDb = null, originSecret = null } = {}) {
-  const publicIds = publicProfileIdSet(publicProfileIds);
+function tokenAuth(token, { getDb = null, originSecret = null } = {}) {
   // Accepted front-door secrets (a SET, for zero-downtime rotation).
   const originSecrets = parseOriginSecrets(originSecret);
 
@@ -33,6 +31,16 @@ function tokenAuth(token, { publicProfileIds = '', getDb = null, originSecret = 
       return getDb().ownerProfileId(kind, Number(id));
     } catch {
       return null;
+    }
+  };
+
+  // Whether a profile is the public demo; unknown (or no db) counts as private.
+  const isPublic = (profileId) => {
+    if (!getDb || profileId == null) return false;
+    try {
+      return getDb().isPublicProfile(profileId);
+    } catch {
+      return false;
     }
   };
 
@@ -80,7 +88,7 @@ function tokenAuth(token, { publicProfileIds = '', getDb = null, originSecret = 
         isGatedRead = true; // unrecognized route → default-deny
       else if (c.global)
         isGatedRead = false; // safe global → open
-      else isGatedRead = !publicIds.has(String(c.profile)); // profile data → gate unless public (null owner → gated)
+      else isGatedRead = !isPublic(c.profile); // profile data → gate unless public (null owner → gated)
     }
 
     if (!isWrite && !isCompileGet && !isGatedRead) return next();
