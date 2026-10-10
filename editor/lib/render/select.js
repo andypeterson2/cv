@@ -7,11 +7,10 @@
  * resort — e.g. an empty DB before the boot seed — we point at the builtin bundle
  * on disk so a compile never hard-fails on layout resolution.
  *
- * `variants.layout_id` is a plain TEXT reference with no ownership constraint. A pin
- * can only be made on a builtin, the account's own layout, or a version that is public
- * at that moment (routes/variants.js, routes/layouts.js); here getLayout also lets a
- * pinned version keep compiling after its author unpublishes it, and still never
- * resolves another account's private, pending or rejected row.
+ * `variants.layout_id` is a plain TEXT reference with no ownership constraint.
+ * getLayout resolves a builtin, the owner's own row, or another account's public or
+ * unlisted version, so a pinned version keeps compiling after it is unpublished and
+ * another account's private, pending or rejected row never does.
  */
 const { DEFAULT_LAYOUT_ID, builtinLayoutDir, layoutDirForRow } = require('./layouts');
 

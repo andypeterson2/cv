@@ -115,9 +115,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       }
       if (typeof layoutId !== 'string')
         throw new AppError('layout_id must be a string or null', 400);
-      // Resolved against the profile's owner, the same account the compile will read
-      // it as. A new pin needs a builtin, one of that account's own layouts, or a
-      // version that is public right now; a pin, once made, outlives unpublishing.
+      // Pinnable for the profile's owner: a builtin, their own layout, or public now.
       const owner = getDb().profileUserId(v.profileId);
       const layout = getDb().getLayout(layoutId, owner);
       if (!layout || !getDb().canPinLayout(layout, owner))

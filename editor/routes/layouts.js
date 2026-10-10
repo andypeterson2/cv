@@ -412,7 +412,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       if (!layout) throw new NotFoundError('Layout not found');
       if (layout.source === 'builtin') throw new AppError('Cannot delete a builtin layout', 409);
       if (layout.userId !== req.userId) throw new NotFoundError('Layout not found');
-      // A version others may have pinned is withdrawn, not removed.
+      // A version others may have pinned stays on disk and becomes unlisted.
       if (layout.versionNo != null && ['public', 'unlisted'].includes(layout.state)) {
         getDb().setLayoutState(layout.id, 'unlisted');
         return res.json({ success: true, unlisted: true });
