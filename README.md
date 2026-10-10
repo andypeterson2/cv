@@ -65,7 +65,7 @@ User ───── Profile ──┬── Personal info (per-profile key-valu
 
 Every profile belongs to an account, and an account sees only its own. Each account has storage limits (below); the site owner and the demo account have none, and `GET /api/usage` reports where an account stands. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
 
-A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification. An author can publish an upload: it is copied as the next numbered version, verified again, and listed for every account once the site owner approves it. Anyone may pin a public version to a variant or as their default and keeps it until they choose a newer one; unpublishing hides a version from the list without breaking anyone already using it.
+A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification. A layout can also be linked to a public GitHub repository, following its latest release or a branch: it is checked once a day and on request (at most every 5 minutes per layout), each new commit is verified before it replaces the last good one, and the author's own documents follow it. An author can publish an upload: it is copied as the next numbered version, verified again, and listed for every account once the site owner approves it. Anyone may pin a public version to a variant or as their default and keeps it until they choose a newer one; unpublishing hides a version from the list without breaking anyone already using it.
 
 ## API reference
 
@@ -130,6 +130,8 @@ Cost and abuse. Each compile spawns a XeLaTeX process, so these bound it.
 | `CV_PENDING_LAYOUTS` | `3` | Layout versions per account waiting for review |
 | `CV_BUNDLE_MAX_MB` | `50` | Unpacked size of one layout zip |
 | `CV_BUNDLE_MAX_FILES` | `2000` | Files in one layout zip |
+| `GITHUB_TOKEN` | unset | Optional token (no scopes needed) for checking linked layout repos; raises GitHub's API limit from 60 to 5,000 requests an hour |
+| `CV_GITHUB_API_BASE`, `CV_GITHUB_CODELOAD_BASE` | GitHub | Test-only replacements for api.github.com and codeload.github.com |
 
 ## Testing
 
