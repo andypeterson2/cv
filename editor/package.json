@@ -27,7 +27,8 @@
     "express-rate-limit": "^8.7.0",
     "extract-zip": "^2.0.1",
     "multer": "^2.3.0",
-    "nunjucks": "^3.2.4"
+    "nunjucks": "^3.2.4",
+    "yauzl": "^2.10.0"
   },
   "optionalDependencies": {
     "@huggingface/transformers": "^3.8.1"

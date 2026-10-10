@@ -16,6 +16,7 @@ const createEntriesRouter = require('./routes/entries');
 const createItemsRouter = require('./routes/items');
 const createVariantsRouter = require('./routes/variants');
 const createDataRouter = require('./routes/data');
+const { storageGuard } = require('./lib/quota');
 const createLayoutsRouter = require('./routes/layouts');
 const createAuthRouter = require('./routes/auth');
 const { seedBuiltinLayouts } = require('./lib/render/seed');
@@ -186,6 +187,9 @@ app.use(
 // Resolve the request → `req.userId`, after the token gate so only allowed requests
 // reach it; every route reads it and the profile layer scopes by it.
 app.use('/api', attachUser(getDb));
+
+// Refuse writes from an account already at its storage quota.
+app.use('/api', storageGuard(getDb));
 
 // Mount routers — every content route is id-addressable; there is no active
 // profile / session state.
