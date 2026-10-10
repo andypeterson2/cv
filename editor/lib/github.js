@@ -8,6 +8,12 @@
  * still has to be public because visibility is checked on every call. ETags are
  * sent back so an unchanged answer is a 304 that costs no rate limit.
  *
+ * The token's health is tracked from GitHub's answers: `ok`, `expiring` (GitHub's
+ * expiry header is within EXPIRING_DAYS), `invalid` (GitHub refused it), `unset`, or
+ * `unchecked` before the first call. A refused token is dropped for the rest of the
+ * process and the request retried without it, so syncing carries on at the
+ * anonymous limit until the token is replaced.
+ *
  * CV_GITHUB_API_BASE / CV_GITHUB_CODELOAD_BASE replace the two hosts in tests.
  */
 const fs = require('fs');
@@ -18,6 +24,35 @@ const { AppError } = require('./errors');
 const API_BASE = () => process.env.CV_GITHUB_API_BASE || 'https://api.github.com';
 const CODELOAD_BASE = () => process.env.CV_GITHUB_CODELOAD_BASE || 'https://codeload.github.com';
 const MAX_ZIP_BYTES = 25 * 1024 * 1024;
+const EXPIRING_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const token = { state: 'unchecked', refused: false };
+
+/** The token's health as one word, for the health endpoint. */
+function tokenState() {
+  if (!process.env.GITHUB_TOKEN) return 'unset';
+  return token.state;
+}
+
+/** Update the token's health from a response to a request that carried it. */
+function noteToken(res) {
+  if (res.statusCode === 401) {
+    if (!token.refused) console.warn('GITHUB_TOKEN was refused by GitHub; continuing without it.');
+    token.refused = true;
+    token.state = 'invalid';
+    return;
+  }
+  const expiry = res.headers['github-authentication-token-expiration'];
+  // GitHub writes "2026-11-10 12:00:00 UTC" or "2026-11-10 12:00:00 -0700".
+  const iso = String(expiry || '')
+    .replace(' UTC', 'Z')
+    .replace(/ ([+-]\d{2})(\d{2})$/, '$1:$2')
+    .replace(' ', 'T');
+  const at = expiry ? Date.parse(iso) : NaN;
+  token.state =
+    Number.isFinite(at) && at - Date.now() <= EXPIRING_DAYS * DAY_MS ? 'expiring' : 'ok';
+}
 const TIMEOUT_MS = 20000;
 
 const NAME_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
@@ -49,12 +84,13 @@ function headers({ accept = 'application/vnd.github+json', etag } = {}) {
     Accept: accept,
     'X-GitHub-Api-Version': '2022-11-28',
   };
-  if (process.env.GITHUB_TOKEN) h.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  if (process.env.GITHUB_TOKEN && !token.refused)
+    h.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   if (etag) h['If-None-Match'] = etag;
   return h;
 }
 
-function get(url, opts) {
+function send(url, opts) {
   const client = url.startsWith('http:') ? http : https;
   return new Promise((resolve, reject) => {
     const req = client.get(url, { headers: headers(opts), timeout: TIMEOUT_MS }, resolve);
@@ -63,6 +99,29 @@ function get(url, opts) {
       reject(e instanceof AppError ? e : new AppError(`Could not reach GitHub: ${e.message}`, 502)),
     );
   });
+}
+
+/** GET with the token when there is a usable one; a refused token is retried without. */
+async function get(url, opts) {
+  const withToken = Boolean(process.env.GITHUB_TOKEN && !token.refused);
+  const res = await send(url, opts);
+  if (!withToken) return res;
+  noteToken(res);
+  if (res.statusCode !== 401) return res;
+  res.resume();
+  return send(url, opts);
+}
+
+/** Ask GitHub about the token now (the rate-limit endpoint costs nothing). */
+async function checkToken() {
+  if (!process.env.GITHUB_TOKEN || token.refused) return tokenState();
+  try {
+    const res = await get(`${API_BASE()}/rate_limit`);
+    res.resume();
+  } catch {
+    // Unreachable GitHub says nothing about the token; keep the last state.
+  }
+  return tokenState();
 }
 
 function readBody(res) {
@@ -185,4 +244,20 @@ async function downloadZipball(owner, repo, sha, dest) {
   });
 }
 
-module.exports = { parseRepo, getRepo, commitSha, resolveSource, downloadZipball, assertRef };
+/** Forget what is known about the token (tests). */
+function resetTokenState() {
+  token.state = 'unchecked';
+  token.refused = false;
+}
+
+module.exports = {
+  parseRepo,
+  getRepo,
+  commitSha,
+  resolveSource,
+  downloadZipball,
+  assertRef,
+  tokenState,
+  checkToken,
+  resetTokenState,
+};
