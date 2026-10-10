@@ -308,6 +308,7 @@ async function dynamicCheck(
  *   extractText: (pdfPath) => Promise<string|null>  (default: pdftotext; null = skipped)
  *   scanPdf: (pdfPath) => Promise<{forbidden}|null>  (default: qpdf; null = skipped)
  *   compileKey: the account the compiles count against (per-account compile cap)
+ *   fixtures: false to compile only `samples` (a pin-time check against someone's data)
  *   samples: extra real-data resolved variants to smoke-compile
  * @returns {Promise<{ok, layoutId, checks}>}
  */
@@ -315,7 +316,7 @@ async function verifyLayout(bundleDir, opts = {}) {
   const { compile = queuedCompile, assetsDir = null, samples = [] } = opts;
   const extract = opts.extractText || extractText;
   const scan = opts.scanPdf || scanPdf;
-  const { compileKey = null } = opts;
+  const { compileKey = null, fixtures = true } = opts;
   const checks = [];
 
   const sec = securityScan(bundleDir);
@@ -337,7 +338,7 @@ async function verifyLayout(bundleDir, opts = {}) {
   checks.push(...st.checks);
 
   if (checks.every((c) => c.ok) && st.manifest) {
-    for (const sample of [...fixtureSamples(), ...samples]) {
+    for (const sample of [...(fixtures ? fixtureSamples() : []), ...samples]) {
       checks.push(
         ...(await dynamicCheck(bundleDir, st.manifest, sample, {
           compile,
@@ -388,4 +389,20 @@ function gatherSamples(db, { userId = null, maxSamples = 6 } = {}) {
   return samples;
 }
 
-module.exports = { verifyLayout, securityScan, gatherSamples };
+/**
+ * The part of a report anyone may see: real-data samples quote the verifying
+ * account's résumé, so only fixture checks are kept.
+ */
+function publicReport(report) {
+  if (!report || !Array.isArray(report.checks)) return report;
+  const checks = report.checks.filter((c) => !String(c.name).includes(':real:'));
+  return { ...report, checks };
+}
+
+/** The slowest fixture compile in a report, in ms, or null when none ran. */
+function slowestCompile(report) {
+  const times = (report?.checks || []).filter((c) => typeof c.ms === 'number').map((c) => c.ms);
+  return times.length ? Math.max(...times) : null;
+}
+
+module.exports = { verifyLayout, securityScan, gatherSamples, publicReport, slowestCompile };
