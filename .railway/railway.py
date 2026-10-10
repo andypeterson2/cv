@@ -32,6 +32,7 @@ def main(_ctx=None):
             "CV_EDITOR_TOKEN": preserve(),
             "CV_ORIGIN_SECRET": preserve(),
             "CV_ORIGIN_SECRET_ENFORCE": preserve(),
+            "GITHUB_TOKEN": preserve(),
             "HOST": preserve(),
             "OWNER_EMAIL": preserve(),
         },

@@ -37,6 +37,21 @@ function findBundleRoot(dir) {
 }
 
 /**
+ * The bundle root at `subdir` inside a zip with one top-level folder (a GitHub
+ * zipball's `<repo>-<sha>/`), or null. The folder must stay inside the zip.
+ */
+function subfolderRoot(work, subdir) {
+  const clean = path.posix.normalize(String(subdir).replace(/\\/g, '/')).replace(/^\/+|\/+$/g, '');
+  if (!clean || clean === '.' || clean.startsWith('..') || path.isAbsolute(clean))
+    throw new AppError('The folder must be a path inside the repository', 400);
+  const tops = fs.readdirSync(work).filter((n) => fs.statSync(path.join(work, n)).isDirectory());
+  if (tops.length !== 1) return null;
+  const root = path.join(work, tops[0], clean);
+  if (!root.startsWith(path.join(work, tops[0]) + path.sep)) return null;
+  return fs.existsSync(path.join(root, 'layout.json')) ? root : null;
+}
+
+/**
  * Read the zip's directory without unpacking it, and refuse one whose files would
  * unpack past the size or file-count limit (a small zip can expand enormously).
  * yauzl checks each entry's real size against the directory while extracting, so
@@ -76,7 +91,7 @@ function assertUnpackedSize(zipPath) {
  * @returns {Promise<{work: string, root: string, manifest: object}>} the caller removes `work`
  * @throws AppError (400 unreadable zip, 409 builtin id, 422 invalid bundle)
  */
-async function readBundle(zipPath, db) {
+async function readBundle(zipPath, db, { subdir = '' } = {}) {
   await assertUnpackedSize(zipPath);
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-bundle-'));
   try {
@@ -90,10 +105,12 @@ async function readBundle(zipPath, db) {
     } catch (e) {
       throw new AppError('Invalid bundle: ' + e.message, 422);
     }
-    const root = findBundleRoot(work);
+    const root = subdir ? subfolderRoot(work, subdir) : findBundleRoot(work);
     if (!root)
       throw new AppError(
-        'Zip must contain a layout.json (at its root or in a single top-level folder)',
+        subdir
+          ? `No layout.json in the folder "${subdir}"`
+          : 'Zip must contain a layout.json (at its root or in a single top-level folder)',
         422,
       );
     let manifest;
