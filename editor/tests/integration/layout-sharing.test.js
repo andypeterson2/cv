@@ -141,7 +141,11 @@ describe('listing', () => {
     expect(ids).toEqual(expect.arrayContaining(['awesome-cv', 'classic', v2, v5]));
     expect(ids).not.toEqual(expect.arrayContaining([root]));
     for (const id of [v1, v3, v4]) expect(ids).not.toContain(id);
-    for (const l of res.body.layouts) expect(l).not.toHaveProperty('userId');
+    for (const l of res.body.layouts) {
+      expect(l).not.toHaveProperty('userId');
+      expect(l).not.toHaveProperty('reviewNote');
+      expect(l).not.toHaveProperty('bytes');
+    }
     const pub = res.body.layouts.find((l) => l.id === v2);
     expect(pub).toMatchObject({ own: false, author: 'Ada', state: 'public', updateAvailable: v5 });
     expect(res.body.canReview).toBe(false);
@@ -150,6 +154,10 @@ describe('listing', () => {
   test('the author sees every row of their own, marked as theirs', async () => {
     const res = await request('GET', '/api/layouts', undefined, author);
     const mine = res.body.layouts.filter((l) => l.own).map((l) => l.id);
+    for (const l of res.body.layouts.filter((x) => x.own)) {
+      expect(l).toHaveProperty('reviewNote');
+      expect(l).toHaveProperty('bytes');
+    }
     expect(mine).toEqual(expect.arrayContaining([root, v1, v2, v3, v4, v5]));
   });
 
