@@ -308,3 +308,36 @@ describe('Google OAuth proxy', () => {
     expect(props).toEqual({ email: 'admin@test.dev', name: 'A', cvUserId: 5 });
   });
 });
+
+describe('signed layout bundle links', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('refuses a bad, empty or variant-shaped link', async () => {
+    const bad = await worker.fetch(
+      new Request('https://mcp.test/bundle/nope.nope'),
+      stubEnv(),
+      ctx,
+    );
+    expect(bad.status).toBe(403);
+    for (const payload of [{}, { l: 'x' }, { v: 1, u: 2 }, { l: 3, u: 2 }]) {
+      const t = await signPayload(payload, SECRET);
+      const res = await worker.fetch(new Request(`https://mcp.test/bundle/${t}`), stubEnv(), ctx);
+      expect(res.status, JSON.stringify(payload)).toBe(403);
+    }
+  });
+
+  it('fetches the named layout zip as the user the link was minted for', async () => {
+    const calls: Array<{ url: string; headers: Headers }> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (i: any, init: any) => {
+      calls.push({ url: String(i), headers: new Headers(init?.headers) });
+      return new Response(new Uint8Array([80, 75, 3, 4]), { status: 200 });
+    });
+    const t = await signPayload({ l: 'u3-modern@2', u: 34 }, SECRET);
+    const res = await worker.fetch(new Request(`https://mcp.test/bundle/${t}`), stubEnv(), ctx);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/zip');
+    expect(res.headers.get('Content-Disposition')).toBe('attachment; filename="u3-modern@2.zip"');
+    expect(calls[0].url).toBe('http://cv.test/api/layouts/u3-modern%402/bundle');
+    expect(calls[0].headers.get('x-user-id')).toBe('34');
+  });
+});

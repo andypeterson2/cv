@@ -318,6 +318,10 @@ class CvDatabase {
         'SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ?',
       ),
 
+      layoutPinnedBy: p(
+        'SELECT 1 FROM variants v JOIN profiles p ON p.id = v.profile_id WHERE v.layout_id = ? AND p.user_id = ? LIMIT 1',
+      ),
+
       // Per-account verification reports (they may quote that account's résumé text)
       getLayoutReport: p(
         'SELECT ok, report, created_at FROM layout_reports WHERE layout_id = ? AND user_id = ?',

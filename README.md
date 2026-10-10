@@ -84,7 +84,7 @@ The shape, by prefix:
 | `/api/profiles`, `/api/profiles/:id/…` | Profiles, and everything scoped to one: personal info, sections, variants, versions, tags, import/export, LinkedIn sync |
 | `/api/sections/:id`, `/api/entries/:id`, `/api/items/:id` | The id-addressed content tree, plus tags |
 | `/api/variants/:id/…` | Tag rules, section order, per-entry overrides, cover-letter paragraphs, `/resolve`, and the compile routes |
-| `/api/layouts` | List, upload, verify, publish, unpublish, delete, the owner's review queue, and the account's default |
+| `/api/layouts` | List, check, upload (a file or an https URL), download, verify, publish, unpublish, delete, the owner's review queue, and the account's default |
 
 Errors share one body: `{"error": {"code": "...", "message": "...", "details": ...}}`, with the HTTP status carrying the class. The compile routes add `success` and the xelatex `log` beside it.
 
