@@ -13,7 +13,7 @@ let pid;
 beforeEach(() => {
   db = new CvDatabase(':memory:');
   db.clearAllContent(); // remove seeded Jane Doe → blank slate
-  pid = db.createPerson('Test Person');
+  pid = db.createProfile('Test Profile');
 });
 
 afterEach(() => {
@@ -38,29 +38,29 @@ function buildMain() {
   return { summary, sEntry, exp, e1, i1, i2, e2, i3, skills };
 }
 
-describe('Persons', () => {
+describe('Profiles', () => {
   test('create / get / rename / delete', () => {
-    expect(db.getPerson(pid).name).toBe('Test Person');
-    db.renamePerson(pid, 'Renamed');
-    expect(db.getPerson(pid).name).toBe('Renamed');
-    db.deletePerson(pid);
-    expect(db.getPerson(pid)).toBeNull();
+    expect(db.getProfile(pid).name).toBe('Test Profile');
+    db.renameProfile(pid, 'Renamed');
+    expect(db.getProfile(pid).name).toBe('Renamed');
+    db.deleteProfile(pid);
+    expect(db.getProfile(pid)).toBeNull();
   });
 
-  test('deleting a person cascades to sections/entries/items/variants', () => {
+  test('deleting a profile cascades to sections/entries/items/variants', () => {
     const { exp } = buildMain();
     const v = db.createVariant(pid, 'CV', 'cv');
-    db.deletePerson(pid);
+    db.deleteProfile(pid);
     expect(db.getSection(exp)).toBeNull();
     expect(db.getVariant(v)).toBeNull();
   });
 });
 
 describe('Sections / entries / items', () => {
-  test('sections are per-person and ordered', () => {
+  test('sections are per-profile and ordered', () => {
     buildMain();
-    const other = db.createPerson('Other');
-    db.createSection(other, 'experience', 'experience', 'Experience'); // same slug, different person OK
+    const other = db.createProfile('Other');
+    db.createSection(other, 'experience', 'experience', 'Experience'); // same slug, different profile OK
     const secs = db.getSections(pid);
     expect(secs.map((s) => s.slug)).toEqual(['summary', 'experience', 'skills']);
     expect(db.getSections(other).map((s) => s.slug)).toEqual(['experience']);
@@ -119,13 +119,13 @@ describe('Tag catalog + suggestion', () => {
     expect(cat.find((c) => c.tag === 'frontend').description).toBe('updated');
   });
 
-  test('deleteCatalogTag removes; catalog cascades on deletePerson', () => {
+  test('deleteCatalogTag removes; catalog cascades on deleteProfile', () => {
     db.setCatalogTag(pid, 'frontend');
     db.deleteCatalogTag(pid, 'frontend');
     expect(db.getTagCatalog(pid)).toEqual([]);
     db.setCatalogTag(pid, 'react');
-    db.deletePerson(pid);
-    expect(db.getTagCatalog(pid)).toEqual([]); // gone with the person
+    db.deleteProfile(pid);
+    expect(db.getTagCatalog(pid)).toEqual([]); // gone with the profile
   });
 
   test('suggestTags unions catalog + usage and never invents a tag', async () => {
@@ -160,14 +160,14 @@ describe('Tag catalog + suggestion', () => {
     expect(db.seedCatalogFromUsage(pid).added).toBe(0);
   });
 
-  test('a person with few tags of their own gets starter-tag suggestions', async () => {
+  test('a profile with few tags of their own gets starter-tag suggestions', async () => {
     buildMain();
     const { results } = await db.suggestTags(pid, 'Designed the PostgreSQL schema and SQL queries');
     const tags = results.map((r) => r.tag);
     expect(tags).toEqual(expect.arrayContaining(['postgresql', 'sql']));
   });
 
-  test('the starter vocabulary drops out once a person has their own', async () => {
+  test('the starter vocabulary drops out once a profile has their own', async () => {
     const { e1 } = buildMain();
     db.addEntryTags(
       e1,
@@ -225,19 +225,19 @@ describe('Tag catalog + suggestion', () => {
     expect(stats.manualShownShare).toBe(0.5);
   });
 
-  test("a tag event must name one of the person's own entries or items", () => {
+  test("a tag event must name one of the profile's own entries or items", () => {
     const { i1 } = buildMain();
-    const other = db.createPerson('Other');
+    const other = db.createProfile('Other');
     expect(() =>
       db.recordTagEvents(other, [{ target: 'item', id: i1, tag: 'x', action: 'accept' }]),
     ).toThrow(/not found/);
     expect(db.tagEventStats(other).totals.accept).toBe(0);
   });
 
-  test('tag events go with their person', () => {
+  test('tag events go with their profile', () => {
     const { i1 } = buildMain();
     db.recordTagEvents(pid, [{ target: 'item', id: i1, tag: 'backend', action: 'accept' }]);
-    db.deletePerson(pid);
+    db.deleteProfile(pid);
     expect(db.tagEventStats(pid).totals.accept).toBe(0);
   });
 
@@ -480,8 +480,8 @@ describe('resolveMain', () => {
     expect(db.resolveMain(pid).sections.map((s) => s.id)).not.toContain('empty');
   });
 
-  test('throws for unknown person id', () => {
-    expect(() => db.resolveMain(99999)).toThrow('Person not found');
+  test('throws for unknown profile id', () => {
+    expect(() => db.resolveMain(99999)).toThrow('Profile not found');
   });
 });
 
@@ -512,7 +512,7 @@ describe('per-variant cover-letter header', () => {
     expect(db.getLetterHeader(v)).toMatchObject({ recipientName: 'Globex', closing: 'Best,' });
   });
 
-  test('two cover letters on one person keep independent headers — the whole point', () => {
+  test('two cover letters on one profile keep independent headers — the whole point', () => {
     const a = db.createVariant(pid, 'To Acme', 'coverletter');
     const b = db.createVariant(pid, 'To Globex', 'coverletter');
     db.setLetterHeader(a, { recipientName: 'Acme' });
@@ -532,21 +532,21 @@ describe('per-variant cover-letter header', () => {
     expect(db.resolveVariant(v).coverletter.recipientName).toBe('');
   });
 
-  test('export → import round-trips the header on each variant, not the person', () => {
+  test('export → import round-trips the header on each variant, not the profile', () => {
     const a = db.createVariant(pid, 'To Acme', 'coverletter');
     const b = db.createVariant(pid, 'To Globex', 'coverletter');
     db.setLetterHeader(a, { recipientName: 'Acme', opening: 'Dear Acme,' });
     db.setLetterHeader(b, { recipientName: 'Globex' });
     db.createLetterSection(a, 'Intro', 'Hello Acme');
 
-    const blob = db.getPersonExport(pid);
-    expect(blob.coverletter).toBeUndefined(); // no person-level header in the export
+    const blob = db.getProfileExport(pid);
+    expect(blob.coverletter).toBeUndefined(); // no profile-level header in the export
     expect(blob.variants.find((v) => v.name === 'To Acme').header).toMatchObject({
       recipientName: 'Acme',
     });
 
-    const pid2 = db.createPerson('Reimport');
-    db.importPersonData(pid2, blob);
+    const pid2 = db.createProfile('Reimport');
+    db.importProfileData(pid2, blob);
     const vs = db.getVariants(pid2);
     const id = (name) => vs.find((v) => v.name === name).id;
     expect(db.getLetterHeader(id('To Acme'))).toMatchObject({
@@ -601,7 +601,7 @@ describe('importLegacyData + seeding', () => {
   };
 
   test('derives CV/Resume/Cover Letter variants faithfully', () => {
-    const id = db.createPerson('Legacy');
+    const id = db.createProfile('Legacy');
     db.importLegacyData(id, legacy);
 
     expect(db.getPersonal(id).firstName).toBe('Leg');
@@ -634,9 +634,9 @@ describe('importLegacyData + seeding', () => {
 
   test('fresh DB seeds Jane Doe with main + variants', () => {
     const fresh = new CvDatabase(':memory:');
-    const persons = fresh.getPersons();
-    expect(persons.map((p) => p.name)).toContain('Jane Doe');
-    const jane = persons.find((p) => p.name === 'Jane Doe');
+    const profiles = fresh.getProfiles();
+    expect(profiles.map((p) => p.name)).toContain('Jane Doe');
+    const jane = profiles.find((p) => p.name === 'Jane Doe');
     const variants = fresh.getVariants(jane.id);
     expect(variants.map((v) => v.kind).sort()).toEqual(['coverletter', 'cv', 'resume']);
     // Jane's resume omits education
@@ -646,25 +646,25 @@ describe('importLegacyData + seeding', () => {
   });
 });
 
-describe('getPersonExport / getMain', () => {
+describe('getProfileExport / getMain', () => {
   test('getMain returns sections, variants, and tag vocabulary', () => {
     const { e1 } = buildMain();
     db.addEntryTags(e1, ['frontend']);
     db.createVariant(pid, 'CV', 'cv');
     const main = db.getMain(pid);
-    expect(main.person.id).toBe(pid);
+    expect(main.profile.id).toBe(pid);
     expect(main.sections.map((s) => s.slug)).toEqual(['summary', 'experience', 'skills']);
     expect(main.variants.map((v) => v.kind)).toEqual(['cv']);
     expect(main.tags).toEqual(['frontend']);
   });
 
-  test('getPersonExport captures personal, sections, tags, and variants', () => {
+  test('getProfileExport captures personal, sections, tags, and variants', () => {
     const { e1 } = buildMain();
     db.addEntryTags(e1, ['frontend']);
     db.setPersonal(pid, { firstName: 'Ex', lastName: 'Port' });
     const v = db.createVariant(pid, 'FE Resume', 'resume');
     db.setVariantRules(v, { include: ['frontend'] });
-    const exp = db.getPersonExport(pid);
+    const exp = db.getProfileExport(pid);
     expect(exp.personal.firstName).toBe('Ex');
     expect(exp.sections.find((s) => s.slug === 'experience').entries[0].tags).toEqual(['frontend']);
     expect(exp.variants.find((x) => x.name === 'FE Resume').rules.include).toEqual(['frontend']);

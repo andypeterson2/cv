@@ -27,7 +27,7 @@ describe('cv tool catalog (moved into the Worker)', () => {
     for (const n of [
       'cv_health',
       'cv_get_main',
-      'cv_create_person',
+      'cv_create_profile',
       'cv_tag',
       'cv_create_variant',
       'cv_set_variant_rules',
@@ -41,40 +41,40 @@ describe('cv tool catalog (moved into the Worker)', () => {
     ]) {
       expect(names.has(n)).toBe(true);
     }
-    expect(names.has('cv_switch_to_person')).toBe(false);
+    expect(names.has('cv_switch_to_profile')).toBe(false);
     expect(names.has('cv_import_data')).toBe(false);
   });
 
   it('rejects malformed args (via @cfworker/json-schema, zero-eval / Workers-safe)', () => {
     expect(validate('cv_health', { x: 1 }).valid).toBe(false); // additionalProperties:false
-    expect(validate('cv_get_main', { person_id: 'x' }).valid).toBe(false); // non-integer id
+    expect(validate('cv_get_main', { profile_id: 'x' }).valid).toBe(false); // non-integer id
     expect(validate('cv_get_main', {}).valid).toBe(false); // missing required
-    // Bad enums, an empty name (minLength), and a missing person_id.
-    expect(validate('cv_create_variant', { person_id: 1, name: 'X', kind: 'bad' }).valid).toBe(
+    // Bad enums, an empty name (minLength), and a missing profile_id.
+    expect(validate('cv_create_variant', { profile_id: 1, name: 'X', kind: 'bad' }).valid).toBe(
       false,
     );
     expect(validate('cv_tag', { target: 'section', id: 1, tags: ['x'] }).valid).toBe(false);
-    expect(validate('cv_create_person', { name: '' }).valid).toBe(false);
+    expect(validate('cv_create_profile', { name: '' }).valid).toBe(false);
     expect(validate('cv_export_linkedin', {}).valid).toBe(false);
-    expect(validate('cv_export_linkedin', { person_id: 5, format: 'bad' }).valid).toBe(false);
+    expect(validate('cv_export_linkedin', { profile_id: 5, format: 'bad' }).valid).toBe(false);
   });
 
   it('accepts well-formed args', () => {
     expect(validate('cv_health', {}).valid).toBe(true);
-    expect(validate('cv_get_main', { person_id: 3 }).valid).toBe(true);
+    expect(validate('cv_get_main', { profile_id: 3 }).valid).toBe(true);
     expect(
-      validate('cv_create_variant', { person_id: 1, name: 'FE Resume', kind: 'resume' }).valid,
+      validate('cv_create_variant', { profile_id: 1, name: 'FE Resume', kind: 'resume' }).valid,
     ).toBe(true);
     expect(validate('cv_tag', { target: 'entry', id: 2, tags: ['frontend'] }).valid).toBe(true);
     expect(
       validate('cv_set_variant_rules', { variant_id: 9, include: ['a'], exclude: ['b'] }).valid,
     ).toBe(true);
     expect(
-      validate('cv_export_linkedin', { person_id: 5, variant_id: 10, format: 'markdown' }).valid,
+      validate('cv_export_linkedin', { profile_id: 5, variant_id: 10, format: 'markdown' }).valid,
     ).toBe(true);
-    expect(validate('cv_linkedin_mark_synced', { person_id: 5, entry_ids: [244, 245] }).valid).toBe(
-      true,
-    );
+    expect(
+      validate('cv_linkedin_mark_synced', { profile_id: 5, entry_ids: [244, 245] }).valid,
+    ).toBe(true);
     expect(
       validate('cv_set_variant_settings', {
         variant_id: 19,
@@ -86,7 +86,7 @@ describe('cv tool catalog (moved into the Worker)', () => {
 
   it('callTool rejects unknown tools + invalid args before any network call', async () => {
     await expect(callTool('nope', {})).rejects.toThrow(/Unknown tool/);
-    await expect(callTool('cv_get_main', { person_id: 'x' })).rejects.toThrow(/Invalid arguments/);
+    await expect(callTool('cv_get_main', { profile_id: 'x' })).rejects.toThrow(/Invalid arguments/);
   });
 });
 
@@ -99,7 +99,7 @@ describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
     calls = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any, init: any) => {
       calls.push({ url: String(input), headers: new Headers(init?.headers) });
-      return new Response(JSON.stringify({ persons: [] }), {
+      return new Response(JSON.stringify({ profiles: [] }), {
         headers: { 'content-type': 'application/json' },
       });
     });
@@ -107,9 +107,9 @@ describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('injects X-User-Id + X-Origin-Secret, and NOT the owner token', async () => {
-    await cvCtx.run({ cvUserId: 7 }, () => callTool('cv_list_persons', {}));
+    await cvCtx.run({ cvUserId: 7 }, () => callTool('cv_list_profiles', {}));
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toMatch(/\/api\/persons$/);
+    expect(calls[0].url).toMatch(/\/api\/profiles$/);
     expect(calls[0].headers.get('x-user-id')).toBe('7');
     expect(calls[0].headers.get('x-origin-secret')).toBe('test-origin-secret');
     expect(calls[0].headers.get('authorization')).toBeNull(); // the shared owner token is gone
@@ -126,12 +126,12 @@ describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
   });
 
   it('scopes to whoever is in context — a different id is sent verbatim', async () => {
-    await cvCtx.run({ cvUserId: 42 }, () => callTool('cv_list_persons', {}));
+    await cvCtx.run({ cvUserId: 42 }, () => callTool('cv_list_profiles', {}));
     expect(calls[0].headers.get('x-user-id')).toBe('42');
   });
 
   it('refuses a cv call with no authenticated user in context (no request made)', async () => {
-    await expect(callTool('cv_list_persons', {})).rejects.toThrow(/No authenticated cv user/);
+    await expect(callTool('cv_list_profiles', {})).rejects.toThrow(/No authenticated cv user/);
     expect(calls).toHaveLength(0);
   });
 });

@@ -1,10 +1,10 @@
 /**
  * Resolves the user behind a request, in one place, so every route can read
- * `req.userId` and the person data layer can scope by it:
+ * `req.userId` and the profile data layer can scope by it:
  *   - a request bearing the owner token is the owner ('@owner');
  *   - a request carrying a gateway-verified X-User-Id is that user;
  *   - anything else is the demo account ('@system'), which owns only the public
- *     person(s);
+ *     profile(s);
  *   - with no token configured (local dev and tests) the request acts as the owner.
  */
 const { parseOriginSecrets, matchesOriginSecret } = require('./origin-secret');

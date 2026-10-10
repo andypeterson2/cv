@@ -122,7 +122,7 @@ export async function fetchVariantPdf(variantId: number | string): Promise<Array
 }
 
 // Shared schema fragments (verbatim from the stdio catalog).
-const personId = { type: 'integer', description: 'Person id (from cv_list_persons)' };
+const profileId = { type: 'integer', description: 'Profile id (from cv_list_profiles)' };
 const variantId = {
   type: 'integer',
   description: 'Variant id (from cv_list_variants / cv_get_main)',
@@ -151,35 +151,35 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_health',
     description:
-      'Ping the cv-editor backend. Returns {status, service, version, uptime_s, persons}. Call first if other tools error.',
+      'Ping the cv-editor backend. Returns {status, service, version, uptime_s}. Call first if other tools error.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: () => api('GET', '/api/health'),
   },
   {
-    name: 'cv_list_persons',
+    name: 'cv_list_profiles',
     description:
-      'List every profile: {persons:[{id,name,created_at}]}. Always safe. Use ids with cv_get_main etc.',
+      'List every profile: {profiles:[{id,name,created_at}]}. Always safe. Use ids with cv_get_main etc.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    handler: () => api('GET', '/api/persons'),
+    handler: () => api('GET', '/api/profiles'),
   },
   {
     name: 'cv_get_main',
     description:
-      "Return a person's FULL main CV with stable ids: {person, personal, " +
+      "Return a profile's FULL main CV with stable ids: {profile, personal, " +
       'sections:[{id,slug,type,title,sortOrder,entries:[{id,fields,tags,items:[{id,content,title,tags}]}]}], ' +
       'variants:[{id,name,kind,rules,sections,personal}], tags, tagAliases}. Read this once, then edit by id. This is the ' +
       'canonical read — ids here are valid for every edit/tag/override tool. (Cover-letter headers are per-variant ' +
       'now — see cv_resolve_variant / the letter-section tools, not a top-level `coverletter`.)',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}`),
+    handler: (a) => api('GET', `/api/profiles/${enc(a.profile_id)}`),
   },
   {
-    name: 'cv_create_person',
+    name: 'cv_create_profile',
     description: 'Create a new empty profile. Returns {id}.',
     inputSchema: {
       type: 'object',
@@ -187,18 +187,18 @@ const toolDefs: ToolDef[] = [
       required: ['name'],
       additionalProperties: false,
     },
-    handler: (a) => api('POST', '/api/persons', { name: a.name }),
+    handler: (a) => api('POST', '/api/profiles', { name: a.name }),
   },
   {
-    name: 'cv_delete_person',
+    name: 'cv_delete_profile',
     description: 'Delete a profile and ALL its content and variants.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('DELETE', `/api/persons/${enc(a.person_id)}`),
+    handler: (a) => api('DELETE', `/api/profiles/${enc(a.profile_id)}`),
   },
   {
     name: 'cv_set_personal',
@@ -207,10 +207,10 @@ const toolDefs: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         fields: { type: 'object', description: 'field → string value', minProperties: 1 },
       },
-      required: ['person_id', 'fields'],
+      required: ['profile_id', 'fields'],
       additionalProperties: false,
     },
     handler: (a) => {
@@ -218,27 +218,27 @@ const toolDefs: ToolDef[] = [
         if (typeof v !== 'string')
           throw new Error(`Personal field "${k}" must be a string, got ${typeof v}`);
       }
-      return api('PATCH', `/api/persons/${enc(a.person_id)}/personal`, a.fields);
+      return api('PATCH', `/api/profiles/${enc(a.profile_id)}/personal`, a.fields);
     },
   },
   // Sections / entries / bullets (main content)
   {
     name: 'cv_add_section',
     description:
-      'Add a section to a person. slug is kebab-case (unique per person). type: experience, education, projects, skills, certifications, references, summary, honors, writing, … Returns {id}.',
+      'Add a section to a profile. slug is kebab-case (unique per profile). type: experience, education, projects, skills, certifications, references, summary, honors, writing, … Returns {id}.',
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         slug: { type: 'string', pattern: shared.SLUG_PATTERN },
         type: { type: 'string' },
         title: { type: 'string' },
       },
-      required: ['person_id', 'slug', 'type', 'title'],
+      required: ['profile_id', 'slug', 'type', 'title'],
       additionalProperties: false,
     },
     handler: (a) =>
-      api('POST', `/api/persons/${enc(a.person_id)}/sections`, {
+      api('POST', `/api/profiles/${enc(a.profile_id)}/sections`, {
         slug: a.slug,
         type: a.type,
         title: a.title,
@@ -413,14 +413,14 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_search_tags',
     description:
-      "Fuzzy-search a person's existing tag vocabulary — tolerant of typos, case/separator variants, prefixes, and " +
+      "Fuzzy-search a profile's existing tag vocabulary — tolerant of typos, case/separator variants, prefixes, and " +
       'aliases. Returns {query, results:[{tag, score, count, via}]} ranked best-first (score in 0..1). Call this ' +
       'BEFORE coining a new tag and reuse a close existing one (score ~0.7+) so the vocabulary does not fragment, and ' +
       'before writing variant rules to find the exact tags to include. Approximate — never auto-applied to a render.',
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         q: { type: 'string', minLength: 1, description: 'Search text' },
         limit: {
           type: 'integer',
@@ -435,14 +435,14 @@ const toolDefs: ToolDef[] = [
           description: 'Score floor (default 0.3)',
         },
       },
-      required: ['person_id', 'q'],
+      required: ['profile_id', 'q'],
       additionalProperties: false,
     },
     handler: (a) => {
       const qs = [`q=${enc(a.q)}`];
       if (a.limit !== undefined) qs.push(`limit=${enc(a.limit)}`);
       if (a.min_score !== undefined) qs.push(`min_score=${enc(a.min_score)}`);
-      return api('GET', `/api/persons/${enc(a.person_id)}/tags/search?${qs.join('&')}`);
+      return api('GET', `/api/profiles/${enc(a.profile_id)}/tags/search?${qs.join('&')}`);
     },
   },
   {
@@ -455,15 +455,15 @@ const toolDefs: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         alias: { type: 'string', minLength: 1 },
         canonical: { type: 'string', minLength: 1 },
       },
-      required: ['person_id', 'alias', 'canonical'],
+      required: ['profile_id', 'alias', 'canonical'],
       additionalProperties: false,
     },
     handler: (a) =>
-      api('PUT', `/api/persons/${enc(a.person_id)}/tag-aliases`, {
+      api('PUT', `/api/profiles/${enc(a.profile_id)}/tag-aliases`, {
         alias: a.alias,
         canonical: a.canonical,
       }),
@@ -473,24 +473,24 @@ const toolDefs: ToolDef[] = [
     description: 'Remove a tag alias. Tags already folded into the canonical are left as-is.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, alias: { type: 'string', minLength: 1 } },
-      required: ['person_id', 'alias'],
+      properties: { profile_id: profileId, alias: { type: 'string', minLength: 1 } },
+      required: ['profile_id', 'alias'],
       additionalProperties: false,
     },
-    handler: (a) => api('DELETE', `/api/persons/${enc(a.person_id)}/tag-aliases/${enc(a.alias)}`),
+    handler: (a) => api('DELETE', `/api/profiles/${enc(a.profile_id)}/tag-aliases/${enc(a.alias)}`),
   },
   {
     name: 'cv_suggest_tags',
     description:
       'Given a piece of bullet/entry TEXT, return EXISTING tags that fit it, ranked best-first, drawn from the ' +
-      "person's tag catalog (controlled vocabulary) + current usage vocabulary: {query, results:[{tag, score, " +
+      "profile's tag catalog (controlled vocabulary) + current usage vocabulary: {query, results:[{tag, score, " +
       'inCatalog, count, via}]}. This is the smart-tagging primitive — call it when adding or editing content, then ' +
       'apply the high-scoring existing tags with cv_tag instead of coining near-duplicates. Suggestions are ' +
       'candidates only; nothing is written until you call cv_tag. Prefer tags where inCatalog is true.',
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         text: { type: 'string', minLength: 1, description: 'The bullet/entry text to tag' },
         limit: {
           type: 'integer',
@@ -512,7 +512,7 @@ const toolDefs: ToolDef[] = [
             'Ranking method; lexical (default) needs no model. embedding is an optional local semantic scorer for bulk/offline use.',
         },
       },
-      required: ['person_id', 'text'],
+      required: ['profile_id', 'text'],
       additionalProperties: false,
     },
     handler: (a) => {
@@ -520,36 +520,36 @@ const toolDefs: ToolDef[] = [
       if (a.limit !== undefined) body.limit = a.limit;
       if (a.min_score !== undefined) body.minScore = a.min_score;
       if (a.scorer !== undefined) body.scorer = a.scorer;
-      return api('POST', `/api/persons/${enc(a.person_id)}/tags/suggest`, body);
+      return api('POST', `/api/profiles/${enc(a.profile_id)}/tags/suggest`, body);
     },
   },
   {
     name: 'cv_tag_suggestion_stats',
     description:
-      'How tag suggestions are faring for a person, from what they did with them in the editor: ' +
+      'How tag suggestions are faring for a profile, from what they did with them in the editor: ' +
       '{totals:{accept,dismiss,manual,remove}, byRank:[{rank,accept,dismiss,acceptRate}], acceptRate, ' +
       'manualShare (hand-typed tags per accepted suggestion), manualShownShare (hand-typed tags that had been ' +
       'suggested)}. Read-only.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/tags/events/stats`),
+    handler: (a) => api('GET', `/api/profiles/${enc(a.profile_id)}/tags/events/stats`),
   },
   {
     name: 'cv_list_tag_catalog',
     description:
-      "List the person's tag catalog — the curated controlled vocabulary: [{tag, description, category}]. This is " +
+      "List the profile's tag catalog — the curated controlled vocabulary: [{tag, description, category}]. This is " +
       'the preferred target set for tagging; cv_suggest_tags ranks catalog members first.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/tags/catalog`),
+    handler: (a) => api('GET', `/api/profiles/${enc(a.profile_id)}/tags/catalog`),
   },
   {
     name: 'cv_add_catalog_tag',
@@ -560,19 +560,19 @@ const toolDefs: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         tag: { type: 'string', minLength: 1 },
         description: { type: 'string' },
         category: { type: 'string' },
       },
-      required: ['person_id', 'tag'],
+      required: ['profile_id', 'tag'],
       additionalProperties: false,
     },
     handler: (a) => {
       const body: Record<string, any> = { tag: a.tag };
       if (a.description !== undefined) body.description = a.description;
       if (a.category !== undefined) body.category = a.category;
-      return api('PUT', `/api/persons/${enc(a.person_id)}/tags/catalog`, body);
+      return api('PUT', `/api/profiles/${enc(a.profile_id)}/tags/catalog`, body);
     },
   },
   {
@@ -580,11 +580,11 @@ const toolDefs: ToolDef[] = [
     description: 'Remove a tag from the catalog. Does not touch content already tagged with it.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, tag: { type: 'string', minLength: 1 } },
-      required: ['person_id', 'tag'],
+      properties: { profile_id: profileId, tag: { type: 'string', minLength: 1 } },
+      required: ['profile_id', 'tag'],
       additionalProperties: false,
     },
-    handler: (a) => api('DELETE', `/api/persons/${enc(a.person_id)}/tags/catalog/${enc(a.tag)}`),
+    handler: (a) => api('DELETE', `/api/profiles/${enc(a.profile_id)}/tags/catalog/${enc(a.tag)}`),
   },
   {
     name: 'cv_seed_catalog',
@@ -593,23 +593,23 @@ const toolDefs: ToolDef[] = [
       'Returns {added}.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('POST', `/api/persons/${enc(a.person_id)}/tags/catalog/seed`),
+    handler: (a) => api('POST', `/api/profiles/${enc(a.profile_id)}/tags/catalog/seed`),
   },
   {
     name: 'cv_suggest_tags_bulk',
     description:
-      'Suggest tags for EVERY entry and bullet of a person in one call — use right after importing an untagged CV to ' +
+      'Suggest tags for EVERY entry and bullet of a profile in one call — use right after importing an untagged CV to ' +
       'tag the whole thing efficiently. Returns {count, items:[{target, id, text, current, suggestions:[…]}]}. ' +
       'Suggest-only: nothing is written. Review and apply the good ones with cv_tag. Pass scorer:"embedding" for ' +
       'local semantic ranking over many items without per-item frontier cost.',
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         limit: {
           type: 'integer',
           minimum: 1,
@@ -625,7 +625,7 @@ const toolDefs: ToolDef[] = [
         },
         scorer: { type: 'string', enum: shared.SCORER_METHODS },
       },
-      required: ['person_id'],
+      required: ['profile_id'],
       additionalProperties: false,
     },
     handler: (a) => {
@@ -633,26 +633,26 @@ const toolDefs: ToolDef[] = [
       if (a.limit !== undefined) body.limit = a.limit;
       if (a.min_score !== undefined) body.minScore = a.min_score;
       if (a.scorer !== undefined) body.scorer = a.scorer;
-      return api('POST', `/api/persons/${enc(a.person_id)}/tags/suggest-bulk`, body);
+      return api('POST', `/api/profiles/${enc(a.profile_id)}/tags/suggest-bulk`, body);
     },
   },
   // Variants
   {
     name: 'cv_list_variants',
     description:
-      "List a person's variants: [{id,name,kind,created_at}]. kind ∈ cv|resume|coverletter.",
+      "List a profile's variants: [{id,name,kind,created_at}]. kind ∈ cv|resume|coverletter.",
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/variants`),
+    handler: (a) => api('GET', `/api/profiles/${enc(a.profile_id)}/variants`),
   },
   {
     name: 'cv_get_variant',
     description:
-      "Return a variant's full config: {id,name,kind,rules:{include,exclude},sections,entryOverrides,itemOverrides,personal[,letterSections]}. `personal` holds this variant's personal.* overrides (its tagline); an absent key inherits the person value.",
+      "Return a variant's full config: {id,name,kind,rules:{include,exclude},sections,entryOverrides,itemOverrides,personal[,letterSections]}. `personal` holds this variant's personal.* overrides (its tagline); an absent key inherits the profile value.",
     inputSchema: {
       type: 'object',
       properties: { variant_id: variantId },
@@ -664,7 +664,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_set_variant_personal',
     description:
-      'Override personal.* header fields for ONE variant — the per-variant tagline (position), quote, and friends. Only passed fields change. A string sets the override, "" suppresses the field in this variant, and null drops the override so the person value is inherited again. Person-wide edits stay in cv_set_personal.',
+      'Override personal.* header fields for ONE variant — the per-variant tagline (position), quote, and friends. Only passed fields change. A string sets the override, "" suppresses the field in this variant, and null drops the override so the profile value is inherited again. Profile-wide edits stay in cv_set_personal.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -704,15 +704,15 @@ const toolDefs: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         name: { type: 'string', minLength: 1 },
         kind: { type: 'string', enum: shared.VARIANT_KINDS },
       },
-      required: ['person_id', 'name', 'kind'],
+      required: ['profile_id', 'name', 'kind'],
       additionalProperties: false,
     },
     handler: (a) =>
-      api('POST', `/api/persons/${enc(a.person_id)}/variants`, { name: a.name, kind: a.kind }),
+      api('POST', `/api/profiles/${enc(a.profile_id)}/variants`, { name: a.name, kind: a.kind }),
   },
   {
     name: 'cv_delete_variant',
@@ -1022,55 +1022,56 @@ const toolDefs: ToolDef[] = [
     handler: (a) => api('PATCH', '/api/settings', a.settings),
   },
 
-  // Person rename / export / import
+  // Profile rename / export / import
   {
-    name: 'cv_rename_person',
-    description: 'Rename a person/profile (names are unique).',
+    name: 'cv_rename_profile',
+    description: 'Rename a profile/profile (names are unique).',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, name: { type: 'string', minLength: 1 } },
-      required: ['person_id', 'name'],
+      properties: { profile_id: profileId, name: { type: 'string', minLength: 1 } },
+      required: ['profile_id', 'name'],
       additionalProperties: false,
     },
-    handler: (a) => api('PUT', `/api/persons/${enc(a.person_id)}`, { name: a.name }),
+    handler: (a) => api('PUT', `/api/profiles/${enc(a.profile_id)}`, { name: a.name }),
   },
   {
-    name: 'cv_export_person',
+    name: 'cv_export_profile',
     description:
-      'Export a person as a portable JSON snapshot (personal + sections/entries/items + tags + variants). Pair with cv_import_person to back up or clone a profile.',
+      'Export a profile as a portable JSON snapshot (personal + sections/entries/items + tags + variants). Pair with cv_import_profile to back up or clone a profile.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId },
-      required: ['person_id'],
+      properties: { profile_id: profileId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
-    handler: (a) => api('GET', `/api/persons/${enc(a.person_id)}/export`),
+    handler: (a) => api('GET', `/api/profiles/${enc(a.profile_id)}/export`),
   },
   {
-    name: 'cv_import_person',
+    name: 'cv_import_profile',
     description:
-      'Import a snapshot (from cv_export_person) INTO an existing person, replacing its content. data is the exported object.',
+      'Import a snapshot (from cv_export_profile) INTO an existing profile, replacing its content. data is the exported object.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, data: { type: 'object', minProperties: 1 } },
-      required: ['person_id', 'data'],
+      properties: { profile_id: profileId, data: { type: 'object', minProperties: 1 } },
+      required: ['profile_id', 'data'],
       additionalProperties: false,
     },
-    handler: (a) => api('POST', `/api/persons/${enc(a.person_id)}/import`, a.data),
+    handler: (a) => api('POST', `/api/profiles/${enc(a.profile_id)}/import`, a.data),
   },
 
   // Reordering (pass the full id list in the new order)
   {
     name: 'cv_reorder_sections',
     description:
-      "Reorder a person's sections. ids = ALL of the person's section ids in the desired order (from cv_get_main).",
+      "Reorder a profile's sections. ids = ALL of the profile's section ids in the desired order (from cv_get_main).",
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, ids: idList },
-      required: ['person_id', 'ids'],
+      properties: { profile_id: profileId, ids: idList },
+      required: ['profile_id', 'ids'],
       additionalProperties: false,
     },
-    handler: (a) => api('PATCH', `/api/persons/${enc(a.person_id)}/sections/order`, { ids: a.ids }),
+    handler: (a) =>
+      api('PATCH', `/api/profiles/${enc(a.profile_id)}/sections/order`, { ids: a.ids }),
   },
   {
     name: 'cv_reorder_entries',
@@ -1171,12 +1172,12 @@ const toolDefs: ToolDef[] = [
     description:
       "Export a variant's work history as paste-ready blocks for LinkedIn / Indeed / Handshake (none exposes an " +
       'individual profile-write API, so the CV is the source of truth and you paste). Returns {variantId, format, limits, ' +
-      'positions:[{entryId,title,company,location,start,end,description,overLimit,fingerprint}]}. person_id is required; ' +
-      "variant_id picks the lens (default: the person's cv variant). format ∈ linkedin (• bullets) | plaintext | markdown (- bullets).",
+      'positions:[{entryId,title,company,location,start,end,description,overLimit,fingerprint}]}. profile_id is required; ' +
+      "variant_id picks the lens (default: the profile's cv variant). format ∈ linkedin (• bullets) | plaintext | markdown (- bullets).",
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         variant_id: variantId,
         format: {
           type: 'string',
@@ -1184,7 +1185,7 @@ const toolDefs: ToolDef[] = [
           description: 'Bullet style (default: linkedin)',
         },
       },
-      required: ['person_id'],
+      required: ['profile_id'],
       additionalProperties: false,
     },
     handler: (a) => {
@@ -1192,7 +1193,7 @@ const toolDefs: ToolDef[] = [
       if (a.variant_id != null) qs.set('variant', String(a.variant_id));
       if (a.format) qs.set('format', a.format);
       const q = qs.toString();
-      return api('GET', `/api/persons/${enc(a.person_id)}/linkedin${q ? `?${q}` : ''}`);
+      return api('GET', `/api/profiles/${enc(a.profile_id)}/linkedin${q ? `?${q}` : ''}`);
     },
   },
   {
@@ -1200,16 +1201,16 @@ const toolDefs: ToolDef[] = [
     description:
       "Per-entry LinkedIn sync status for a variant: synced | drifted | new, comparing each position's current fingerprint " +
       'against what cv_linkedin_mark_synced last stamped — names exactly which positions are now stale on LinkedIn. Returns ' +
-      '{variantId, positions:[{entryId,title,company,state,syncedAt}]}. person_id required; variant_id defaults to the cv variant.',
+      '{variantId, positions:[{entryId,title,company,state,syncedAt}]}. profile_id required; variant_id defaults to the cv variant.',
     inputSchema: {
       type: 'object',
-      properties: { person_id: personId, variant_id: variantId },
-      required: ['person_id'],
+      properties: { profile_id: profileId, variant_id: variantId },
+      required: ['profile_id'],
       additionalProperties: false,
     },
     handler: (a) => {
       const q = a.variant_id != null ? `?variant=${enc(a.variant_id)}` : '';
-      return api('GET', `/api/persons/${enc(a.person_id)}/linkedin/status${q}`);
+      return api('GET', `/api/profiles/${enc(a.profile_id)}/linkedin/status${q}`);
     },
   },
   {
@@ -1220,7 +1221,7 @@ const toolDefs: ToolDef[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        person_id: personId,
+        profile_id: profileId,
         variant_id: variantId,
         entry_ids: {
           type: 'array',
@@ -1228,11 +1229,11 @@ const toolDefs: ToolDef[] = [
           description: 'Entry ids to mark synced (default: all current positions)',
         },
       },
-      required: ['person_id'],
+      required: ['profile_id'],
       additionalProperties: false,
     },
     handler: (a) =>
-      api('POST', `/api/persons/${enc(a.person_id)}/linkedin/mark-synced`, {
+      api('POST', `/api/profiles/${enc(a.profile_id)}/linkedin/mark-synced`, {
         ...(a.variant_id != null ? { variant: a.variant_id } : {}),
         ...(a.entry_ids ? { entryIds: a.entry_ids } : {}),
       }),

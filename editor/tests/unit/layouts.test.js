@@ -23,7 +23,7 @@ beforeEach(() => {
   seedBuiltinLayouts(db);
   owner = db.ownerUserId();
   other = db.upsertUser({ googleSub: 'g-other', email: 'other@example.test' });
-  pid = db.createPerson('Test Person');
+  pid = db.createProfile('Test Profile');
 });
 
 afterEach(() => db.close());

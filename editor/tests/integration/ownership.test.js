@@ -66,10 +66,10 @@ let iid;
 let stranger;
 beforeEach(async () => {
   db.clearAllContent();
-  pid = Number((await request('POST', '/api/persons', { name: 'Owner' })).body.id);
+  pid = Number((await request('POST', '/api/profiles', { name: 'Owner' })).body.id);
   sid = Number(
     (
-      await request('POST', `/api/persons/${pid}/sections`, {
+      await request('POST', `/api/profiles/${pid}/sections`, {
         slug: 'experience',
         type: 'experience',
         title: 'Experience',
@@ -168,7 +168,7 @@ describe('nested ids stay inside the parent in the path', () => {
   test("reordering a section's entries cannot move another section's entry", async () => {
     const other = Number(
       (
-        await request('POST', `/api/persons/${pid}/sections`, {
+        await request('POST', `/api/profiles/${pid}/sections`, {
           slug: 'projects',
           type: 'projects',
           title: 'Projects',
@@ -211,11 +211,11 @@ describe('nested ids stay inside the parent in the path', () => {
 
   test("a cover letter's paragraph cannot be edited or deleted through another variant", async () => {
     const mine = Number(
-      (await request('POST', `/api/persons/${pid}/variants`, { name: 'CL', kind: 'coverletter' }))
+      (await request('POST', `/api/profiles/${pid}/variants`, { name: 'CL', kind: 'coverletter' }))
         .body.id,
     );
     const other = Number(
-      (await request('POST', `/api/persons/${pid}/variants`, { name: 'CL2', kind: 'coverletter' }))
+      (await request('POST', `/api/profiles/${pid}/variants`, { name: 'CL2', kind: 'coverletter' }))
         .body.id,
     );
     const lid = Number(
@@ -255,11 +255,11 @@ describe('settings', () => {
     });
   });
 
-  test('a resolve carries the style of the account that owns the person', async () => {
+  test('a resolve carries the style of the account that owns the profile', async () => {
     await request('PATCH', '/api/settings', { 'style.accentColor': 'awesome-red' });
     await request('PATCH', '/api/settings', { 'style.accentColor': 'awesome-pink' }, stranger);
     const vid = Number(
-      (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id,
+      (await request('POST', `/api/profiles/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id,
     );
     const mine = await request('GET', `/api/variants/${vid}/resolve`);
     expect(mine.body.style.accentColor).toBe('awesome-red');
@@ -317,7 +317,7 @@ describe('layouts', () => {
   test('a variant cannot be bound to another account’s layout', async () => {
     install('u-stranger-y', stranger);
     const vid = Number(
-      (await request('POST', `/api/persons/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id,
+      (await request('POST', `/api/profiles/${pid}/variants`, { name: 'V', kind: 'cv' })).body.id,
     );
     expect(
       (await request('PUT', `/api/variants/${vid}/layout`, { layout_id: 'u-stranger-y' })).status,

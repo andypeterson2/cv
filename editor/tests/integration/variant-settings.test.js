@@ -58,10 +58,11 @@ let pid;
 let vid;
 beforeEach(async () => {
   db.clearAllContent();
-  pid = Number((await request('POST', '/api/persons', { name: 'Test' })).body.id);
-  db.setPersonal(pid, { firstName: 'Test', lastName: 'Person', position: 'Person Tagline' });
+  pid = Number((await request('POST', '/api/profiles', { name: 'Test' })).body.id);
+  db.setPersonal(pid, { firstName: 'Test', lastName: 'Profile', position: 'Profile Tagline' });
   vid = Number(
-    (await request('POST', `/api/persons/${pid}/variants`, { name: 'ML', kind: 'resume' })).body.id,
+    (await request('POST', `/api/profiles/${pid}/variants`, { name: 'ML', kind: 'resume' })).body
+      .id,
   );
 });
 

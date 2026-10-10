@@ -29,7 +29,7 @@ const STYLES = [{}, { fontFamily: 'roboto' }];
 
 describe.skipIf(!canCompile)('PDF text layer (Jane Doe)', () => {
   const db = new CvDatabase(':memory:');
-  const pid = db.getPersons()[0].id;
+  const pid = db.getProfiles()[0].id;
   const variants = db.getVariants(pid);
   let tmp;
   beforeAll(() => {

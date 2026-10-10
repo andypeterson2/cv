@@ -36,21 +36,21 @@ function guard(secret, enforce) {
 describe('originGuard', () => {
   test('no secret configured → open (local dev / tests)', () => {
     const { mw } = guard(undefined, true);
-    expect(invoke(mw, 'GET', '/api/persons/5').nexted).toBe(true);
-    expect(invoke(mw, 'POST', '/api/persons').nexted).toBe(true);
+    expect(invoke(mw, 'GET', '/api/profiles/5').nexted).toBe(true);
+    expect(invoke(mw, 'POST', '/api/profiles').nexted).toBe(true);
   });
 
   test('soft mode: a missing secret is logged but ALLOWED (so front doors can catch up)', () => {
     const { mw, logs } = guard('s3cret', false);
-    const res = invoke(mw, 'GET', '/api/persons/5');
+    const res = invoke(mw, 'GET', '/api/profiles/5');
     expect(res.nexted).toBe(true);
     expect(logs).toHaveLength(1);
-    expect(logs[0]).toMatch(/soft.*GET \/api\/persons\/5/);
+    expect(logs[0]).toMatch(/soft.*GET \/api\/profiles\/5/);
   });
 
   test('soft mode: the correct secret passes silently', () => {
     const { mw, logs } = guard('s3cret', false);
-    expect(invoke(mw, 'GET', '/api/persons/5', 's3cret').nexted).toBe(true);
+    expect(invoke(mw, 'GET', '/api/profiles/5', 's3cret').nexted).toBe(true);
     expect(logs).toHaveLength(0);
   });
 
@@ -76,7 +76,7 @@ describe('originGuard', () => {
 
   test('OPTIONS preflight is exempt', () => {
     const { mw } = guard('s3cret', true);
-    expect(invoke(mw, 'OPTIONS', '/api/persons/5').nexted).toBe(true);
+    expect(invoke(mw, 'OPTIONS', '/api/profiles/5').nexted).toBe(true);
   });
 
   test('enforcing: a comma-separated SET accepts ANY listed secret (zero-downtime rotation)', () => {
