@@ -29,11 +29,13 @@ function storedLayoutId(userId, manifestId) {
   return `u${userId}-${manifestId}`;
 }
 
-// What a caller sees of a layout row: never another account's user id.
+// What a caller sees of a layout row: never another account's user id, and the
+// owner's review note and the disk size only on the caller's own rows.
 function present(layout, userId) {
   if (!layout) return layout;
-  const { userId: owner, ...rest } = layout;
-  return { ...rest, own: owner != null && owner === userId };
+  const { userId: owner, reviewNote, bytes, ...rest } = layout;
+  const own = owner != null && owner === userId;
+  return own ? { ...rest, reviewNote, bytes, own } : { ...rest, own };
 }
 
 // The fixture compile limit a version must meet before the owner can approve it.
