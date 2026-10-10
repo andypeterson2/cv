@@ -3,7 +3,6 @@ const os = require('os');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const extract = require('extract-zip');
 const { rateLimit } = require('express-rate-limit');
 const { clientIp } = require('../lib/client-ip');
 const { AppError, NotFoundError } = require('../lib/errors');
@@ -13,14 +12,13 @@ const {
   gatherSamples,
   publicReport,
   slowestCompile,
+  summarizeReport,
 } = require('../lib/render/verify');
+const { readBundle, zipBundle } = require('../lib/render/bundle');
+const { downloadZip } = require('../lib/fetch-zip');
 const { pinCheck } = require('../lib/render/pin-check');
-const { loadLayout, assertNoSymlinks } = require('../lib/render/loader');
 const { bundleChecksum } = require('../lib/render/seed');
 const { uploadedLayoutDir, layoutDirForRow, DEFAULT_LAYOUT_ID } = require('../lib/render/layouts');
-const { SLUG_PATTERN } = require('@cv/constants');
-
-const SLUG_RE = new RegExp(SLUG_PATTERN);
 
 // The row id an upload is stored under. Two accounts may install the same manifest
 // id, so the stored id carries the installer; the manifest keeps its own id as
@@ -28,23 +26,6 @@ const SLUG_RE = new RegExp(SLUG_PATTERN);
 // row's user_id, never by reading a number back out of this string.
 function storedLayoutId(userId, manifestId) {
   return `u${userId}-${manifestId}`;
-}
-
-// A bundle root is the dir holding the manifest — either the zip root, or a
-// single top-level folder inside it (the common "zip of a folder" shape).
-function findBundleRoot(dir) {
-  if (fs.existsSync(path.join(dir, 'layout.json'))) return dir;
-  const subdirs = fs.readdirSync(dir).filter((n) => {
-    try {
-      return fs.statSync(path.join(dir, n)).isDirectory();
-    } catch {
-      return false;
-    }
-  });
-  if (subdirs.length === 1 && fs.existsSync(path.join(dir, subdirs[0], 'layout.json'))) {
-    return path.join(dir, subdirs[0]);
-  }
-  return null;
 }
 
 // What a caller sees of a layout row: never another account's user id.
@@ -164,93 +145,110 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
     }),
   );
 
-  // Upload a .zip bundle → extract (zip-slip-safe) → verify → install or reject.
-  // Nothing is installed unless the verification report passes.
-  router.post(
-    '/',
-    uploadRateLimit,
-    upload.single('bundle'),
-    wrap(async (req, res) => {
-      if (!req.file) throw new AppError('Expected a .zip bundle in form field "bundle"', 400);
-      const work = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-upload-'));
-      try {
-        try {
-          await extract(req.file.path, { dir: work }); // extract-zip rejects path traversal
-        } catch (e) {
-          throw new AppError('Could not read the zip: ' + e.message, 400);
-        }
-        // extract-zip creates symlink entries from the archive; refuse the upload
-        // before the manifest, the security scan or the install touch the tree.
-        try {
-          assertNoSymlinks(work);
-        } catch (e) {
-          throw new AppError('Invalid bundle: ' + e.message, 422);
-        }
-
-        const root = findBundleRoot(work);
-        if (!root)
-          throw new AppError(
-            'Zip must contain a layout.json (at its root or in a single top-level folder)',
-            422,
-          );
-
-        let manifest;
-        try {
-          ({ manifest } = loadLayout(root));
-        } catch (e) {
-          throw new AppError('Invalid bundle: ' + e.message, 422);
-        }
-
-        // The id names a directory under CV_LAYOUTS_DIR, so it has to be a slug
-        // before anything derives a path from it.
-        if (typeof manifest.id !== 'string' || !SLUG_RE.test(manifest.id)) {
-          throw new AppError(`Manifest id must match ${SLUG_PATTERN}`, 422);
-        }
-
-        // Builtins own their bare ids for everyone; an upload may not shadow one.
-        const builtin = getDb().getLayout(manifest.id, null);
-        if (builtin && builtin.source === 'builtin') {
-          throw new AppError(
-            `"${manifest.id}" is the id of a builtin layout and cannot be overwritten`,
-            409,
-          );
-        }
-
-        const storedId = storedLayoutId(req.userId, manifest.id);
-        const report = await verifyLayout(root, {
-          assetsDir: ASSETS_DIR,
-          samples: gatherSamples(getDb(), { userId: req.userId }),
-          compileKey: req.userId,
-        });
-        if (!report.ok) {
-          return res.status(422).json({
+  /**
+   * Verify the zip at `zipPath` as the caller's layout and, unless `dryRun`, install
+   * it. Returns the HTTP status and body; nothing is installed unless verification
+   * passes. `missing` lists what to fix, in plain sentences.
+   */
+  async function checkOrInstall(zipPath, userId, { dryRun }) {
+    const { work, root, manifest } = await readBundle(zipPath, getDb());
+    try {
+      const report = await verifyLayout(root, {
+        assetsDir: ASSETS_DIR,
+        samples: gatherSamples(getDb(), { userId }),
+        compileKey: userId,
+      });
+      const missing = summarizeReport(report, manifest);
+      if (dryRun) return { status: 200, body: { ok: report.ok, missing, report } };
+      if (!report.ok) {
+        return {
+          status: 422,
+          body: {
             error: {
               code: 'verification_failed',
               message: 'Layout failed verification',
               details: report,
             },
-          });
-        }
+            missing,
+          },
+        };
+      }
+      const storedId = storedLayoutId(userId, manifest.id);
+      const dest = uploadedLayoutDir(storedId);
+      fs.rmSync(dest, { recursive: true, force: true });
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.cpSync(root, dest, { recursive: true });
+      const row = upsertFromManifest(getDb(), manifest, {
+        id: storedId,
+        status: 'active',
+        source: 'upload',
+        checksum: bundleChecksum(dest),
+        report: publicReport(report),
+        userId,
+      });
+      recordReport(storedId, userId, report);
+      return {
+        status: 201,
+        body: { success: true, layout: present(row, userId), report, missing },
+      };
+    } finally {
+      fs.rmSync(work, { recursive: true, force: true });
+    }
+  }
 
-        const dest = uploadedLayoutDir(storedId);
-        fs.rmSync(dest, { recursive: true, force: true });
-        fs.mkdirSync(path.dirname(dest), { recursive: true });
-        fs.cpSync(root, dest, { recursive: true });
-
-        const row = upsertFromManifest(getDb(), manifest, {
-          id: storedId,
-          status: 'active',
-          source: 'upload',
-          checksum: bundleChecksum(dest),
-          report: publicReport(report),
-          userId: req.userId,
-        });
-        recordReport(storedId, req.userId, report);
-        res.status(201).json({ success: true, layout: present(row, req.userId), report });
+  const fromUpload = (dryRun) =>
+    wrap(async (req, res) => {
+      if (!req.file) throw new AppError('Expected a .zip bundle in form field "bundle"', 400);
+      try {
+        const { status, body } = await checkOrInstall(req.file.path, req.userId, { dryRun });
+        res.status(status).json(body);
       } finally {
-        fs.rmSync(work, { recursive: true, force: true });
         fs.rmSync(req.file.path, { force: true });
       }
+    });
+
+  // Upload a .zip bundle → extract (zip-slip-safe) → verify → install or reject.
+  router.post('/', uploadRateLimit, upload.single('bundle'), fromUpload(false));
+
+  // The same verification without installing: what the bundle is missing.
+  router.post('/check', uploadRateLimit, upload.single('bundle'), fromUpload(true));
+
+  // Check or install a zip the server fetches from an https URL (for the MCP
+  // connector, which cannot send a file).
+  router.post(
+    '/from-url',
+    uploadRateLimit,
+    wrap(async (req, res) => {
+      const url = req.body && req.body.url;
+      if (typeof url !== 'string' || !url) throw new AppError('url is required', 400);
+      const dryRun = Boolean(req.body.dryRun);
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-url-'));
+      try {
+        const file = await downloadZip(url, path.join(dir, 'bundle.zip'));
+        const { status, body } = await checkOrInstall(file, req.userId, { dryRun });
+        res.status(status).json(body);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  // Download a layout as a zip: a builtin, the caller's own, a public version, or an
+  // unlisted one the caller has pinned.
+  router.get(
+    '/:id/bundle',
+    wrap(async (req, res) => {
+      const layout = getDb().getLayout(req.params.id, req.userId);
+      const allowed =
+        layout &&
+        (getDb().canPinLayout(layout, req.userId) ||
+          (layout.state === 'unlisted' && getDb().hasLayoutPin(layout.id, req.userId)));
+      if (!allowed) throw new NotFoundError('Layout not found');
+      const file = await zipBundle(layoutDirForRow(layout), layout.checksum);
+      const name = `${layout.family}${layout.versionNo ? `-v${layout.versionNo}` : ''}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      res.sendFile(file, { dotfiles: 'allow' });
     }),
   );
 

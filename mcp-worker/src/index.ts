@@ -1,7 +1,7 @@
 import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
 import { CvMcp } from './mcp';
 import { GoogleAuthHandler } from './oauth-google';
-import { fetchVariantPdf } from './tools';
+import { fetchVariantPdf, fetchLayoutBundle } from './tools';
 import { signingSecret, verifyPayload } from './sign';
 import { cvCtx } from './cv-ctx';
 import type { Env } from './types';
@@ -60,6 +60,10 @@ function isPdfPath(pathname: string): boolean {
   return pathname.startsWith('/pdf/');
 }
 
+function isBundlePath(pathname: string): boolean {
+  return pathname.startsWith('/bundle/');
+}
+
 const PDF_LINK_TTL_MS = 5 * 60 * 1000;
 
 /**
@@ -95,14 +99,45 @@ async function servePdf(request: Request, env: Env): Promise<Response> {
   }
 }
 
+/**
+ * Serve a layout zip from a signed, short-lived `/bundle/<token>` link (minted by
+ * cv_download_layout), fetched from cv as the account the link was minted for.
+ */
+async function serveBundle(request: Request, env: Env): Promise<Response> {
+  const token = new URL(request.url).pathname.slice('/bundle/'.length);
+  const payload = await verifyPayload(token, signingSecret(env), PDF_LINK_TTL_MS);
+  if (!payload || typeof payload.l !== 'string' || typeof payload.u !== 'number') {
+    return new Response('Invalid or expired download link.', {
+      status: 403,
+      headers: { 'x-content-type-options': 'nosniff' },
+    });
+  }
+  const layoutId = payload.l;
+  try {
+    const bytes = await cvCtx.run({ cvUserId: payload.u }, () => fetchLayoutBundle(layoutId));
+    const name = layoutId.replace(/[^A-Za-z0-9_.@-]/g, '_');
+    return new Response(bytes, {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${name}.zip"`,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    });
+  } catch (e: any) {
+    return new Response(`Layout unavailable: ${e.message}`, { status: 502 });
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(request.url);
     const pdf = isPdfPath(pathname);
+    const bundle = isBundlePath(pathname);
 
     // 1. Default-deny: only allowlisted paths (and the signed PDF links) get past
     //    the front door. Stealth 404 blocks a scan before any other logic runs.
-    if (!pdf && !isAllowedPath(pathname)) {
+    if (!pdf && !bundle && !isAllowedPath(pathname)) {
       return new Response('Not found', {
         status: 404,
         headers: { 'x-content-type-options': 'nosniff' },
@@ -111,7 +146,7 @@ export default {
 
     // 2. Rate-limit per client IP. Cloudflare sets CF-Connecting-IP at the edge
     //    (clients can't spoof it); best-effort throttling of a hammering source.
-    if (pdf || RATE_LIMITED_PATHS.has(pathname)) {
+    if (pdf || bundle || RATE_LIMITED_PATHS.has(pathname)) {
       const key = request.headers.get('CF-Connecting-IP') || 'unknown';
       const { success } = await env.OAUTH_RATE_LIMITER.limit({ key });
       if (!success) {
@@ -124,6 +159,7 @@ export default {
 
     // 3. Signed PDF download links (cv_get_pdf) — served outside the OAuth flow.
     if (pdf) return servePdf(request, env);
+    if (bundle) return serveBundle(request, env);
 
     return oauth.fetch(request, env, ctx);
   },
