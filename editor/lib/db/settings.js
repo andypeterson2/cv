@@ -19,7 +19,9 @@ module.exports = {
   setSettings(map, userId) {
     const tx = this.db.transaction((entries) => {
       for (const [key, val] of entries) {
-        if (val && typeof val === 'object' && 'num' in val && 'unit' in val) {
+        if (val == null) {
+          this._stmts.deleteSetting.run(userId, key);
+        } else if (typeof val === 'object' && 'num' in val && 'unit' in val) {
           this._stmts.upsertSettingUnit.run(
             userId,
             key,
