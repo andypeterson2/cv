@@ -10,10 +10,12 @@ const os = require('os');
 const path = require('path');
 const extract = require('extract-zip');
 const archiver = require('archiver');
+const yauzl = require('yauzl');
 const { AppError } = require('../errors');
 const { loadLayout, assertNoSymlinks } = require('./loader');
 const { CV_LAYOUTS_DIR } = require('./layouts');
 const { SLUG_PATTERN } = require('@cv/constants');
+const { limits, QuotaError } = require('../quota');
 
 const SLUG_RE = new RegExp(SLUG_PATTERN);
 
@@ -35,11 +37,47 @@ function findBundleRoot(dir) {
 }
 
 /**
+ * Read the zip's directory without unpacking it, and refuse one whose files would
+ * unpack past the size or file-count limit (a small zip can expand enormously).
+ * yauzl checks each entry's real size against the directory while extracting, so
+ * a zip that understates its sizes fails extraction instead.
+ */
+function assertUnpackedSize(zipPath) {
+  const { bundleBytes, bundleFiles } = limits();
+  return new Promise((resolve, reject) => {
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zip) => {
+      if (err) return reject(new AppError('Could not read the zip: ' + err.message, 400));
+      let bytes = 0;
+      let files = 0;
+      const fail = (e) => {
+        zip.close();
+        reject(e);
+      };
+      zip.on('entry', (entry) => {
+        files++;
+        bytes += entry.uncompressedSize;
+        if (files > bundleFiles)
+          return fail(new QuotaError(`The zip holds more than ${bundleFiles} files`));
+        if (bytes > bundleBytes)
+          return fail(
+            new QuotaError(`The zip unpacks to more than ${Math.round(bundleBytes / 1048576)} MB`),
+          );
+        zip.readEntry();
+      });
+      zip.on('end', () => resolve({ bytes, files }));
+      zip.on('error', (e) => reject(new AppError('Could not read the zip: ' + e.message, 400)));
+      zip.readEntry();
+    });
+  });
+}
+
+/**
  * Unpack `zipPath` and validate it as a layout bundle.
  * @returns {Promise<{work: string, root: string, manifest: object}>} the caller removes `work`
  * @throws AppError (400 unreadable zip, 409 builtin id, 422 invalid bundle)
  */
 async function readBundle(zipPath, db) {
+  await assertUnpackedSize(zipPath);
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'layout-bundle-'));
   try {
     try {
@@ -105,4 +143,29 @@ function zipBundle(dir, checksum) {
   });
 }
 
-module.exports = { readBundle, zipBundle, findBundleRoot };
+/** Bytes on disk under `dir`; a symbolic link counts as its own size. */
+function dirBytes(dir) {
+  let total = 0;
+  if (!fs.existsSync(dir)) return 0;
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    const st = fs.lstatSync(full);
+    total += st.isDirectory() ? dirBytes(full) : st.size;
+  }
+  return total;
+}
+
+/** Drop a cached zip once no layout row uses its checksum any more. */
+function forgetZip(checksum, stillUsed) {
+  if (!checksum || stillUsed) return;
+  fs.rmSync(path.join(CV_LAYOUTS_DIR, '.zips', `${checksum}.zip`), { force: true });
+}
+
+module.exports = {
+  readBundle,
+  zipBundle,
+  findBundleRoot,
+  forgetZip,
+  assertUnpackedSize,
+  dirBytes,
+};
