@@ -329,8 +329,17 @@ describe.skipIf(!canCompile)('publishing (real compile)', () => {
       checksum: bundleChecksum(path.join(STORE, id)),
       userId: author,
     });
+    expect((await request('POST', `/api/layouts/${enc(id)}/publish`, {}, author)).status).toBe(409); // not linked to a repository yet
+    db.upsertLayoutSource({
+      family: id,
+      userId: author,
+      owner: 'ada',
+      repo: 'classic',
+      track: 'branch',
+    });
     const res = await request('POST', `/api/layouts/${enc(id)}/publish`, {}, author);
     expect(res.status).toBe(201);
+    expect(db.getLayoutSource(id).shared).toBe(true);
     expect(res.body.layout).toMatchObject({
       id: `${id}@1`,
       state: 'pending',

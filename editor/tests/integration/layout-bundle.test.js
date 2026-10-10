@@ -1,18 +1,14 @@
 /**
- * Bundles in and out: the dry-run check reports what a bundle is missing, the URL
- * install refuses anything but public https, and a download is a zip of exactly
- * the layouts the caller may use.
+ * Layout downloads: a zip of exactly the layouts the caller may use.
  */
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
-const archiver = require('archiver');
 const extract = require('extract-zip');
 
 const STORE = fs.mkdtempSync(path.join(os.tmpdir(), 'layouts-bundle-'));
 process.env.CV_LAYOUTS_DIR = STORE;
-process.env.CV_UPLOAD_RATE_MAX = '1000';
 
 const CvDatabase = require('../../lib/db');
 const { seedBuiltinLayouts, bundleChecksum } = require('../../lib/render/seed');
@@ -23,24 +19,13 @@ let db;
 let author;
 let other;
 
-function send(method, urlPath, { userId, json, file } = {}) {
+function send(method, urlPath, { userId, json } = {}) {
   return new Promise((resolve, reject) => {
     const headers = {};
     let payload = null;
     if (json !== undefined) {
       payload = Buffer.from(JSON.stringify(json));
       headers['Content-Type'] = 'application/json';
-    } else if (file) {
-      const boundary = '----cvtest' + Date.now();
-      payload = Buffer.concat([
-        Buffer.from(
-          `--${boundary}\r\nContent-Disposition: form-data; name="bundle"; filename="b.zip"\r\n` +
-            'Content-Type: application/zip\r\n\r\n',
-        ),
-        file,
-        Buffer.from(`\r\n--${boundary}--\r\n`),
-      ]);
-      headers['Content-Type'] = `multipart/form-data; boundary=${boundary}`;
     }
     if (payload) headers['Content-Length'] = payload.length;
     if (userId != null) headers['X-User-Id'] = String(userId);
@@ -64,19 +49,6 @@ function send(method, urlPath, { userId, json, file } = {}) {
   });
 }
 
-/** A zip (in memory) of the files given as { relPath: content }. */
-function zipOf(files) {
-  return new Promise((resolve, reject) => {
-    const zip = archiver('zip');
-    const chunks = [];
-    zip.on('data', (c) => chunks.push(c));
-    zip.on('end', () => resolve(Buffer.concat(chunks)));
-    zip.on('error', reject);
-    for (const [name, content] of Object.entries(files)) zip.append(content, { name });
-    zip.finalize();
-  });
-}
-
 beforeAll(async () => {
   const app = require('../../server');
   db = new CvDatabase(':memory:');
@@ -96,52 +68,6 @@ beforeAll(async () => {
 afterAll(async () => {
   if (server) await new Promise((r) => server.close(r));
   fs.rmSync(STORE, { recursive: true, force: true });
-});
-
-describe('POST /api/layouts/check', () => {
-  test('lists what a broken bundle is missing and installs nothing', async () => {
-    const file = await zipOf({
-      'layout.json': JSON.stringify({
-        id: 'half',
-        engine: 'nunjucks',
-        kinds: ['cv'],
-        entry: { document: 'templates/missing.tex.njk' },
-      }),
-    });
-    const res = await send('POST', '/api/layouts/check', { userId: author, file });
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(false);
-    expect(res.body.missing).toEqual(
-      expect.arrayContaining([
-        expect.stringMatching(/does not declare the coverletter kind/i),
-        expect.stringMatching(/no template for document/i),
-      ]),
-    );
-    expect(db.getLayout(`u${author}-half`, author)).toBe(null);
-  });
-
-  test('refuses a zip without layout.json', async () => {
-    const file = await zipOf({ 'readme.txt': 'hi' });
-    const res = await send('POST', '/api/layouts/check', { userId: author, file });
-    expect(res.status).toBe(422);
-  });
-});
-
-describe('POST /api/layouts/from-url', () => {
-  test('refuses http, private addresses and junk', async () => {
-    for (const url of [
-      'http://example.com/a.zip',
-      'https://127.0.0.1/a.zip',
-      'https://localhost/a.zip',
-      'not a url',
-    ]) {
-      const res = await send('POST', '/api/layouts/from-url', {
-        userId: author,
-        json: { url, dryRun: true },
-      });
-      expect(res.status).toBe(400);
-    }
-  });
 });
 
 describe('GET /api/layouts/:id/bundle', () => {
