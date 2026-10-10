@@ -180,6 +180,7 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
       if (!existing) assertBelow(getDb(), userId, 'layout');
       const bytes = dirBytes(root);
       assertLayoutBytes(getDb(), userId, bytes, existing ? existing.bytes : 0);
+      const replacedChecksum = existing ? existing.checksum : null;
       const dest = uploadedLayoutDir(storedId);
       fs.rmSync(dest, { recursive: true, force: true });
       fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -194,6 +195,8 @@ module.exports = function createLayoutsRouter(getDb, projectRoot) {
         bytes,
       });
       recordReport(storedId, userId, report);
+      if (replacedChecksum && replacedChecksum !== row.checksum)
+        forgetZip(replacedChecksum, getDb().layoutChecksumInUse(replacedChecksum));
       return {
         status: 201,
         body: { success: true, layout: present(row, userId), report, missing },

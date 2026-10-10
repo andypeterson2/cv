@@ -31,6 +31,19 @@ function compileFail(res, status, code, log) {
   return res.status(status).json({ success: false, log, error: { code, message: log } });
 }
 
+// A fresh temp dir for one compile. The hourly sweep may remove an empty parent
+// between the mkdir and the mkdtemp, so a missing parent is created once more.
+function makeBuildDir(buildRoot, kind) {
+  for (let attempt = 0; ; attempt++) {
+    fs.mkdirSync(buildRoot, { recursive: true });
+    try {
+      return fs.mkdtempSync(path.join(buildRoot, kind + '-'));
+    } catch (e) {
+      if (e.code !== 'ENOENT' || attempt > 0) throw e;
+    }
+  }
+}
+
 function cleanupDir(dir) {
   try {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -373,8 +386,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   ) {
     let buildDir, mainTexFile;
     try {
-      fs.mkdirSync(buildRoot, { recursive: true });
-      buildDir = fs.mkdtempSync(path.join(buildRoot, kind + '-'));
+      buildDir = makeBuildDir(buildRoot, kind);
       const { dir: layoutDir, source } = selectLayoutFor();
       const opts = { layoutDir, assetsDir: ASSETS_DIR };
       mainTexFile =
