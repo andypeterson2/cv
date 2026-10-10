@@ -72,6 +72,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
         entryOverrides: Object.fromEntries(db.getEntryOverrides(id)),
         itemOverrides: Object.fromEntries(db.getItemOverrides(id)),
         personal: db.getVariantPersonal(id),
+        settings: db.getVariantSettings(id),
       };
       if (v.kind === 'coverletter') {
         body.letterSections = db.getLetterSections(id);
@@ -282,6 +283,29 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       const id = intId(req.params.id, 'variant id');
       requireVariant(id, req.userId);
       getDb().setVariantPersonal(id, req.body);
+      res.json({ success: true });
+    }),
+  );
+
+  // Per-variant style/spacing/fonts overrides, layered over the account's settings
+
+  router.get(
+    '/:id/settings',
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId, { write: false });
+      res.json(getDb().getVariantSettings(id));
+    }),
+  );
+
+  // A null value drops that override, so the key inherits the account value again.
+  router.patch(
+    '/:id/settings',
+    validate('variantSettings'),
+    wrap((req, res) => {
+      const id = intId(req.params.id, 'variant id');
+      requireVariant(id, req.userId);
+      getDb().setVariantSettings(id, req.body);
       res.json({ success: true });
     }),
   );

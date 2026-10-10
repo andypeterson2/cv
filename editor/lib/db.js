@@ -51,6 +51,7 @@ class CvDatabase {
       upsertSettingUnit: p(
         'INSERT INTO settings (user_id, key, value, value_num, value_unit) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit',
       ),
+      deleteSetting: p('DELETE FROM settings WHERE user_id = ? AND key = ?'),
       // Carried into the owner account when a stray account is adopted; the owner's
       // own keys win, so the copy cannot overwrite a value they already chose.
       copySettingsToUser: p(
@@ -368,6 +369,18 @@ class CvDatabase {
         'INSERT INTO variant_personal (variant_id, key, value) VALUES (?, ?, ?) ON CONFLICT(variant_id, key) DO UPDATE SET value = excluded.value',
       ),
       deleteVariantPersonal: p('DELETE FROM variant_personal WHERE variant_id = ? AND key = ?'),
+
+      // Per-variant style/spacing/fonts overrides; key is prefixed, absent means inherit
+      getVariantSettings: p(
+        'SELECT key, value, value_num, value_unit FROM variant_settings WHERE variant_id = ?',
+      ),
+      upsertVariantSetting: p(
+        'INSERT INTO variant_settings (variant_id, key, value, value_num, value_unit) VALUES (?, ?, ?, NULL, NULL) ON CONFLICT(variant_id, key) DO UPDATE SET value = excluded.value, value_num = NULL, value_unit = NULL',
+      ),
+      upsertVariantSettingUnit: p(
+        'INSERT INTO variant_settings (variant_id, key, value, value_num, value_unit) VALUES (?, ?, ?, ?, ?) ON CONFLICT(variant_id, key) DO UPDATE SET value = excluded.value, value_num = excluded.value_num, value_unit = excluded.value_unit',
+      ),
+      deleteVariantSetting: p('DELETE FROM variant_settings WHERE variant_id = ? AND key = ?'),
     };
   }
 
@@ -679,6 +692,7 @@ class CvDatabase {
         entryOverrides: Object.fromEntries(this.getEntryOverrides(v.id)),
         itemOverrides: Object.fromEntries(this.getItemOverrides(v.id)),
         personal: this.getVariantPersonal(v.id),
+        settings: this.getVariantSettings(v.id),
       })),
       tags: this.listTags(personId),
       tagAliases: this.getTagAliases(personId),

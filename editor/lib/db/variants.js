@@ -4,7 +4,14 @@
  * and resolution (variant → compile-ready data for the LaTeX generator). Mixed
  * onto the CvDatabase prototype; methods run with `this` === the instance.
  */
-const { rowToVariant, stripPrefix, combineUnits, sortKey, bySort } = require('./helpers');
+const {
+  rowToVariant,
+  rowsToSettings,
+  stripPrefix,
+  combineUnits,
+  sortKey,
+  bySort,
+} = require('./helpers');
 const { VARIANT_KINDS: KINDS } = require('@cv/constants');
 const fuzzy = require('../fuzzy');
 const { getLatexType } = require('../latex-type-map');
@@ -271,6 +278,39 @@ class VariantStore {
     tx();
   }
 
+  /**
+   * A variant's style/spacing/fonts overrides as a flat map of prefixed keys, in the
+   * same shape as getSettings(). Only keys with a row appear.
+   */
+  getVariantSettings(variantId) {
+    return rowsToSettings(this._stmts.getVariantSettings.all(variantId));
+  }
+
+  /**
+   * Upsert overrides from a flat map of prefixed keys. A {num, unit} value keeps its
+   * unit; a null value drops the override, so the key inherits the account value.
+   */
+  setVariantSettings(variantId, map) {
+    const tx = this.db.transaction(() => {
+      for (const [key, val] of Object.entries(map)) {
+        if (val == null) {
+          this._stmts.deleteVariantSetting.run(variantId, key);
+        } else if (typeof val === 'object') {
+          this._stmts.upsertVariantSettingUnit.run(
+            variantId,
+            key,
+            String(val.num) + val.unit,
+            val.num,
+            val.unit,
+          );
+        } else {
+          this._stmts.upsertVariantSetting.run(variantId, key, String(val));
+        }
+      }
+    });
+    tx();
+  }
+
   // resolution — variant → compile-ready data for lib/generator
 
   _matchesTags(tags, rules) {
@@ -286,15 +326,19 @@ class VariantStore {
 
   /**
    * Style/spacing/fonts for a document, read from the account that owns the person it
-   * belongs to. The result depends on the document alone, so every reader sees the
-   * same thing and the public demo renders identically for all of them. An account
-   * with no rows yields {}, which the render context fills from the defaults.
+   * belongs to, with the variant's own overrides on top. The result depends on the
+   * document alone, so every reader sees the same thing and the public demo renders
+   * identically for all of them. Keys set nowhere are filled from the defaults by the
+   * render context.
    */
-  _renderSettings(userId) {
-    const style = stripPrefix(this.getSettings('style', userId), 'style.');
-    const spacing = combineUnits(stripPrefix(this.getSettings('spacing', userId), 'spacing.'));
-    const fonts = combineUnits(stripPrefix(this.getSettings('fonts', userId), 'fonts.'));
-    return { style, spacing, fonts };
+  _renderSettings(userId, variantId = null) {
+    const own = variantId == null ? {} : this.getVariantSettings(variantId);
+    const pick = (prefix) => {
+      const merged = { ...this.getSettings(prefix, userId) };
+      for (const [k, v] of Object.entries(own)) if (k.startsWith(prefix + '.')) merged[k] = v;
+      return combineUnits(stripPrefix(merged, prefix + '.'));
+    };
+    return { style: pick('style'), spacing: pick('spacing'), fonts: pick('fonts') };
   }
 
   /**
@@ -311,7 +355,10 @@ class VariantStore {
       // Variant overrides win over the person's personal.* fields, so a variant
       // can carry its own tagline.
       const personal = { ...this.getPersonal(personId), ...this.getVariantPersonal(variantId) };
-      const { style, spacing, fonts } = this._renderSettings(this.personUserId(personId));
+      const { style, spacing, fonts } = this._renderSettings(
+        this.personUserId(personId),
+        variantId,
+      );
 
       if (v.kind === 'coverletter') {
         const coverletter = this.getLetterHeader(variantId);
