@@ -53,6 +53,18 @@ function commit(req, res, repo, ref) {
   res.end(sha);
 }
 
+/** /rate_limit: refuses `options.badToken`, and reports `options.tokenExpiry` on a token. */
+function rateLimitRoute(req, res, options) {
+  const auth = req.headers.authorization;
+  if (auth && auth === `Bearer ${options.badToken}`)
+    return json(res, 401, { message: 'Bad credentials' });
+  const extra =
+    auth && options.tokenExpiry
+      ? { 'github-authentication-token-expiration': options.tokenExpiry }
+      : {};
+  json(res, 200, { resources: {} }, extra);
+}
+
 function apiRoute(req, res, repos, parts) {
   const repo = repos[`${parts[1]}/${parts[2]}`];
   if (!repo) return json(res, 404, { message: 'Not Found' });
@@ -81,6 +93,7 @@ function startFakeGithub() {
   const repos = {};
   const calls = [];
   let rateLimited = false;
+  const options = { badToken: null, tokenExpiry: null };
   const server = http.createServer(async (req, res) => {
     calls.push(req.url);
     if (rateLimited) {
@@ -88,6 +101,9 @@ function startFakeGithub() {
       return res.end('{}');
     }
     const parts = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean);
+    if (parts[0] === 'rate_limit') return rateLimitRoute(req, res, options);
+    if (req.headers.authorization === `Bearer ${options.badToken}`)
+      return json(res, 401, { message: 'Bad credentials' });
     if (parts[0] === 'repos') return apiRoute(req, res, repos, parts);
     if (parts[2] === 'zip') return codeloadRoute(res, repos, parts);
     res.writeHead(404);
@@ -100,6 +116,7 @@ function startFakeGithub() {
         base,
         repos,
         calls,
+        options,
         setRateLimited: (v) => (rateLimited = v),
         close: () => new Promise((r) => server.close(r)),
       });
