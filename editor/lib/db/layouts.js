@@ -38,6 +38,8 @@ function rowToLayout(r, full = false) {
     reviewNote: r.review_note ?? null,
     compileMs: r.compile_ms ?? null,
     bytes: r.bytes ?? 0,
+    sourceSha: r.source_sha ?? null,
+    sourceRef: r.source_ref ?? null,
     author: r.source === 'builtin' ? null : r.author_name || 'an account',
   };
   if (full) {
@@ -45,6 +47,27 @@ function rowToLayout(r, full = false) {
     out.report = safeParse(r.report, null);
   }
   return out;
+}
+
+function sourceRow(r) {
+  if (!r) return null;
+  return {
+    family: r.family,
+    userId: r.user_id,
+    owner: r.repo_owner,
+    repo: r.repo_name,
+    path: r.path || '',
+    track: r.track,
+    branch: r.branch,
+    lastSha: r.last_sha,
+    lastRef: r.last_ref,
+    etag: r.etag,
+    lastCheckedAt: r.last_checked_at,
+    lastError: r.last_error,
+    shared: !!r.shared,
+    trusted: !!r.trusted,
+    manualSyncedAt: r.manual_synced_at,
+  };
 }
 
 function safeParse(json, fallback) {
@@ -94,6 +117,70 @@ class LayoutStore {
   hasLayoutPin(layoutId, userId) {
     if (this.getDefaultLayoutId(userId) === layoutId) return true;
     return Boolean(this._stmts.layoutPinnedBy.get(layoutId, userId));
+  }
+
+  /** The GitHub source of a layout family, or null for a frozen upload or a builtin. */
+  getLayoutSource(family) {
+    return sourceRow(this._stmts.getLayoutSource.get(family));
+  }
+
+  listLayoutSources() {
+    return this._stmts.listLayoutSources.all().map(sourceRow);
+  }
+
+  listUserLayoutSources(userId) {
+    return this._stmts.listUserLayoutSources.all(userId).map(sourceRow);
+  }
+
+  /** Link or relink a family to a repo; the last check's result comes with it. */
+  upsertLayoutSource(s) {
+    this._stmts.upsertLayoutSource.run({
+      family: s.family,
+      user_id: s.userId,
+      repo_owner: s.owner,
+      repo_name: s.repo,
+      path: s.path || '',
+      track: s.track,
+      branch: s.branch ?? null,
+      last_sha: s.lastSha ?? null,
+      last_ref: s.lastRef ?? null,
+      etag: s.etag ?? null,
+      last_checked_at: s.lastCheckedAt ?? null,
+      last_error: s.lastError ?? null,
+    });
+  }
+
+  /** Record a sync attempt; a null sha, ref or etag keeps the stored one. */
+  recordLayoutSourceCheck(family, { error = null, sha = null, ref = null, etag = null } = {}) {
+    this._stmts.updateLayoutSourceCheck.run({
+      family,
+      at: new Date().toISOString(),
+      error,
+      sha,
+      ref,
+      etag,
+    });
+  }
+
+  setLayoutSourceFlags(family, { shared = null, trusted = null }) {
+    this._stmts.setLayoutSourceFlag.run({
+      family,
+      shared: shared == null ? null : shared ? 1 : 0,
+      trusted: trusted == null ? null : trusted ? 1 : 0,
+    });
+  }
+
+  markLayoutSourceManualSync(family, at) {
+    this._stmts.setLayoutSourceManualSync.run(at, family);
+  }
+
+  deleteLayoutSource(family) {
+    this._stmts.deleteLayoutSource.run(family);
+  }
+
+  /** A family's version rows, oldest first: [{id, state}]. */
+  familyVersions(family) {
+    return this._stmts.familyVersions.all(family);
   }
 
   /** Whether any account's variant or default uses `layoutId`. */
@@ -146,6 +233,8 @@ class LayoutStore {
       review_note: keep('reviewNote', null),
       compile_ms: keep('compileMs', null),
       bytes: keep('bytes', 0),
+      source_sha: keep('sourceSha', null),
+      source_ref: keep('sourceRef', null),
       id: l.id,
       name: l.name || l.id,
       version: l.version ?? null,

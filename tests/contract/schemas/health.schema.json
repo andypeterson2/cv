@@ -24,6 +24,11 @@
       "description": "Seconds since process start.",
       "type": "number",
       "minimum": 0
+    },
+    "checks": {
+      "description": "Named health checks a monitor may watch, each a single status word (cv: github_token).",
+      "type": "object",
+      "additionalProperties": { "type": "string" }
     }
   },
   "allOf": [

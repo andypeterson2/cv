@@ -281,21 +281,22 @@ class CvDatabase {
       // Another account's row is listed only once public, and resolves (for pins
       // made while it was public) while public or unlisted.
       listLayouts: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.user_id IS NULL OR l.user_id = ? OR l.state = 'public' ORDER BY (l.source = 'builtin') DESC, l.family, l.version_no",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, l.source_sha, l.source_ref, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.user_id IS NULL OR l.user_id = ? OR l.state = 'public' ORDER BY (l.source = 'builtin') DESC, l.family, l.version_no",
       ),
       getLayout: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ? AND (l.user_id IS NULL OR l.user_id = ? OR l.state IN ('public', 'unlisted'))",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, l.source_sha, l.source_ref, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ? AND (l.user_id IS NULL OR l.user_id = ? OR l.state IN ('public', 'unlisted'))",
       ),
       upsertLayout:
-        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id, family, version_no, state, published_at, review_note, compile_ms, bytes)
-        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id, @family, @version_no, @state, @published_at, @review_note, @compile_ms, @bytes)
+        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id, family, version_no, state, published_at, review_note, compile_ms, bytes, source_sha, source_ref)
+        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id, @family, @version_no, @state, @published_at, @review_note, @compile_ms, @bytes, @source_sha, @source_ref)
         ON CONFLICT(id) DO UPDATE SET
           name=excluded.name, version=excluded.version, engine=excluded.engine, kinds=excluded.kinds,
           status=excluded.status, source=excluded.source, manifest=excluded.manifest,
           checksum=excluded.checksum, report=excluded.report, verified_at=excluded.verified_at,
           user_id=excluded.user_id, family=excluded.family, version_no=excluded.version_no,
           state=excluded.state, published_at=excluded.published_at,
-          review_note=excluded.review_note, compile_ms=excluded.compile_ms, bytes=excluded.bytes`),
+          review_note=excluded.review_note, compile_ms=excluded.compile_ms, bytes=excluded.bytes,
+          source_sha=excluded.source_sha, source_ref=excluded.source_ref`),
       setLayoutState: p(
         'UPDATE layouts SET state = ?, review_note = COALESCE(?, review_note), published_at = COALESCE(?, published_at) WHERE id = ?',
       ),
@@ -303,7 +304,7 @@ class CvDatabase {
         'SELECT COALESCE(MAX(version_no), 0) + 1 AS n FROM layouts WHERE family = ?',
       ),
       pendingLayouts: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.state = 'pending' ORDER BY l.created_at",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, l.source_sha, l.source_ref, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.state = 'pending' ORDER BY l.created_at",
       ),
       // `= ?` never matches a NULL owner, so the scoped delete cannot remove a
       // builtin however it is called.
@@ -311,11 +312,38 @@ class CvDatabase {
       // Unscoped — SYSTEM use only (the boot seed reconciling rows against disk, the
       // owner's review). Request handlers otherwise go through the scoped reads above.
       listAllLayouts: p(
-        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id ORDER BY (l.source = 'builtin') DESC, l.id",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, l.source_sha, l.source_ref, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id ORDER BY (l.source = 'builtin') DESC, l.id",
       ),
       deleteLayoutUnscoped: p('DELETE FROM layouts WHERE id = ?'),
       getLayoutUnscoped: p(
-        'SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ?',
+        'SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, l.bytes, l.source_sha, l.source_ref, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ?',
+      ),
+
+      // GitHub sources of linked layout families
+      getLayoutSource: p('SELECT * FROM layout_sources WHERE family = ?'),
+      listLayoutSources: p(
+        'SELECT * FROM layout_sources ORDER BY last_checked_at IS NOT NULL, last_checked_at',
+      ),
+      listUserLayoutSources: p('SELECT * FROM layout_sources WHERE user_id = ? ORDER BY family'),
+      upsertLayoutSource:
+        p(`INSERT INTO layout_sources (family, user_id, repo_owner, repo_name, path, track, branch, last_sha, last_ref, etag, last_checked_at, last_error)
+        VALUES (@family, @user_id, @repo_owner, @repo_name, @path, @track, @branch, @last_sha, @last_ref, @etag, @last_checked_at, @last_error)
+        ON CONFLICT(family) DO UPDATE SET repo_owner = excluded.repo_owner, repo_name = excluded.repo_name,
+          path = excluded.path, track = excluded.track, branch = excluded.branch, last_sha = excluded.last_sha,
+          last_ref = excluded.last_ref, etag = excluded.etag, last_checked_at = excluded.last_checked_at,
+          last_error = excluded.last_error`),
+      updateLayoutSourceCheck: p(
+        'UPDATE layout_sources SET last_checked_at = @at, last_error = @error, last_sha = COALESCE(@sha, last_sha), last_ref = COALESCE(@ref, last_ref), etag = COALESCE(@etag, etag) WHERE family = @family',
+      ),
+      setLayoutSourceFlag: p(
+        'UPDATE layout_sources SET shared = COALESCE(@shared, shared), trusted = COALESCE(@trusted, trusted) WHERE family = @family',
+      ),
+      setLayoutSourceManualSync: p(
+        'UPDATE layout_sources SET manual_synced_at = ? WHERE family = ?',
+      ),
+      deleteLayoutSource: p('DELETE FROM layout_sources WHERE family = ?'),
+      familyVersions: p(
+        'SELECT id, state FROM layouts WHERE family = ? AND version_no IS NOT NULL ORDER BY version_no',
       ),
 
       layoutInUse: p(

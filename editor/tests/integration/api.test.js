@@ -530,7 +530,18 @@ describe('Catalog + health', () => {
     // …and nothing data-shaped: /health is publicly reachable, so anything here is
     // world-readable. Pinned exactly so a well-meaning addition can't leak facts.
     expect(health.body.profiles).toBeUndefined();
-    expect(Object.keys(health.body).sort()).toEqual(['service', 'status', 'uptime_s', 'version']);
+    expect(Object.keys(health.body).sort()).toEqual([
+      'checks',
+      'service',
+      'status',
+      'uptime_s',
+      'version',
+    ]);
+    // The one extra: the layout sync token's health as a single word, for the monitor.
+    expect(Object.keys(health.body.checks)).toEqual(['github_token']);
+    expect(['ok', 'expiring', 'invalid', 'unset', 'unchecked']).toContain(
+      health.body.checks.github_token,
+    );
   });
 });
 
