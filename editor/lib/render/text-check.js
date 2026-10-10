@@ -18,13 +18,6 @@ const LAYOUT_CHARS = new Set([...'•|·“”‘’"\'–—…,.:;()/[]+-@&%$#
 // Characters that only ever come from a broken glyph-to-text mapping.
 const SUSPECT_CHARS = /[‑­ıſ�-]/u;
 
-// Words the awesome-cv header adds in `labeled` mode ("tel:", "GitHub: @…").
-const LABEL_WORDS = new Set(
-  'tel mailto homepage dob whatsapp github gitlab bitbucket stackoverflow linkedin in orcid twitter x mastodon skype reddit u researchgate xing medium kaggle hackerrank telegram google scholar'.split(
-    ' ',
-  ),
-);
-
 // Words layouts print on their own: the letter date, "Cover Letter", "Position in Place".
 const LAYOUT_WORDS = new Set(
   'january february march april may june july august september october november december cover letter page in attached'.split(
@@ -82,7 +75,7 @@ function sourceStrings(ctx) {
   const extra = ['position', 'address', 'mobile', 'email', 'dateofbirth', 'quote', 'extrainfo'].map(
     (k) => p[k],
   );
-  for (const soc of p.socials || []) extra.push(...soc.values);
+  for (const soc of p.socials || []) extra.push(...soc.values, soc.link);
 
   const c = ctx.meta && ctx.meta.kind === 'coverletter' ? ctx.coverletter : null;
   if (c) {
@@ -128,14 +121,14 @@ function isMixedCase(w) {
   return /\p{Ll}/u.test(w.slice(1)) && /\p{Lu}{2}/u.test(w);
 }
 
-function foreignWords(text, src, allowLabels) {
+function foreignWords(text, src) {
   const out = [];
   for (const w of words(text)) {
     const lw = w.toLowerCase();
     if (src.words.has(w)) continue;
     if (isMixedCase(w)) out.push(['mixed-case', w]);
     else if (src.lower.has(lw) || /^\p{N}+$/u.test(w) || LAYOUT_WORDS.has(lw)) continue;
-    else if (!(allowLabels && LABEL_WORDS.has(lw))) out.push(['foreign-word', w]);
+    else out.push(['foreign-word', w]);
   }
   return out;
 }
@@ -150,10 +143,9 @@ function missingWords(text, body) {
 /**
  * @param {object} ctx  buildContext() output the PDF was rendered from
  * @param {string} text pdftotext output
- * @param {object} [opts] { allowLabels } — accept the header's `labeled` words
  * @returns {{ok: boolean, issues: {rule: string, sample: string}[]}}
  */
-function checkText(ctx, text, opts = {}) {
+function checkText(ctx, text) {
   const { body, extra } = sourceStrings(ctx);
   const source = [...body, ...extra].join('\n');
   const sourceWords = new Set(words(source));
@@ -166,7 +158,7 @@ function checkText(ctx, text, opts = {}) {
   const found = [
     ...foreignChars(text, src),
     ...lineSplits(folded, src),
-    ...foreignWords(folded, src, opts.allowLabels),
+    ...foreignWords(folded, src),
     ...missingWords(folded, body),
   ];
   const seen = new Set();
