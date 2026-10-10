@@ -47,6 +47,10 @@ function buildPersonal(personalIn) {
     } else if (p[cat.key]) {
       socials.push({ key: cat.key, values: [p[cat.key]] });
     }
+    const soc = socials[socials.length - 1];
+    if (soc && soc.key === cat.key) {
+      soc.link = cat.link.replace(/\{(\d)\}/g, (m, i) => soc.values[Number(i)] || '');
+    }
   }
 
   return Object.assign({}, p, { photo, socials });
@@ -114,7 +118,6 @@ function resolveAccent(style) {
 
 function buildStyle(styleIn) {
   const style = Object.assign({}, STYLE_DEFAULTS, styleIn);
-  style.headerAltText = style.headerAltText === 'plain' ? 'plain' : 'labeled';
   style.accent = resolveAccent(style);
   return style;
 }
