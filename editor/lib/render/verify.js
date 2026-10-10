@@ -179,10 +179,6 @@ function fixtureSamples() {
         style: { fontFamily: 'roboto', accentColor: 'custom', customHex: '#3366CC' },
       }),
     },
-    {
-      label: 'fixture:plain-alt',
-      data: makeKitchenSink({ variant: 'cv', style: { headerAltText: 'plain' } }),
-    },
     { label: 'fixture:symbols', data: symbolSink() },
     {
       label: 'fixture:symbols-roboto',
@@ -204,7 +200,7 @@ async function textCheck(sample, result, extract) {
   const text = result.pdfPath ? await extract(result.pdfPath) : null;
   if (text == null) return { name, ok: true, detail: 'skipped (no pdftotext)', skipped: true };
   const ctx = buildContext(sample.data);
-  const { issues } = checkText(ctx, text, { allowLabels: ctx.style.headerAltText !== 'plain' });
+  const { issues } = checkText(ctx, text);
   for (const m of new Set((result.log || '').match(/Missing character: There is no \S+/g) || [])) {
     issues.unshift({ rule: 'missing-glyph', sample: m.split(' ').pop() });
   }

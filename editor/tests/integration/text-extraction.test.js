@@ -1,6 +1,6 @@
 /**
  * Real-compile text-layer check: renders the seeded Jane Doe profile with every
- * builtin layout, font and header mode, compiles it with xelatex, and requires
+ * builtin layout and font, compiles it with xelatex, and requires
  * the pdftotext output to match the source text. Skips without xelatex or
  * pdftotext (CI has neither; the container and a local TeX install have both).
  */
@@ -25,7 +25,7 @@ function hasBin(cmd, arg) {
 
 const canCompile = hasBin('xelatex', '--version') && hasBin('pdftotext', '-v');
 const LAYOUTS = path.join(__dirname, '..', '..', 'layouts');
-const STYLES = [{}, { fontFamily: 'roboto', headerAltText: 'plain' }];
+const STYLES = [{}, { fontFamily: 'roboto' }];
 
 describe.skipIf(!canCompile)('PDF text layer (Jane Doe)', () => {
   const db = new CvDatabase(':memory:');
@@ -56,8 +56,12 @@ describe.skipIf(!canCompile)('PDF text layer (Jane Doe)', () => {
       expect(result.log).not.toMatch(/Missing character/);
       const ctx = buildContext(data);
       const text = await extractText(result.pdfPath);
-      const { issues } = checkText(ctx, text, { allowLabels: ctx.style.headerAltText !== 'plain' });
+      const { issues } = checkText(ctx, text);
       expect(issues).toEqual([]);
+      if (kind !== 'coverletter') {
+        expect(text).toContain('github.com/janedoe');
+        expect(text).toContain('linkedin.com/in/janedoe');
+      }
     },
     60_000,
   );

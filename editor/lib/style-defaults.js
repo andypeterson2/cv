@@ -3,8 +3,6 @@ const STYLE_DEFAULTS = {
   fontSize: '11pt',
   accentColor: 'spinel',
   fontFamily: 'source-sans-3',
-  // Extracted header text: 'labeled' ("tel:…", "GitHub: @…") or 'plain' (as shown).
-  headerAltText: 'labeled',
 };
 
 const SPACING_DEFAULTS = {

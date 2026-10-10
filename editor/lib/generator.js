@@ -105,10 +105,7 @@ function buildPreamble(style, spacing, fonts) {
 
   lines.push('\\setbool{acvSectionColorHighlight}{true}');
   lines.push('');
-  lines.push(
-    '\\renewcommand{\\acvHeaderSocialSep}{\\BeginAccSupp{ActualText={}}\\quad\\textbar\\quad\\EndAccSupp{}}',
-  );
-  lines.push(`\\renewcommand{\\acvAltMode}{${s.headerAltText === 'plain' ? 'plain' : 'labeled'}}`);
+  lines.push('\\renewcommand{\\acvHeaderSocialSep}{\\quad\\textbar\\quad}');
   lines.push('');
 
   // Font override

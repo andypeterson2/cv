@@ -80,10 +80,15 @@ describe('checkText', () => {
     expect(rules(CLEAN + '\nSENıOR')).toContain('foreign-char');
   });
 
-  it('flags header labels unless they are allowed', () => {
-    const labeled = CLEAN.replace('jane@example.com', 'mailto:jane@example.com');
-    expect(rules(labeled)).toContain('foreign-word');
-    expect(checkText(ctx, labeled, { allowLabels: true }).ok).toBe(true);
+  it('flags header labels', () => {
+    expect(rules(CLEAN.replace('jane@example.com', 'mailto:jane@example.com'))).toContain(
+      'foreign-word',
+    );
+  });
+
+  it('accepts a social as its profile link', () => {
+    expect(sourceStrings(ctx).extra).toContain('github.com/janedoe');
+    expect(checkText(ctx, CLEAN.replace('| janedoe', '| github.com/janedoe')).ok).toBe(true);
   });
 
   it('flags missing words', () => {
