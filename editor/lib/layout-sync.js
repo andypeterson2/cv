@@ -358,6 +358,7 @@ function scheduleLayoutSync(getDb, { assetsDir }) {
     running = true;
     let changed = 0;
     try {
+      await github.checkToken();
       for (const src of getDb().listLayoutSources()) {
         const r = await syncFamily(getDb(), src.family, { assetsDir });
         if (r.changed) changed++;
@@ -369,6 +370,8 @@ function scheduleLayoutSync(getDb, { assetsDir }) {
       running = false;
     }
   };
+  // Learn the token's health at boot, so the monitor need not wait for the first sync.
+  void github.checkToken();
   setTimeout(
     () => {
       void run();
