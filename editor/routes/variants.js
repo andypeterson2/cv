@@ -39,7 +39,7 @@ function cleanupDir(dir) {
   }
 }
 
-const { renderVariant } = require('../lib/render/host');
+const { renderVariant, renderVariantIsolated } = require('../lib/render/host');
 const { selectLayout } = require('../lib/render/select');
 
 module.exports = function createVariantsRouter(getDb, projectRoot) {
@@ -359,10 +359,12 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // Shared compile tail — generate the .tex from resolved data, queue the (costly,
   // concurrency-capped) xelatex run, then stream the PDF back inline or JSON the log.
   // `opts` carries what differs between a variant and the main document: the per-request
-  // build root, the temp-dir prefix (kind), the layout selector, and the download name.
-  function runCompile(
+  // build root, the temp-dir prefix (kind), the layout selector, the download name, and
+  // the account the compile counts against. An uploaded layout's templates are another
+  // user's code, so they render in the worker with its timeout and output cap.
+  async function runCompile(
     compileData,
-    { buildRoot, kind, selectLayoutFor, filename },
+    { buildRoot, kind, selectLayoutFor, filename, accountId },
     res,
     { inline },
   ) {
@@ -370,15 +372,19 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
     try {
       fs.mkdirSync(buildRoot, { recursive: true });
       buildDir = fs.mkdtempSync(path.join(buildRoot, kind + '-'));
-      const { dir: layoutDir } = selectLayoutFor();
-      mainTexFile = renderVariant(compileData, buildDir, { layoutDir, assetsDir: ASSETS_DIR });
+      const { dir: layoutDir, source } = selectLayoutFor();
+      const opts = { layoutDir, assetsDir: ASSETS_DIR };
+      mainTexFile =
+        source === 'builtin'
+          ? renderVariant(compileData, buildDir, opts)
+          : await renderVariantIsolated(compileData, buildDir, opts);
     } catch (e) {
       if (buildDir) cleanupDir(buildDir);
       return compileFail(res, 500, 'internal_error', 'File generation failed: ' + e.message);
     }
 
-    // Queue the expensive xelatex run behind the shared concurrency limiter.
-    queuedCompile(buildDir, mainTexFile)
+    // Queue the expensive xelatex run behind the shared and per-account limiters.
+    queuedCompile(buildDir, mainTexFile, { key: accountId })
       .then((result) => {
         if (!result.ok) {
           cleanupDir(buildDir);
@@ -395,6 +401,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       })
       .catch((e) => {
         cleanupDir(buildDir);
+        if (e.code === 'busy') return compileFail(res, 429, 'compile_busy', e.message);
         compileFail(res, 500, 'internal_error', 'Compile failed: ' + e.message);
       });
   }
@@ -418,6 +425,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
         selectLayoutFor: () =>
           selectLayout(getDb(), variant, getDb().profileUserId(variant.profileId)),
         filename: `${slugifyName(variant.name)}-${variant.kind}.pdf`,
+        accountId: getDb().profileUserId(variant.profileId),
       },
       res,
       { inline },
@@ -446,6 +454,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
         selectLayoutFor: () =>
           selectLayout(getDb(), { layoutId: null, kind: 'cv' }, getDb().profileUserId(pid)),
         filename: `${slugifyName(profile.name)}.pdf`,
+        accountId: getDb().profileUserId(pid),
       },
       res,
       { inline },

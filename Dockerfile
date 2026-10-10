@@ -25,6 +25,7 @@ RUN apt-get update -qq && \
       fontconfig \
       fonts-dejavu-core \
       poppler-utils \
+      qpdf \
       ca-certificates \
       curl \
       unzip && \
