@@ -23,6 +23,8 @@ RUN apt-get update -qq && \
       texlive-fonts-recommended \
       texlive-pictures \
       fontconfig \
+      fonts-dejavu-core \
+      poppler-utils \
       ca-certificates \
       curl \
       unzip && \

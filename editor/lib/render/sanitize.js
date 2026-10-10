@@ -7,7 +7,9 @@
  * `sanitizeLatex`, or the builtin layout's golden-equivalence test breaks.
  *
  * Behaviour (matched to the legacy wired path):
- *   - escapes the bare specials  # $ % & _ ^  by backslash-prefixing them
+ *   - escapes the bare specials  # $ % & _  by backslash-prefixing them, and a
+ *     bare ^ as \textasciicircum{} (a bare \^ is an accent and would extract as
+ *     a combining mark)
  *   - skips a special that is already escaped (preceded by a backslash), so
  *     intentional commands like \textbf{...} or a hand-written \& survive
  *   - does not touch ~ or \ (the legacy wired path didn't either) — the
@@ -17,7 +19,9 @@
  */
 function sanitizeLatex(text) {
   if (typeof text !== 'string' || text === '') return text || '';
-  return text.replace(/(?<!\\)([#$%&_^])/g, '\\$1');
+  return text
+    .replace(/(?<!\\)([#$%&_])/g, '\\$1')
+    .replace(/(?<!\\)\^/g, '\\textasciicircum{}');
 }
 
 module.exports = { sanitizeLatex };
