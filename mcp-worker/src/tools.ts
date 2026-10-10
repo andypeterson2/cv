@@ -683,6 +683,21 @@ const toolDefs: ToolDef[] = [
     },
   },
   {
+    name: 'cv_set_variant_settings',
+    description:
+      'Override style/spacing/fonts for ONE variant, on top of the account settings from cv_set_settings. settings is a flat map of prefixed keys, e.g. {"spacing.contentTopAdjust":{"num":-2,"unit":"mm"}, "fonts.contentTextSize":{"num":10,"unit":"pt"}, "style.fontFamily":"roboto"}. null drops the override so the account value (then the default) applies again. cv_get_variant shows current overrides under settings.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        variant_id: variantId,
+        settings: { type: 'object', minProperties: 1 },
+      },
+      required: ['variant_id', 'settings'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('PATCH', `/api/variants/${enc(a.variant_id)}/settings`, a.settings),
+  },
+  {
     name: 'cv_create_variant',
     description:
       'Create a variant. kind selects the render: "cv" (no rules = the full main), "resume", or "coverletter". name is free ("Frontend Resume"). Returns {id}.',
@@ -997,7 +1012,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_set_settings',
     description:
-      'Update your account style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. See cv_catalog for valid colors/units.',
+      'Update your account style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. null resets a key to its default. Applies to every variant unless it overrides the key (cv_set_variant_settings). See cv_catalog for valid colors/units.',
     inputSchema: {
       type: 'object',
       properties: { settings: { type: 'object', minProperties: 1 } },
