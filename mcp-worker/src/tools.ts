@@ -997,7 +997,7 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_set_settings',
     description:
-      'Update your account style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. See cv_catalog for valid colors/units.',
+      'Update your account style/spacing/fonts (merges the given keys). settings is a flat map of prefixed keys, e.g. {"style.accentColor":"awesome-red", "spacing.horizontalMargin":{"num":1.4,"unit":"cm"}, "fonts.headerNameSize":{"num":32,"unit":"pt"}}. "style.headerAltText" is "labeled" (header contacts extract as \"tel:…\", \"GitHub: @…\") or "plain" (extract as shown). See cv_catalog for valid colors/units.',
     inputSchema: {
       type: 'object',
       properties: { settings: { type: 'object', minProperties: 1 } },

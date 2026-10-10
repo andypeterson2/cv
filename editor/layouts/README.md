@@ -64,6 +64,22 @@ Nunjucks with **LaTeX-safe delimiters** (so template syntax never collides with 
 Intentional LaTeX in a value passes through unescaped (e.g. a bullet containing
 `\textbf{...}` renders bold) — `tex` only escapes the bare specials.
 
+**PDF text layer.** Verification extracts each fixture PDF with `pdftotext` and fails
+when the text differs from the source (non-breaking hyphens, words split at line ends,
+mixed-case small caps, icons or labels in the extracted text, symbols the font cannot
+draw). Each preamble therefore needs, after fonts and `unicode-math` are loaded:
+
+```latex
+\XeTeXgenerateactualtext=1
+\hyphenpenalty=10000
+\exhyphenpenalty=10000
+<< symbolFallback() >>
+```
+
+`symbolFallback()` sets any palette symbol the current font lacks in DejaVu Sans.
+Wrap decorative icons in `\BeginAccSupp{ActualText={}}…\EndAccSupp{}` so they extract
+as nothing.
+
 ### Whitespace gotcha (important)
 
 The engine runs with `trimBlocks`+`lstripBlocks`: a block tag **on its own line** emits

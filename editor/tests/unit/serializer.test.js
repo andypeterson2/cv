@@ -15,7 +15,7 @@ describe('sanitizeLatex', () => {
     expect(sanitizeLatex('50% off')).toBe('50\\% off');
     expect(sanitizeLatex('$100')).toBe('\\$100');
     expect(sanitizeLatex('my_var')).toBe('my\\_var');
-    expect(sanitizeLatex('x^2')).toBe('x\\^2');
+    expect(sanitizeLatex('x^2')).toBe('x\\textasciicircum{}2');
   });
 
   test('does not double-escape already-escaped chars', () => {
