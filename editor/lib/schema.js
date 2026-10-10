@@ -18,23 +18,32 @@ const { VARIANT_KINDS, SLUG_PATTERN, SCORER_METHODS } = require('@cv/constants')
 const VALID_KINDS = VARIANT_KINDS;
 const SLUG = SLUG_PATTERN;
 
-// Global settings (style / spacing / fonts)
+// Account settings (style / spacing / fonts); a null value drops the key
+
+const settingValue = {
+  oneOf: [
+    { type: 'string' },
+    { type: 'null' },
+    {
+      type: 'object',
+      properties: { num: { type: 'number' }, unit: { type: 'string', enum: LATEX_UNITS } },
+      required: ['num', 'unit'],
+      additionalProperties: false,
+    },
+  ],
+};
 
 const settingsSchema = {
   type: 'object',
-  patternProperties: {
-    '^[a-zA-Z0-9_.]+$': {
-      oneOf: [
-        { type: 'string' },
-        {
-          type: 'object',
-          properties: { num: { type: 'number' }, unit: { type: 'string', enum: LATEX_UNITS } },
-          required: ['num', 'unit'],
-          additionalProperties: false,
-        },
-      ],
-    },
-  },
+  patternProperties: { '^[a-zA-Z0-9_.]+$': settingValue },
+  additionalProperties: false,
+  minProperties: 1,
+};
+
+// Per-variant overrides of render settings only; a null value drops the override
+const variantSettingsSchema = {
+  type: 'object',
+  patternProperties: { '^(style|spacing|fonts)\\.[a-zA-Z0-9_]+$': settingValue },
   additionalProperties: false,
   minProperties: 1,
 };
@@ -371,6 +380,7 @@ const schemas = {
   updateLetterSection: updateLetterSectionSchema,
   letterHeader: letterHeaderSchema,
   variantPersonal: variantPersonalSchema,
+  variantSettings: variantSettingsSchema,
   createVersion: createVersionSchema,
   tagVersion: tagVersionSchema,
 };

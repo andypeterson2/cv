@@ -7,9 +7,9 @@ import { cvCtx } from '../src/cv-ctx';
 // Worker runtime — proves the tool catalog + the Workers-safe validator behave
 // like the stdio server before that server is deleted.
 describe('cv tool catalog (moved into the Worker)', () => {
-  it('exposes exactly 62 tools, each cv_*-prefixed with a description + schema', () => {
-    expect(TOOL_COUNT).toBe(62);
-    expect(tools.length).toBe(62);
+  it('exposes exactly 63 tools, each cv_*-prefixed with a description + schema', () => {
+    expect(TOOL_COUNT).toBe(63);
+    expect(tools.length).toBe(63);
     for (const t of tools) {
       expect(t.name).toMatch(/^cv_/);
       expect(typeof t.description).toBe('string');
@@ -75,6 +75,13 @@ describe('cv tool catalog (moved into the Worker)', () => {
     expect(validate('cv_linkedin_mark_synced', { person_id: 5, entry_ids: [244, 245] }).valid).toBe(
       true,
     );
+    expect(
+      validate('cv_set_variant_settings', {
+        variant_id: 19,
+        settings: { 'spacing.contentTopAdjust': { num: -2, unit: 'mm' }, 'style.fontFamily': null },
+      }).valid,
+    ).toBe(true);
+    expect(validate('cv_set_variant_settings', { variant_id: 19, settings: {} }).valid).toBe(false);
   });
 
   it('callTool rejects unknown tools + invalid args before any network call', async () => {
@@ -106,6 +113,16 @@ describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
     expect(calls[0].headers.get('x-user-id')).toBe('7');
     expect(calls[0].headers.get('x-origin-secret')).toBe('test-origin-secret');
     expect(calls[0].headers.get('authorization')).toBeNull(); // the shared owner token is gone
+  });
+
+  it('cv_set_variant_settings PATCHes the variant settings route', async () => {
+    await cvCtx.run({ cvUserId: 7 }, () =>
+      callTool('cv_set_variant_settings', {
+        variant_id: 19,
+        settings: { 'spacing.marginTop': null },
+      }),
+    );
+    expect(calls[0].url).toMatch(/\/api\/variants\/19\/settings$/);
   });
 
   it('scopes to whoever is in context — a different id is sent verbatim', async () => {
