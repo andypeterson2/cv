@@ -29,7 +29,7 @@ const { bundleChecksum } = require('../lib/render/seed');
 const { uploadedLayoutDir, layoutDirForRow, DEFAULT_LAYOUT_ID } = require('../lib/render/layouts');
 
 // The repository a layout comes from, as a caller may see it: its last error and
-// trust only on the caller's own layouts.
+// trust only to its author and the site owner.
 function presentSource(src, own) {
   if (!src) return null;
   const out = {
@@ -50,8 +50,11 @@ function present(layout, userId, db) {
   if (!layout) return layout;
   const { userId: owner, reviewNote, bytes, ...rest } = layout;
   const own = owner != null && owner === userId;
+  const reviewer = db && userId != null && userId === db.ownerUserId();
   const source =
-    db && !layout.builtin ? presentSource(db.getLayoutSource(layout.family), own) : null;
+    db && !layout.builtin
+      ? presentSource(db.getLayoutSource(layout.family), own || reviewer)
+      : null;
   const shown = { ...rest, own, source };
   return own ? { ...shown, reviewNote, bytes } : shown;
 }
