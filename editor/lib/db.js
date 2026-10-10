@@ -278,31 +278,52 @@ class CvDatabase {
 
       // Layouts (bundle metadata; files live on disk). A builtin has user_id NULL,
       // which is what makes it visible to every account; an upload names its owner.
+      // Another account's row is listed only once public, and resolves (for pins
+      // made while it was public) while public or unlisted.
       listLayouts: p(
-        "SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts WHERE user_id IS NULL OR user_id = ? ORDER BY (source = 'builtin') DESC, id",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.user_id IS NULL OR l.user_id = ? OR l.state = 'public' ORDER BY (l.source = 'builtin') DESC, l.family, l.version_no",
       ),
       getLayout: p(
-        'SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at, user_id FROM layouts WHERE id = ? AND (user_id IS NULL OR user_id = ?)',
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ? AND (l.user_id IS NULL OR l.user_id = ? OR l.state IN ('public', 'unlisted'))",
       ),
       upsertLayout:
-        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id)
-        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id)
+        p(`INSERT INTO layouts (id, name, version, engine, kinds, status, source, manifest, checksum, report, verified_at, user_id, family, version_no, state, published_at, review_note, compile_ms)
+        VALUES (@id, @name, @version, @engine, @kinds, @status, @source, @manifest, @checksum, @report, @verified_at, @user_id, @family, @version_no, @state, @published_at, @review_note, @compile_ms)
         ON CONFLICT(id) DO UPDATE SET
           name=excluded.name, version=excluded.version, engine=excluded.engine, kinds=excluded.kinds,
           status=excluded.status, source=excluded.source, manifest=excluded.manifest,
           checksum=excluded.checksum, report=excluded.report, verified_at=excluded.verified_at,
-          user_id=excluded.user_id`),
+          user_id=excluded.user_id, family=excluded.family, version_no=excluded.version_no,
+          state=excluded.state, published_at=excluded.published_at,
+          review_note=excluded.review_note, compile_ms=excluded.compile_ms`),
+      setLayoutState: p(
+        'UPDATE layouts SET state = ?, review_note = COALESCE(?, review_note), published_at = COALESCE(?, published_at) WHERE id = ?',
+      ),
+      nextLayoutVersion: p(
+        'SELECT COALESCE(MAX(version_no), 0) + 1 AS n FROM layouts WHERE family = ?',
+      ),
+      pendingLayouts: p(
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.state = 'pending' ORDER BY l.created_at",
+      ),
       // `= ?` never matches a NULL owner, so the scoped delete cannot remove a
       // builtin however it is called.
       deleteLayout: p('DELETE FROM layouts WHERE id = ? AND user_id = ?'),
-      // Unscoped — SYSTEM use only (the boot seed reconciling rows against disk).
-      // Request handlers must go through the scoped pair above.
+      // Unscoped — SYSTEM use only (the boot seed reconciling rows against disk, the
+      // owner's review). Request handlers otherwise go through the scoped reads above.
       listAllLayouts: p(
-        "SELECT id, name, version, engine, kinds, status, source, checksum, created_at, verified_at FROM layouts ORDER BY (source = 'builtin') DESC, id",
+        "SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name FROM layouts l LEFT JOIN users u ON u.id = l.user_id ORDER BY (l.source = 'builtin') DESC, l.id",
       ),
       deleteLayoutUnscoped: p('DELETE FROM layouts WHERE id = ?'),
       getLayoutUnscoped: p(
-        'SELECT id, name, version, engine, kinds, status, source, manifest, checksum, report, created_at, verified_at, user_id FROM layouts WHERE id = ?',
+        'SELECT l.id, l.name, l.version, l.engine, l.kinds, l.status, l.source, l.checksum, l.created_at, l.verified_at, l.user_id, l.family, l.version_no, l.state, l.published_at, l.review_note, l.compile_ms, u.name AS author_name, l.manifest, l.report FROM layouts l LEFT JOIN users u ON u.id = l.user_id WHERE l.id = ?',
+      ),
+
+      // Per-account verification reports (they may quote that account's résumé text)
+      getLayoutReport: p(
+        'SELECT ok, report, created_at FROM layout_reports WHERE layout_id = ? AND user_id = ?',
+      ),
+      upsertLayoutReport: p(
+        "INSERT INTO layout_reports (layout_id, user_id, ok, report) VALUES (?, ?, ?, ?) ON CONFLICT(layout_id, user_id) DO UPDATE SET ok = excluded.ok, report = excluded.report, created_at = datetime('now')",
       ),
 
       // Variant rules

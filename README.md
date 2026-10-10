@@ -65,7 +65,7 @@ User ───── Profile ──┬── Personal info (per-profile key-valu
 
 Every profile belongs to an account, and an account sees only its own. Style, spacing and fonts are per-account; a document renders with the style of the account that owns its profile, so a shared or public profile looks the same to every reader. Profiles owned by the built-in `@system` account (the Jane Doe demo) are the public ones: anyone can read them without signing in, and only that account can change them.
 
-A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification.
+A document is produced by resolving a variant into plain data, rendering it through the chosen layout's templates, and compiling the result with XeLaTeX. Layouts are swappable bundles: two ship with the image, and an account can upload its own, which is installed only after it passes verification. An author can publish an upload: it is copied as the next numbered version, verified again, and listed for every account once the site owner approves it. Anyone may pin a public version to a variant or as their default and keeps it until they choose a newer one; unpublishing hides a version from the list without breaking anyone already using it.
 
 ## API reference
 
@@ -84,7 +84,7 @@ The shape, by prefix:
 | `/api/profiles`, `/api/profiles/:id/…` | Profiles, and everything scoped to one: personal info, sections, variants, versions, tags, import/export, LinkedIn sync |
 | `/api/sections/:id`, `/api/entries/:id`, `/api/items/:id` | The id-addressed content tree, plus tags |
 | `/api/variants/:id/…` | Tag rules, section order, per-entry overrides, cover-letter paragraphs, `/resolve`, and the compile routes |
-| `/api/layouts` | List, upload, verify, delete, and the account's default |
+| `/api/layouts` | List, upload, verify, publish, unpublish, delete, the owner's review queue, and the account's default |
 
 Errors share one body: `{"error": {"code": "...", "message": "...", "details": ...}}`, with the HTTP status carrying the class. The compile routes add `success` and the xelatex `log` beside it.
 
@@ -121,6 +121,7 @@ Cost and abuse. Each compile spawns a XeLaTeX process, so these bound it.
 | `CV_COMPILE_CONCURRENCY` | `2` | XeLaTeX processes allowed at once |
 | `CV_COMPILE_PER_USER` | `1` | Compiles one account may run at once; up to 3 more wait, beyond that the compile returns 429 |
 | `CV_COMPILE_TIMEOUT_MS` | `30000` | Per-compile timeout |
+| `CV_LAYOUT_MAX_COMPILE_MS` | `10000` | Slowest fixture compile a layout version may have and still be approved for sharing |
 | `CV_UPLOAD_RATE_MAX` | `5` | Layout uploads per minute per client |
 
 ## Testing

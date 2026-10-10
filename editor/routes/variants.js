@@ -40,6 +40,7 @@ function cleanupDir(dir) {
 }
 
 const { renderVariant, renderVariantIsolated } = require('../lib/render/host');
+const { pinCheck } = require('../lib/render/pin-check');
 const { selectLayout } = require('../lib/render/select');
 
 module.exports = function createVariantsRouter(getDb, projectRoot) {
@@ -104,7 +105,7 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
   // global default. A non-null id must exist, be active, and support the kind.
   router.put(
     '/:id/layout',
-    wrap((req, res) => {
+    wrap(async (req, res) => {
       const id = intId(req.params.id, 'variant id');
       const v = requireVariant(id, req.userId);
       const layoutId = req.body ? req.body.layout_id : undefined;
@@ -115,15 +116,19 @@ module.exports = function createVariantsRouter(getDb, projectRoot) {
       if (typeof layoutId !== 'string')
         throw new AppError('layout_id must be a string or null', 400);
       // Resolved against the profile's owner, the same account the compile will read
-      // it as, so a variant can only be bound to a layout it can actually use.
-      const layout = getDb().getLayout(layoutId, getDb().profileUserId(v.profileId));
-      if (!layout) throw new NotFoundError('Layout not found');
+      // it as. A new pin needs a builtin, one of that account's own layouts, or a
+      // version that is public right now; a pin, once made, outlives unpublishing.
+      const owner = getDb().profileUserId(v.profileId);
+      const layout = getDb().getLayout(layoutId, owner);
+      if (!layout || !getDb().canPinLayout(layout, owner))
+        throw new NotFoundError('Layout not found');
       if (layout.status !== 'active') throw new AppError('Layout is not active', 409);
       if (Array.isArray(layout.kinds) && !layout.kinds.includes(v.kind)) {
         throw new AppError(`Layout "${layoutId}" does not support ${v.kind}`, 409);
       }
+      const warnings = await pinCheck(getDb(), layout, owner, { assetsDir: ASSETS_DIR });
       getDb().setVariantLayout(id, layoutId);
-      res.json({ success: true, layout_id: layoutId });
+      res.json({ success: true, layout_id: layoutId, warnings });
     }),
   );
 
