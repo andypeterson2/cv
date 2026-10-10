@@ -16,6 +16,9 @@ const createEntriesRouter = require('./routes/entries');
 const createItemsRouter = require('./routes/items');
 const createVariantsRouter = require('./routes/variants');
 const createDataRouter = require('./routes/data');
+const { storageGuard } = require('./lib/quota');
+const { scheduleSweeps } = require('./lib/build-sweep');
+const { CV_LAYOUTS_DIR } = require('./lib/render/layouts');
 const createLayoutsRouter = require('./routes/layouts');
 const createAuthRouter = require('./routes/auth');
 const { seedBuiltinLayouts } = require('./lib/render/seed');
@@ -187,6 +190,9 @@ app.use(
 // reach it; every route reads it and the profile layer scopes by it.
 app.use('/api', attachUser(getDb));
 
+// Refuse writes from an account already at its storage quota.
+app.use('/api', storageGuard(getDb));
+
 // Mount routers — every content route is id-addressable; there is no active
 // profile / session state.
 
@@ -229,6 +235,10 @@ if (require.main === module) {
     console.log(`Project root: ${PROJECT_ROOT}`);
     console.log(`Database: ${DB_PATH}`);
     warmSeedEmbeddings();
+    scheduleSweeps({
+      buildDir: path.join(PROJECT_ROOT, 'build'),
+      zipCacheDir: path.join(CV_LAYOUTS_DIR, '.zips'),
+    });
   });
 }
 

@@ -1,5 +1,6 @@
 const express = require('express');
 const { buildHealth } = require('../lib/health');
+const { usageReport } = require('../lib/quota');
 
 module.exports = function createDataRouter(getDb) {
   const router = express.Router();
@@ -17,6 +18,11 @@ module.exports = function createDataRouter(getDb) {
       latexTypeMap: LATEX_TYPE_MAP,
       validSectionTypes: VALID_SEMANTIC_TYPES,
     });
+  });
+
+  // What the caller's account stores against its limits.
+  router.get('/usage', (req, res) => {
+    res.json(usageReport(getDb(), req.userId));
   });
 
   router.get('/health', (req, res) => {
