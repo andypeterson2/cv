@@ -232,6 +232,10 @@ describe('routes', () => {
     );
     expect(pub.source.repo).toBe('ada/modern');
     expect(pub.source).not.toHaveProperty('lastError');
+    const seen = (
+      await request('GET', '/api/layouts', undefined, db.ownerUserId())
+    ).body.layouts.find((l) => l.family === family());
+    expect(seen.source).toHaveProperty('trusted');
   });
 
   test('linking a private repo is refused; only the owner may trust', async () => {
