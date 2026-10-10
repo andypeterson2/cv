@@ -48,16 +48,16 @@ const variantSettingsSchema = {
   minProperties: 1,
 };
 
-// Persons + personal info
+// Profiles + personal info
 
-const createPersonSchema = {
+const createProfileSchema = {
   type: 'object',
   properties: { name: { type: 'string', minLength: 1, maxLength: 200 } },
   required: ['name'],
   additionalProperties: false,
 };
 
-const updatePersonSchema = createPersonSchema;
+const updateProfileSchema = createProfileSchema;
 
 const personalSchema = {
   type: 'object',
@@ -68,7 +68,7 @@ const personalSchema = {
 
 // Cover-letter header fields (coverletter.*): same shape as personal — flat
 // string map, the setter adds the prefix.
-// (the per-person `coverletter` schema was retired with its route — the header
+// (the per-profile `coverletter` schema was retired with its route — the header
 // is now per-variant, validated by `letterHeader`)
 
 // Import is intentionally permissive: the export shape ({personal, sections, variants,
@@ -200,7 +200,7 @@ const suggestTagsSchema = {
   additionalProperties: false,
 };
 
-// What a person did with tag suggestions (a batch from one editing pass).
+// What a profile did with tag suggestions (a batch from one editing pass).
 const tagEventsSchema = {
   type: 'object',
   properties: {
@@ -334,7 +334,7 @@ const letterHeaderSchema = {
 // Versions
 
 // Only `label` is accepted; the checkpoint's content is snapshotted server-side
-// from the person's authoritative state, so any client-sent `doc` is stripped
+// from the profile's authoritative state, so any client-sent `doc` is stripped
 // (ajv removeAdditional: 'all').
 const createVersionSchema = {
   type: 'object',
@@ -354,8 +354,8 @@ const tagVersionSchema = {
 
 const schemas = {
   settings: settingsSchema,
-  createPerson: createPersonSchema,
-  updatePerson: updatePersonSchema,
+  createProfile: createProfileSchema,
+  updateProfile: updateProfileSchema,
   personal: personalSchema,
   import: importSchema,
   createSection: createSectionSchema,

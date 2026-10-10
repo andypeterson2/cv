@@ -1,9 +1,9 @@
 /**
  * Integration tests for the LinkedIn export/drift endpoints:
- * GET /persons/:pid/linkedin(/status) and POST /persons/:pid/linkedin/mark-synced.
+ * GET /profiles/:pid/linkedin(/status) and POST /profiles/:pid/linkedin/mark-synced.
  * In-memory DB, tokenAuth disabled (no CV_EDITOR_TOKEN) — covers routing, the
  * default-variant pick, format selection, and the export→mark→drift round-trip over
- * HTTP. The auth gating for these person-scoped routes is covered by the auth tests.
+ * HTTP. The auth gating for these profile-scoped routes is covered by the auth tests.
  */
 const http = require('http');
 const CvDatabase = require('../../lib/db');
@@ -65,7 +65,7 @@ let entryB;
 let vid;
 beforeEach(() => {
   db.clearAllContent();
-  pid = db.createPerson('Test');
+  pid = db.createProfile('Test');
   const sec = db.createSection(pid, 'experience', 'experience', 'Experience');
   entryA = db.createEntry(sec, {
     position: 'Engineer',
@@ -93,9 +93,9 @@ const experienceItem0 = () =>
 
 describe('LinkedIn endpoints', () => {
   test('GET /linkedin exports the cv variant by default — cleaned, bulleted, fingerprinted', async () => {
-    const res = await request('GET', `/api/persons/${pid}/linkedin`);
+    const res = await request('GET', `/api/profiles/${pid}/linkedin`);
     expect(res.status).toBe(200);
-    expect(res.body.variantId).toBe(vid); // default = the person's cv-kind variant
+    expect(res.body.variantId).toBe(vid); // default = the profile's cv-kind variant
     expect(res.body.format).toBe('linkedin');
     expect(res.body.positions).toHaveLength(2);
     expect(res.body.positions[0]).toMatchObject({
@@ -109,42 +109,42 @@ describe('LinkedIn endpoints', () => {
     expect(typeof res.body.positions[0].fingerprint).toBe('string');
   });
 
-  test('explicit variant + format are honored; a variant not owned by the person → 404', async () => {
-    const md = await request('GET', `/api/persons/${pid}/linkedin?variant=${vid}&format=markdown`);
+  test('explicit variant + format are honored; a variant not owned by the profile → 404', async () => {
+    const md = await request('GET', `/api/profiles/${pid}/linkedin?variant=${vid}&format=markdown`);
     expect(md.status).toBe(200);
     expect(md.body.positions[0].description.startsWith('- ')).toBe(true);
 
-    const bad = await request('GET', `/api/persons/${pid}/linkedin?variant=999999`);
+    const bad = await request('GET', `/api/profiles/${pid}/linkedin?variant=999999`);
     expect(bad.status).toBe(404);
   });
 
   test('status starts new; mark-synced flips it to synced', async () => {
-    const before = await request('GET', `/api/persons/${pid}/linkedin/status`);
+    const before = await request('GET', `/api/profiles/${pid}/linkedin/status`);
     expect(before.body.positions.map((p) => p.state)).toEqual(['new', 'new']);
 
-    const mark = await request('POST', `/api/persons/${pid}/linkedin/mark-synced`, {});
+    const mark = await request('POST', `/api/profiles/${pid}/linkedin/mark-synced`, {});
     expect(mark.status).toBe(200);
     expect(mark.body.marked).toBe(2);
 
-    const after = await request('GET', `/api/persons/${pid}/linkedin/status`);
+    const after = await request('GET', `/api/profiles/${pid}/linkedin/status`);
     expect(after.body.positions.map((p) => p.state)).toEqual(['synced', 'synced']);
   });
 
   test('editing one entry drifts only it; a subset mark-synced re-stamps only the named entries', async () => {
-    await request('POST', `/api/persons/${pid}/linkedin/mark-synced`, {}); // sync both
+    await request('POST', `/api/profiles/${pid}/linkedin/mark-synced`, {}); // sync both
     db.updateItem(experienceItem0().id, { content: 'Shipped it faster' });
 
-    const drift = await request('GET', `/api/persons/${pid}/linkedin/status`);
+    const drift = await request('GET', `/api/profiles/${pid}/linkedin/status`);
     const by = stateById(drift.body.positions);
     expect(by[entryA]).toBe('drifted');
     expect(by[entryB]).toBe('synced');
 
-    const mark = await request('POST', `/api/persons/${pid}/linkedin/mark-synced`, {
+    const mark = await request('POST', `/api/profiles/${pid}/linkedin/mark-synced`, {
       entryIds: [entryA],
     });
     expect(mark.body.marked).toBe(1);
     const resynced = stateById(
-      (await request('GET', `/api/persons/${pid}/linkedin/status`)).body.positions,
+      (await request('GET', `/api/profiles/${pid}/linkedin/status`)).body.positions,
     );
     expect(resynced[entryA]).toBe('synced');
   });

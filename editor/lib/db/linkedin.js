@@ -9,17 +9,17 @@
  * sharing its prepared statements + db handle.
  */
 class Linkedin {
-  /** The person that owns a variant, or null — lets a variant-scoped tool key the
-   *  per-person sync table without a second round trip. */
-  linkedinPersonForVariant(variantId) {
+  /** The profile that owns a variant, or null — lets a variant-scoped tool key the
+   *  per-profile sync table without a second round trip. */
+  linkedinProfileForVariant(variantId) {
     const v = this._stmts.getVariant.get(variantId);
-    return v ? v.person_id : null;
+    return v ? v.profile_id : null;
   }
 
-  /** Stored sync rows for a person: Map(entry_id → { fingerprint, syncedAt }). */
-  getLinkedinSync(personId) {
+  /** Stored sync rows for a profile: Map(entry_id → { fingerprint, syncedAt }). */
+  getLinkedinSync(profileId) {
     const map = new Map();
-    for (const r of this._stmts.linkedinSyncByPerson.all(personId)) {
+    for (const r of this._stmts.linkedinSyncByProfile.all(profileId)) {
       map.set(r.entry_id, { fingerprint: r.fingerprint, syncedAt: r.synced_at });
     }
     return map;
@@ -30,8 +30,8 @@ class Linkedin {
    * `new` (never synced), `synced` (fingerprint matches), or `drifted` (changed since
    * the last paste). Comparison only — writes happen in markLinkedinSynced.
    */
-  linkedinStatus(personId, positions) {
-    const stored = this.getLinkedinSync(personId);
+  linkedinStatus(profileId, positions) {
+    const stored = this.getLinkedinSync(profileId);
     return positions.map((p) => {
       const s = stored.get(p.entryId);
       const state = !s ? 'new' : s.fingerprint === p.fingerprint ? 'synced' : 'drifted';
@@ -49,10 +49,10 @@ class Linkedin {
    * Stamp the current fingerprint + `syncedAt` for each { entryId, fingerprint } —
    * called after the user pastes. Upserts in one transaction; returns the count.
    */
-  markLinkedinSynced(personId, entries, syncedAt) {
+  markLinkedinSynced(profileId, entries, syncedAt) {
     const tx = this.db.transaction(() => {
       for (const e of entries) {
-        this._stmts.upsertLinkedinSync.run(personId, e.entryId, e.fingerprint, syncedAt);
+        this._stmts.upsertLinkedinSync.run(profileId, e.entryId, e.fingerprint, syncedAt);
       }
     });
     tx();

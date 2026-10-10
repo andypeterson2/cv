@@ -1,7 +1,7 @@
 /**
  * Version history: snapshot → list → restore round-trips the
- * whole person, and restore REPLACES (never appends) content while keeping the
- * person row and its history. :memory: DB, migrations auto-run — no file I/O.
+ * whole profile, and restore REPLACES (never appends) content while keeping the
+ * profile row and its history. :memory: DB, migrations auto-run — no file I/O.
  */
 const CvDatabase = require('../../lib/db');
 
@@ -10,8 +10,8 @@ let pid;
 
 beforeEach(() => {
   db = new CvDatabase(':memory:');
-  db.clearAllContent(); // remove the seeded person → blank slate
-  pid = db.createPerson('Test Person');
+  db.clearAllContent(); // remove the seeded profile → blank slate
+  pid = db.createProfile('Test Profile');
 });
 
 afterEach(() => {
@@ -46,7 +46,7 @@ describe('Versions (ADR-006)', () => {
 
   test('restore replaces content and round-trips the document exactly', () => {
     buildMain();
-    const before = db.getPersonExport(pid);
+    const before = db.getProfileExport(pid);
     const v1 = Number(db.createVersion(pid, 'checkpoint'));
 
     // diverge: add a whole section after the checkpoint
@@ -55,7 +55,7 @@ describe('Versions (ADR-006)', () => {
     expect(db.getSections(pid)).toHaveLength(2);
 
     expect(db.restoreVersion(pid, v1)).toBe(true);
-    expect(db.getPersonExport(pid)).toEqual(before); // exact round-trip
+    expect(db.getProfileExport(pid)).toEqual(before); // exact round-trip
     expect(db.getSections(pid)).toHaveLength(1); // the extra section is gone
   });
 
@@ -64,7 +64,7 @@ describe('Versions (ADR-006)', () => {
     const v1 = Number(db.createVersion(pid, 'cp'));
     db.restoreVersion(pid, v1);
     db.restoreVersion(pid, v1);
-    const exp = db.getPersonExport(pid);
+    const exp = db.getProfileExport(pid);
     expect(exp.sections).toHaveLength(1);
     expect(exp.sections[0].entries[0].items).toHaveLength(2);
     expect(exp.variants).toHaveLength(1);
@@ -82,15 +82,15 @@ describe('Versions (ADR-006)', () => {
     expect(db.restoreVersion(pid, 99999)).toBe(false);
   });
 
-  test('versions are scoped per person', () => {
+  test('versions are scoped per profile', () => {
     buildMain();
-    const other = db.createPerson('Other');
+    const other = db.createProfile('Other');
     db.createVersion(pid, 'mine');
     expect(db.listVersions(other)).toHaveLength(0);
     expect(db.getVersionDoc(other, db.listVersions(pid)[0].id)).toBeNull();
   });
 
-  test('getVersion returns metadata + parsed doc; null for unknown or wrong person', () => {
+  test('getVersion returns metadata + parsed doc; null for unknown or wrong profile', () => {
     buildMain();
     const v1 = Number(db.createVersion(pid, 'cp'));
     const full = db.getVersion(pid, v1);
@@ -99,8 +99,8 @@ describe('Versions (ADR-006)', () => {
     expect(typeof full.createdAt).toBe('number');
     expect(Array.isArray(full.doc.sections)).toBe(true);
     expect(db.getVersion(pid, 99999)).toBeNull();
-    const other = db.createPerson('Other');
-    expect(db.getVersion(other, v1)).toBeNull(); // scoped per person
+    const other = db.createProfile('Other');
+    expect(db.getVersion(other, v1)).toBeNull(); // scoped per profile
   });
 
   test('branches: createVersion records branch + parent; listVersions returns them', () => {
@@ -130,10 +130,10 @@ describe('Versions (ADR-006)', () => {
     expect(db.setTag(pid, 99999, 'x')).toBe(false); // unknown id
   });
 
-  test('deleting a person cascades its versions away', () => {
+  test('deleting a profile cascades its versions away', () => {
     buildMain();
     db.createVersion(pid, 'cp');
-    db.deletePerson(pid);
+    db.deleteProfile(pid);
     expect(db.listVersions(pid)).toHaveLength(0);
   });
 });

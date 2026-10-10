@@ -13,7 +13,7 @@
  *
  * Exempt:
  *   - `/health` and `/api/health` — the container HEALTHCHECK hits these from
- *     127.0.0.1 with no header, and they carry no person data. Gating them would
+ *     127.0.0.1 with no header, and they carry no profile data. Gating them would
  *     fail the healthcheck and flap the deploy.
  *   - `OPTIONS` — CORS preflight carries no data and must stay permissive.
  *

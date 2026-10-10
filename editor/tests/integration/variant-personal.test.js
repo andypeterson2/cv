@@ -59,10 +59,11 @@ let pid;
 let vid;
 beforeEach(async () => {
   db.clearAllContent();
-  pid = Number((await request('POST', '/api/persons', { name: 'Test' })).body.id);
-  db.setPersonal(pid, { firstName: 'Test', lastName: 'Person', position: 'Person Tagline' });
+  pid = Number((await request('POST', '/api/profiles', { name: 'Test' })).body.id);
+  db.setPersonal(pid, { firstName: 'Test', lastName: 'Profile', position: 'Profile Tagline' });
   vid = Number(
-    (await request('POST', `/api/persons/${pid}/variants`, { name: 'ML', kind: 'resume' })).body.id,
+    (await request('POST', `/api/profiles/${pid}/variants`, { name: 'ML', kind: 'resume' })).body
+      .id,
   );
 });
 
@@ -86,12 +87,12 @@ describe('per-variant personal routes', () => {
     );
   });
 
-  test('null clears the override, so the person value comes back', async () => {
+  test('null clears the override, so the profile value comes back', async () => {
     await request('PATCH', `/api/variants/${vid}/personal`, { position: 'Variant Tagline' });
     await request('PATCH', `/api/variants/${vid}/personal`, { position: null });
     expect((await request('GET', `/api/variants/${vid}/personal`)).body).toEqual({});
     expect((await request('GET', `/api/variants/${vid}/resolve`)).body.personal.position).toBe(
-      'Person Tagline',
+      'Profile Tagline',
     );
   });
 
@@ -102,7 +103,7 @@ describe('per-variant personal routes', () => {
 
   test('overrides are per variant', async () => {
     const other = Number(
-      (await request('POST', `/api/persons/${pid}/variants`, { name: 'QC', kind: 'resume' })).body
+      (await request('POST', `/api/profiles/${pid}/variants`, { name: 'QC', kind: 'resume' })).body
         .id,
     );
     await request('PATCH', `/api/variants/${vid}/personal`, { position: 'ML Tagline' });
@@ -115,7 +116,7 @@ describe('per-variant personal routes', () => {
       400,
     );
     // A key outside the pattern is stripped by ajv (removeAdditional), as on the
-    // person route, so the request succeeds and writes nothing.
+    // profile route, so the request succeeds and writes nothing.
     expect(
       (await request('PATCH', `/api/variants/${vid}/personal`, { 'bad key': 'x' })).status,
     ).toBe(200);

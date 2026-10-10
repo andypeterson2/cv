@@ -1,19 +1,19 @@
 /**
  * SQLite access layer for the CV Editor (normalized, stateless model).
  *
- * Single source of truth — every person owns a main CV (sections → entries →
+ * Single source of truth — every profile owns a main CV (sections → entries →
  * items, with free-string tags) plus named variants. A variant is a lightweight
  * overlay: a tag query (variant_rules) + sparse per-entry/item exceptions
  * (entry_overrides / item_overrides) + a section list (variant_sections), or —
  * for coverletter-kind variants — a list of letter paragraphs.
  *
- * There is no "active person" and no JSON-blob working copy. All ids are stable
+ * There is no "active profile" and no JSON-blob working copy. All ids are stable
  * and every method takes the ids it operates on, so callers (REST, MCP) are
  * fully addressable and stateless.
  *
  * Style/spacing/fonts are per-user (the `settings` table, keyed on the account);
- * personal info is per-person (`person_settings`) and the cover-letter header is
- * per-variant. A document renders with its person's owner's style, so what a
+ * personal info is per-profile (`profile_settings`) and the cover-letter header is
+ * per-variant. A document renders with its profile's owner's style, so what a
  * reader sees does not depend on who asked for it.
  */
 
@@ -58,30 +58,32 @@ class CvDatabase {
         'INSERT OR IGNORE INTO settings (user_id, key, value, value_num, value_unit, value_legacy) SELECT ?, key, value, value_num, value_unit, value_legacy FROM settings WHERE user_id = ?',
       ),
 
-      // Person settings (personal.* / coverletter.*)
-      getPersonSettings: p(
-        "SELECT key, value, value_num, value_unit FROM person_settings WHERE person_id = ? AND key LIKE ? || '%'",
+      // Profile settings (personal.* / coverletter.*)
+      getProfileSettings: p(
+        "SELECT key, value, value_num, value_unit FROM profile_settings WHERE profile_id = ? AND key LIKE ? || '%'",
       ),
-      upsertPersonSetting: p(
-        'INSERT INTO person_settings (person_id, key, value) VALUES (?, ?, ?) ON CONFLICT(person_id, key) DO UPDATE SET value = excluded.value',
+      upsertProfileSetting: p(
+        'INSERT INTO profile_settings (profile_id, key, value) VALUES (?, ?, ?) ON CONFLICT(profile_id, key) DO UPDATE SET value = excluded.value',
       ),
-      deletePersonSetting: p('DELETE FROM person_settings WHERE person_id = ? AND key = ?'),
+      deleteProfileSetting: p('DELETE FROM profile_settings WHERE profile_id = ? AND key = ?'),
 
-      // Persons
-      getPersons: p('SELECT id, name, created_at FROM persons ORDER BY id'),
-      getPerson: p('SELECT id, name, created_at FROM persons WHERE id = ?'),
-      insertPerson: p('INSERT INTO persons (name, user_id) VALUES (?, ?)'),
-      updatePersonName: p('UPDATE persons SET name = ? WHERE id = ?'),
-      deletePerson: p('DELETE FROM persons WHERE id = ?'),
-      countPersons: p('SELECT COUNT(*) AS cnt FROM persons'),
+      // Profiles
+      getProfiles: p('SELECT id, name, created_at FROM profiles ORDER BY id'),
+      getProfile: p('SELECT id, name, created_at FROM profiles WHERE id = ?'),
+      insertProfile: p('INSERT INTO profiles (name, user_id) VALUES (?, ?)'),
+      updateProfileName: p('UPDATE profiles SET name = ? WHERE id = ?'),
+      deleteProfile: p('DELETE FROM profiles WHERE id = ?'),
+      countProfiles: p('SELECT COUNT(*) AS cnt FROM profiles'),
       // --- multi-tenancy (migration 018): ownership + per-user scoping ---
-      personUserId: p('SELECT user_id FROM persons WHERE id = ?'),
-      getPersonsForUser: p(
-        'SELECT id, name, created_at FROM persons WHERE user_id = ? ORDER BY id',
+      profileUserId: p('SELECT user_id FROM profiles WHERE id = ?'),
+      getProfilesForUser: p(
+        'SELECT id, name, created_at FROM profiles WHERE user_id = ? ORDER BY id',
       ),
-      getPersonForUser: p('SELECT id, name, created_at FROM persons WHERE id = ? AND user_id = ?'),
-      renamePersonForUser: p('UPDATE persons SET name = ? WHERE id = ? AND user_id = ?'),
-      deletePersonForUser: p('DELETE FROM persons WHERE id = ? AND user_id = ?'),
+      getProfileForUser: p(
+        'SELECT id, name, created_at FROM profiles WHERE id = ? AND user_id = ?',
+      ),
+      renameProfileForUser: p('UPDATE profiles SET name = ? WHERE id = ? AND user_id = ?'),
+      deleteProfileForUser: p('DELETE FROM profiles WHERE id = ? AND user_id = ?'),
       insertUser: p('INSERT INTO users (google_sub, email, name, role) VALUES (?, ?, ?, ?)'),
       getUserById: p(
         'SELECT id, google_sub, email, name, role, created_at FROM users WHERE id = ?',
@@ -95,7 +97,7 @@ class CvDatabase {
       updateUserProfile: p('UPDATE users SET email = ?, name = ? WHERE id = ?'),
       userIdByRole: p('SELECT id FROM users WHERE role = ? ORDER BY id LIMIT 1'),
       adoptUser: p('UPDATE users SET google_sub = ?, email = ?, name = ? WHERE id = ?'),
-      reassignPersons: p('UPDATE persons SET user_id = ? WHERE user_id = ?'),
+      reassignProfiles: p('UPDATE profiles SET user_id = ? WHERE user_id = ?'),
       deleteUser: p('DELETE FROM users WHERE id = ?'),
       // Per-user compile quota (migration 019): count of compiles per user per UTC day.
       getCompileCount: p('SELECT count FROM compile_usage WHERE user_id = ? AND day = ?'),
@@ -103,58 +105,58 @@ class CvDatabase {
         'INSERT INTO compile_usage (user_id, day, count) VALUES (?, ?, 1) ON CONFLICT(user_id, day) DO UPDATE SET count = count + 1',
       ),
 
-      // Versions + the per-person content reset restore uses
+      // Versions + the per-profile content reset restore uses
       insertVersion: p(
-        'INSERT INTO versions (person_id, label, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO versions (profile_id, label, doc, created_at, branch, parent_id) VALUES (?, ?, ?, ?, ?, ?)',
       ),
-      versionsByPerson: p(
-        'SELECT id, label, created_at, branch, tag, parent_id FROM versions WHERE person_id = ? ORDER BY id DESC',
+      versionsByProfile: p(
+        'SELECT id, label, created_at, branch, tag, parent_id FROM versions WHERE profile_id = ? ORDER BY id DESC',
       ),
-      versionDoc: p('SELECT doc FROM versions WHERE id = ? AND person_id = ?'),
+      versionDoc: p('SELECT doc FROM versions WHERE id = ? AND profile_id = ?'),
       versionFull: p(
-        'SELECT id, label, created_at, branch, tag, parent_id, doc FROM versions WHERE id = ? AND person_id = ?',
+        'SELECT id, label, created_at, branch, tag, parent_id, doc FROM versions WHERE id = ? AND profile_id = ?',
       ),
-      setVersionTag: p('UPDATE versions SET tag = ? WHERE id = ? AND person_id = ?'),
+      setVersionTag: p('UPDATE versions SET tag = ? WHERE id = ? AND profile_id = ?'),
 
       // LinkedIn/Indeed/Handshake sync (015): one synced fingerprint per experience entry.
-      linkedinSyncByPerson: p(
-        'SELECT entry_id, fingerprint, synced_at FROM linkedin_sync WHERE person_id = ?',
+      linkedinSyncByProfile: p(
+        'SELECT entry_id, fingerprint, synced_at FROM linkedin_sync WHERE profile_id = ?',
       ),
       upsertLinkedinSync: p(
-        'INSERT INTO linkedin_sync (person_id, entry_id, fingerprint, synced_at) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, entry_id) DO UPDATE SET fingerprint = excluded.fingerprint, synced_at = excluded.synced_at',
+        'INSERT INTO linkedin_sync (profile_id, entry_id, fingerprint, synced_at) VALUES (?, ?, ?, ?) ON CONFLICT(profile_id, entry_id) DO UPDATE SET fingerprint = excluded.fingerprint, synced_at = excluded.synced_at',
       ),
 
-      // Owner-person resolution for auth gating — id-addressed resources → their person.
-      ownerOfVariant: p('SELECT person_id AS pid FROM variants WHERE id = ?'),
-      ownerOfSection: p('SELECT person_id AS pid FROM sections WHERE id = ?'),
+      // Owner-profile resolution for auth gating — id-addressed resources → their profile.
+      ownerOfVariant: p('SELECT profile_id AS pid FROM variants WHERE id = ?'),
+      ownerOfSection: p('SELECT profile_id AS pid FROM sections WHERE id = ?'),
       ownerOfEntry: p(
-        'SELECT s.person_id AS pid FROM entries e JOIN sections s ON s.id = e.section_id WHERE e.id = ?',
+        'SELECT s.profile_id AS pid FROM entries e JOIN sections s ON s.id = e.section_id WHERE e.id = ?',
       ),
       ownerOfItem: p(
-        'SELECT s.person_id AS pid FROM items i JOIN entries e ON e.id = i.entry_id JOIN sections s ON s.id = e.section_id WHERE i.id = ?',
+        'SELECT s.profile_id AS pid FROM items i JOIN entries e ON e.id = i.entry_id JOIN sections s ON s.id = e.section_id WHERE i.id = ?',
       ),
-      clearSections: p('DELETE FROM sections WHERE person_id = ?'),
-      clearVariants: p('DELETE FROM variants WHERE person_id = ?'),
-      clearPersonSettings: p('DELETE FROM person_settings WHERE person_id = ?'),
-      clearTagAliases: p('DELETE FROM tag_aliases WHERE person_id = ?'),
-      clearTagCatalog: p('DELETE FROM tag_catalog WHERE person_id = ?'),
+      clearSections: p('DELETE FROM sections WHERE profile_id = ?'),
+      clearVariants: p('DELETE FROM variants WHERE profile_id = ?'),
+      clearProfileSettings: p('DELETE FROM profile_settings WHERE profile_id = ?'),
+      clearTagAliases: p('DELETE FROM tag_aliases WHERE profile_id = ?'),
+      clearTagCatalog: p('DELETE FROM tag_catalog WHERE profile_id = ?'),
 
       // Sections
-      getSectionsByPerson: p(
-        'SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE person_id = ? ORDER BY sort_order, id',
+      getSectionsByProfile: p(
+        'SELECT id, profile_id, slug, type, title, sort_order FROM sections WHERE profile_id = ? ORDER BY sort_order, id',
       ),
       getSection: p(
-        'SELECT id, person_id, slug, type, title, sort_order FROM sections WHERE id = ?',
+        'SELECT id, profile_id, slug, type, title, sort_order FROM sections WHERE id = ?',
       ),
       insertSection: p(
-        'INSERT INTO sections (person_id, slug, type, title, sort_order) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO sections (profile_id, slug, type, title, sort_order) VALUES (?, ?, ?, ?, ?)',
       ),
       updateSectionTitle: p('UPDATE sections SET title = ? WHERE id = ?'),
       updateSectionSlugType: p('UPDATE sections SET slug = ?, type = ?, title = ? WHERE id = ?'),
       updateSectionSortOrder: p('UPDATE sections SET sort_order = ? WHERE id = ?'),
       deleteSection: p('DELETE FROM sections WHERE id = ?'),
       maxSectionSortOrder: p(
-        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM sections WHERE person_id = ?',
+        'SELECT COALESCE(MAX(sort_order), -1) AS m FROM sections WHERE profile_id = ?',
       ),
 
       // Entries
@@ -194,81 +196,81 @@ class CvDatabase {
       addItemTag: p('INSERT OR IGNORE INTO item_tags (item_id, tag) VALUES (?, ?)'),
       delItemTag: p('DELETE FROM item_tags WHERE item_id = ? AND tag = ?'),
       listEntryTags: p(
-        'SELECT DISTINCT et.tag FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?',
+        'SELECT DISTINCT et.tag FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ?',
       ),
       listItemTags: p(
-        'SELECT DISTINCT it.tag FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?',
+        'SELECT DISTINCT it.tag FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ?',
       ),
       countEntryTags: p(
-        'SELECT et.tag AS tag, COUNT(*) AS cnt FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ? GROUP BY et.tag',
+        'SELECT et.tag AS tag, COUNT(*) AS cnt FROM entry_tags et JOIN entries e ON et.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ? GROUP BY et.tag',
       ),
       countItemTags: p(
-        'SELECT it.tag AS tag, COUNT(*) AS cnt FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ? GROUP BY it.tag',
+        'SELECT it.tag AS tag, COUNT(*) AS cnt FROM item_tags it JOIN items i ON it.item_id = i.id JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ? GROUP BY it.tag',
       ),
-      personForEntry: p(
-        'SELECT s.person_id AS pid FROM entries e JOIN sections s ON e.section_id = s.id WHERE e.id = ?',
+      profileForEntry: p(
+        'SELECT s.profile_id AS pid FROM entries e JOIN sections s ON e.section_id = s.id WHERE e.id = ?',
       ),
-      personForItem: p(
-        'SELECT s.person_id AS pid FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE i.id = ?',
+      profileForItem: p(
+        'SELECT s.profile_id AS pid FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE i.id = ?',
       ),
 
-      // Tag aliases (per-person alias → canonical)
+      // Tag aliases (per-profile alias → canonical)
       getAliases: p(
-        'SELECT alias, canonical, source FROM tag_aliases WHERE person_id = ? ORDER BY alias',
+        'SELECT alias, canonical, source FROM tag_aliases WHERE profile_id = ? ORDER BY alias',
       ),
-      getAlias: p('SELECT canonical FROM tag_aliases WHERE person_id = ? AND alias = ?'),
+      getAlias: p('SELECT canonical FROM tag_aliases WHERE profile_id = ? AND alias = ?'),
       upsertAlias: p(
-        'INSERT INTO tag_aliases (person_id, alias, canonical, source) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, alias) DO UPDATE SET canonical = excluded.canonical, source = excluded.source',
+        'INSERT INTO tag_aliases (profile_id, alias, canonical, source) VALUES (?, ?, ?, ?) ON CONFLICT(profile_id, alias) DO UPDATE SET canonical = excluded.canonical, source = excluded.source',
       ),
-      delAlias: p('DELETE FROM tag_aliases WHERE person_id = ? AND alias = ?'),
+      delAlias: p('DELETE FROM tag_aliases WHERE profile_id = ? AND alias = ?'),
       // Retroactive alias application: fold an existing tag into its canonical,
-      // person-scoped. UPDATE OR IGNORE moves rows that don't collide; the
+      // profile-scoped. UPDATE OR IGNORE moves rows that don't collide; the
       // paired DELETE clears any that did (the canonical already existed).
       rewriteEntryTag: p(
-        'UPDATE OR IGNORE entry_tags SET tag = ? WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+        'UPDATE OR IGNORE entry_tags SET tag = ? WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ?)',
       ),
       delEntryTagP: p(
-        'DELETE FROM entry_tags WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+        'DELETE FROM entry_tags WHERE tag = ? AND entry_id IN (SELECT e.id FROM entries e JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ?)',
       ),
       rewriteItemTag: p(
-        'UPDATE OR IGNORE item_tags SET tag = ? WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+        'UPDATE OR IGNORE item_tags SET tag = ? WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ?)',
       ),
       delItemTagP: p(
-        'DELETE FROM item_tags WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.person_id = ?)',
+        'DELETE FROM item_tags WHERE tag = ? AND item_id IN (SELECT i.id FROM items i JOIN entries e ON i.entry_id = e.id JOIN sections s ON e.section_id = s.id WHERE s.profile_id = ?)',
       ),
       rewriteRuleTag: p(
-        'UPDATE OR IGNORE variant_rules SET tag = ? WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE person_id = ?)',
+        'UPDATE OR IGNORE variant_rules SET tag = ? WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE profile_id = ?)',
       ),
       delRuleTagP: p(
-        'DELETE FROM variant_rules WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE person_id = ?)',
+        'DELETE FROM variant_rules WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE profile_id = ?)',
       ),
 
-      // Tag catalog (per-person controlled vocabulary)
+      // Tag catalog (per-profile controlled vocabulary)
       getCatalog: p(
-        'SELECT tag, description, category FROM tag_catalog WHERE person_id = ? ORDER BY tag',
+        'SELECT tag, description, category FROM tag_catalog WHERE profile_id = ? ORDER BY tag',
       ),
       upsertCatalogTag: p(
-        'INSERT INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(person_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
+        'INSERT INTO tag_catalog (profile_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(profile_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
       ),
       insertTagEvent: p(
-        'INSERT INTO tag_events (person_id, target, target_id, tag, action, rank) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO tag_events (profile_id, target, target_id, tag, action, rank) VALUES (?, ?, ?, ?, ?, ?)',
       ),
       tagEventCounts: p(
-        'SELECT action, rank, COUNT(*) AS n FROM tag_events WHERE person_id = ? GROUP BY action, rank',
+        'SELECT action, rank, COUNT(*) AS n FROM tag_events WHERE profile_id = ? GROUP BY action, rank',
       ),
       insertCatalogTagIfAbsent: p(
-        'INSERT OR IGNORE INTO tag_catalog (person_id, tag, description, category) VALUES (?, ?, ?, ?)',
+        'INSERT OR IGNORE INTO tag_catalog (profile_id, tag, description, category) VALUES (?, ?, ?, ?)',
       ),
-      delCatalogTag: p('DELETE FROM tag_catalog WHERE person_id = ? AND tag = ?'),
+      delCatalogTag: p('DELETE FROM tag_catalog WHERE profile_id = ? AND tag = ?'),
 
       // Variants
       getVariants: p(
-        'SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE person_id = ? ORDER BY id',
+        'SELECT id, profile_id, name, kind, created_at, layout_id FROM variants WHERE profile_id = ? ORDER BY id',
       ),
       getVariant: p(
-        'SELECT id, person_id, name, kind, created_at, layout_id FROM variants WHERE id = ?',
+        'SELECT id, profile_id, name, kind, created_at, layout_id FROM variants WHERE id = ?',
       ),
-      insertVariant: p('INSERT INTO variants (person_id, name, kind) VALUES (?, ?, ?)'),
+      insertVariant: p('INSERT INTO variants (profile_id, name, kind) VALUES (?, ?, ?)'),
       updateVariantName: p('UPDATE variants SET name = ? WHERE id = ?'),
       setVariantLayout: p('UPDATE variants SET layout_id = ? WHERE id = ?'),
       clearVariantLayoutFor: p('UPDATE variants SET layout_id = NULL WHERE layout_id = ?'),
@@ -384,9 +386,9 @@ class CvDatabase {
     };
   }
 
-  // Settings methods (global + per-person) are mixed in at the bottom of this file.
+  // Settings methods (global + per-profile) are mixed in at the bottom of this file.
 
-  // Persons
+  // Profiles
 
   // users + ownership (migration 018)
 
@@ -470,7 +472,7 @@ class CvDatabase {
     const owner = ownerId != null ? this.getUser(ownerId) : null;
     if (!owner || owner.google_sub !== '@owner' || owner.id === stray.id) return null;
     this.db.transaction(() => {
-      this._stmts.reassignPersons.run(owner.id, stray.id); // keep anything they created
+      this._stmts.reassignProfiles.run(owner.id, stray.id); // keep anything they created
       this._stmts.copySettingsToUser.run(owner.id, stray.id);
       this._stmts.deleteUser.run(stray.id); // frees the UNIQUE google_sub for the relink
       this._stmts.adoptUser.run(googleSub, email, name, owner.id);
@@ -488,58 +490,58 @@ class CvDatabase {
   ownerUserId() {
     return (this._ownerUserId ??= this._stmts.userIdByRole.get('owner')?.id ?? null);
   }
-  /** The owner of a person, or null. Cheap ownership probe for gating. */
-  personUserId(id) {
-    return this._stmts.personUserId.get(id)?.user_id ?? null;
+  /** The owner of a profile, or null. Cheap ownership probe for gating. */
+  profileUserId(id) {
+    return this._stmts.profileUserId.get(id)?.user_id ?? null;
   }
 
-  getPersons() {
+  getProfiles() {
     // Unscoped — SYSTEM use only (build verification, admin). Request handlers must
-    // go through getPersonsForUser so a leak can't slip in unnoticed.
-    return this._stmts.getPersons.all();
+    // go through getProfilesForUser so a leak can't slip in unnoticed.
+    return this._stmts.getProfiles.all();
   }
-  getPersonsForUser(userId) {
-    return this._stmts.getPersonsForUser.all(userId);
-  }
-
-  getPerson(id) {
-    return this._stmts.getPerson.get(id) || null;
-  }
-  getPersonForUser(id, userId) {
-    return this._stmts.getPersonForUser.get(id, userId) || null;
+  getProfilesForUser(userId) {
+    return this._stmts.getProfilesForUser.all(userId);
   }
 
-  createPerson(name, userId = this.ownerUserId()) {
-    return this._stmts.insertPerson.run(name, userId).lastInsertRowid;
+  getProfile(id) {
+    return this._stmts.getProfile.get(id) || null;
+  }
+  getProfileForUser(id, userId) {
+    return this._stmts.getProfileForUser.get(id, userId) || null;
   }
 
-  renamePerson(id, name) {
-    this._stmts.updatePersonName.run(name, id);
-  }
-  /** Rename only if `userId` owns the person. Returns true if a row changed. */
-  renamePersonForUser(id, name, userId) {
-    return this._stmts.renamePersonForUser.run(name, id, userId).changes > 0;
+  createProfile(name, userId = this.ownerUserId()) {
+    return this._stmts.insertProfile.run(name, userId).lastInsertRowid;
   }
 
-  deletePerson(id) {
-    // Cascades to person_settings, sections→entries→items→tags, variants→rules/overrides/sections/letters.
-    this._stmts.deletePerson.run(id);
+  renameProfile(id, name) {
+    this._stmts.updateProfileName.run(name, id);
   }
-  /** Delete only if `userId` owns the person. Returns true if a row was removed. */
-  deletePersonForUser(id, userId) {
-    return this._stmts.deletePersonForUser.run(id, userId).changes > 0;
+  /** Rename only if `userId` owns the profile. Returns true if a row changed. */
+  renameProfileForUser(id, name, userId) {
+    return this._stmts.renameProfileForUser.run(name, id, userId).changes > 0;
   }
 
-  /** Full main content for a person, but only if `userId` owns it (else null). */
-  getMainForUser(personId, userId) {
-    if (this.personUserId(personId) !== userId) return null;
-    return this.getMain(personId);
+  deleteProfile(id) {
+    // Cascades to profile_settings, sections→entries→items→tags, variants→rules/overrides/sections/letters.
+    this._stmts.deleteProfile.run(id);
+  }
+  /** Delete only if `userId` owns the profile. Returns true if a row was removed. */
+  deleteProfileForUser(id, userId) {
+    return this._stmts.deleteProfileForUser.run(id, userId).changes > 0;
+  }
+
+  /** Full main content for a profile, but only if `userId` owns it (else null). */
+  getMainForUser(profileId, userId) {
+    if (this.profileUserId(profileId) !== userId) return null;
+    return this.getMain(profileId);
   }
 
   // Sections
 
-  getSections(personId) {
-    return this._stmts.getSectionsByPerson.all(personId).map(rowToSection);
+  getSections(profileId) {
+    return this._stmts.getSectionsByProfile.all(profileId).map(rowToSection);
   }
 
   /** Section with full entries→items→tags. */
@@ -567,9 +569,9 @@ class CvDatabase {
     }));
   }
 
-  createSection(personId, slug, type, title = '') {
-    const order = this._stmts.maxSectionSortOrder.get(personId).m + 1;
-    return this._stmts.insertSection.run(personId, slug, normalizeType(type), title, order)
+  createSection(profileId, slug, type, title = '') {
+    const order = this._stmts.maxSectionSortOrder.get(profileId).m + 1;
+    return this._stmts.insertSection.run(profileId, slug, normalizeType(type), title, order)
       .lastInsertRowid;
   }
 
@@ -592,7 +594,7 @@ class CvDatabase {
     this._stmts.deleteSection.run(id);
   }
 
-  reorderSections(personId, ids) {
+  reorderSections(profileId, ids) {
     const tx = this.db.transaction(() => {
       for (let i = 0; i < ids.length; i++) this._stmts.updateSectionSortOrder.run(i, ids[i]);
     });
@@ -676,14 +678,14 @@ class CvDatabase {
 
   // Aggregate read for MCP / UI — full main + variant summaries
 
-  getMain(personId) {
-    const person = this.getPerson(personId);
-    if (!person) return null;
+  getMain(profileId) {
+    const profile = this.getProfile(profileId);
+    if (!profile) return null;
     return {
-      person,
-      personal: this.getPersonal(personId),
-      sections: this.getSections(personId).map((s) => this.getSection(s.id)),
-      variants: this.getVariants(personId).map((v) => ({
+      profile,
+      personal: this.getPersonal(profileId),
+      sections: this.getSections(profileId).map((s) => this.getSection(s.id)),
+      variants: this.getVariants(profileId).map((v) => ({
         ...v,
         rules: this.getVariantRules(v.id),
         sections: this.getVariantSections(v.id),
@@ -694,18 +696,18 @@ class CvDatabase {
         personal: this.getVariantPersonal(v.id),
         settings: this.getVariantSettings(v.id),
       })),
-      tags: this.listTags(personId),
-      tagAliases: this.getTagAliases(personId),
-      tagCatalog: this.getTagCatalog(personId),
+      tags: this.listTags(profileId),
+      tagAliases: this.getTagAliases(profileId),
+      tagCatalog: this.getTagCatalog(profileId),
     };
   }
 
   /**
-   * The person that owns an id-addressed resource, or null if it doesn't exist.
+   * The profile that owns an id-addressed resource, or null if it doesn't exist.
    * `kind` ∈ variant | section | entry | item. Used by the auth gate to decide
-   * whether a read exposes a non-public person's data.
+   * whether a read exposes a non-public profile's data.
    */
-  ownerPersonId(kind, id) {
+  ownerProfileId(kind, id) {
     const stmt = {
       variant: this._stmts.ownerOfVariant,
       section: this._stmts.ownerOfSection,

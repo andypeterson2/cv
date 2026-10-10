@@ -13,8 +13,8 @@ function intId(value) {
 module.exports = function createEntriesRouter(getDb) {
   const router = express.Router();
 
-  // Ownership gate: writes need the caller to own the entry's person, reads also
-  // pass for a public person. `userId` comes from attachUser (req.userId).
+  // Ownership gate: writes need the caller to own the entry's profile, reads also
+  // pass for a public profile. `userId` comes from attachUser (req.userId).
   const requireEntry = ownedResourceGuard(getDb, 'entry', 'Entry');
 
   router.get(

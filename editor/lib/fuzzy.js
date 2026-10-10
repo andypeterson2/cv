@@ -7,9 +7,9 @@
  * db._matchesTags. The contract is: approximate matching helps an author/LLM
  * find and reuse tags, but anything that lands in a rendered PDF must be a
  * concrete tag stored in a variant rule, never a fuzzy match evaluated at
- * render time. That keeps a person's resume reproducible and inspectable.
+ * render time. That keeps a profile's resume reproducible and inspectable.
  *
- * A person's vocabulary is at most a few hundred tags, so the brute-force
+ * A profile's vocabulary is at most a few hundred tags, so the brute-force
  * O(V·|q|) scan below is sub-millisecond — no index, no SQLite extension.
  */
 

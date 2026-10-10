@@ -1,9 +1,9 @@
 /**
- * Blend a tag scorer with votes from the person's own tagged bullets.
+ * Blend a tag scorer with votes from the profile's own tagged bullets.
  *
  * The text is embedded, its K most similar tagged bullets vote for their tags
  * (each vote weighted by similarity), and a tag's score becomes
- * ALPHA · base score + (1 − ALPHA) · its share of the vote. A person's own
+ * ALPHA · base score + (1 − ALPHA) · its share of the vote. A profile's own
  * habits ("qkd", "qi-lab") then carry to new bullets after a few uses, with no
  * training. Below MIN_EXAMPLES tagged bullets the base scorer runs unchanged.
  *
@@ -20,7 +20,7 @@ const MIN_EXAMPLES = 3;
 /**
  * @param {Function} base - async (text, candidates) => [{tag, score}]
  * @param {Function} embed - async (text) => number[]
- * @param {Array<{text: string, tags: string[]}>} examples - the person's tagged bullets
+ * @param {Array<{text: string, tags: string[]}>} examples - the profile's tagged bullets
  * @param {{alpha?: number, k?: number, minExamples?: number}} [opts] - the serving
  *        constants when omitted; a parameter sweep passes its own.
  * @returns {Function} a scorer with the same signature as `base`

@@ -14,7 +14,7 @@ module.exports = function createItemsRouter(getDb) {
   const router = express.Router();
 
   // Ownership gate: every route here writes, so each one needs the caller to own
-  // the item's person. `userId` comes from attachUser (req.userId).
+  // the item's profile. `userId` comes from attachUser (req.userId).
   const requireItem = ownedResourceGuard(getDb, 'item', 'Item');
 
   router.put(

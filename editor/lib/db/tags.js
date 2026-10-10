@@ -1,5 +1,5 @@
 /**
- * Tag subsystem for CvDatabase: tags, per-person aliases, the controlled-vocab
+ * Tag subsystem for CvDatabase: tags, per-profile aliases, the controlled-vocab
  * catalog, and suggestion. Mixed onto the CvDatabase prototype, so methods run
  * with `this` === the CvDatabase instance (its prepared statements, db handle,
  * and cross-cluster reads like this.getSections/getSection).
@@ -10,7 +10,7 @@ const suggest = require('../suggest');
 const { SEED_TAGS, seedTag } = require('../seed-tags');
 const { withNeighbours } = require('../neighbour-scorer');
 
-// Below this many distinct tags of their own, a person's suggestions also draw
+// Below this many distinct tags of their own, a profile's suggestions also draw
 // on the starter vocabulary.
 const SEED_UNTIL = 30;
 
@@ -18,7 +18,7 @@ class TagStore {
   // Tags
 
   addEntryTags(entryId, tags) {
-    const pid = this._stmts.personForEntry.get(entryId)?.pid;
+    const pid = this._stmts.profileForEntry.get(entryId)?.pid;
     const tx = this.db.transaction(() => {
       for (const t of tags) {
         const tag = this._canonicalTag(pid, t);
@@ -31,12 +31,12 @@ class TagStore {
   }
 
   removeEntryTag(entryId, tag) {
-    const pid = this._stmts.personForEntry.get(entryId)?.pid;
+    const pid = this._stmts.profileForEntry.get(entryId)?.pid;
     this._stmts.delEntryTag.run(entryId, this._canonicalTag(pid, tag));
   }
 
   addItemTags(itemId, tags) {
-    const pid = this._stmts.personForItem.get(itemId)?.pid;
+    const pid = this._stmts.profileForItem.get(itemId)?.pid;
     const tx = this.db.transaction(() => {
       for (const t of tags) {
         const tag = this._canonicalTag(pid, t);
@@ -48,32 +48,32 @@ class TagStore {
     tx();
   }
 
-  /** A starter tag joins the person's catalog, with its description, on first use. */
-  _catalogSeedTag(personId, tag) {
-    const seed = personId == null ? null : seedTag(tag);
+  /** A starter tag joins the profile's catalog, with its description, on first use. */
+  _catalogSeedTag(profileId, tag) {
+    const seed = profileId == null ? null : seedTag(tag);
     if (seed)
-      this._stmts.insertCatalogTagIfAbsent.run(personId, tag, seed.description, seed.category);
+      this._stmts.insertCatalogTagIfAbsent.run(profileId, tag, seed.description, seed.category);
   }
 
   removeItemTag(itemId, tag) {
-    const pid = this._stmts.personForItem.get(itemId)?.pid;
+    const pid = this._stmts.profileForItem.get(itemId)?.pid;
     this._stmts.delItemTag.run(itemId, this._canonicalTag(pid, tag));
   }
 
-  /** Distinct tag vocabulary across a person's entries + items. */
-  listTags(personId) {
+  /** Distinct tag vocabulary across a profile's entries + items. */
+  listTags(profileId) {
     const set = new Set();
-    for (const r of this._stmts.listEntryTags.all(personId)) set.add(r.tag);
-    for (const r of this._stmts.listItemTags.all(personId)) set.add(r.tag);
+    for (const r of this._stmts.listEntryTags.all(profileId)) set.add(r.tag);
+    for (const r of this._stmts.listItemTags.all(profileId)) set.add(r.tag);
     return [...set].sort();
   }
 
   /** Tag vocabulary with usage counts (entries + items): [{tag, count}], desc. */
-  listTagsWithCounts(personId) {
+  listTagsWithCounts(profileId) {
     const counts = new Map();
-    for (const r of this._stmts.countEntryTags.all(personId))
+    for (const r of this._stmts.countEntryTags.all(profileId))
       counts.set(r.tag, (counts.get(r.tag) || 0) + r.cnt);
-    for (const r of this._stmts.countItemTags.all(personId))
+    for (const r of this._stmts.countItemTags.all(profileId))
       counts.set(r.tag, (counts.get(r.tag) || 0) + r.cnt);
     return [...counts.entries()]
       .map(([tag, count]) => ({ tag, count }))
@@ -81,19 +81,19 @@ class TagStore {
   }
 
   /**
-   * Fuzzy-rank a person's tag vocabulary against a query string. Approximate —
+   * Fuzzy-rank a profile's tag vocabulary against a query string. Approximate —
    * for discovery and authoring only; never used by variant resolution. If the
    * query is itself an alias, its canonical is surfaced as an exact hit.
    * @returns {query, results:[{tag, score, count, via}]}
    */
-  searchTags(personId, query, { limit = 10, minScore = 0.3 } = {}) {
+  searchTags(profileId, query, { limit = 10, minScore = 0.3 } = {}) {
     const q = normTag(query);
-    const vocab = this.listTagsWithCounts(personId);
+    const vocab = this.listTagsWithCounts(profileId);
     let results = fuzzy.searchTags(q, vocab, { limit, minScore });
 
     // An alias's canonical is an exact intent match: surface it first (via:'alias',
     // score 1), replacing any coincidental string match for the same tag.
-    const canonical = this._resolveAlias(personId, q);
+    const canonical = this._resolveAlias(profileId, q);
     if (canonical !== q) {
       const hit = vocab.find((v) => v.tag === canonical);
       results = [
@@ -105,18 +105,18 @@ class TagStore {
     return { query: q, results };
   }
 
-  // Tag aliases (per-person alias → canonical)
+  // Tag aliases (per-profile alias → canonical)
 
-  getTagAliases(personId) {
-    return this._stmts.getAliases.all(personId);
+  getTagAliases(profileId) {
+    return this._stmts.getAliases.all(profileId);
   }
 
   /** Follow the alias chain to its terminal canonical (cycle-safe). */
-  _resolveAlias(personId, tag, _seen) {
+  _resolveAlias(profileId, tag, _seen) {
     let cur = tag;
     const seen = _seen || new Set([cur]);
     for (let i = 0; i < 16; i++) {
-      const row = this._stmts.getAlias.get(personId, cur);
+      const row = this._stmts.getAlias.get(profileId, cur);
       if (!row || !row.canonical) return cur;
       if (seen.has(row.canonical)) return cur; // defensive — writes reject cycles
       seen.add(row.canonical);
@@ -126,19 +126,19 @@ class TagStore {
   }
 
   /** Normalize a tag, then fold it through the alias map to its canonical. */
-  _canonicalTag(personId, tag) {
+  _canonicalTag(profileId, tag) {
     const t = normTag(tag);
-    if (!t || personId == null) return t;
-    return this._resolveAlias(personId, t);
+    if (!t || profileId == null) return t;
+    return this._resolveAlias(profileId, t);
   }
 
   /**
-   * Define alias → canonical for a person and fold any existing `alias`-tagged
+   * Define alias → canonical for a profile and fold any existing `alias`-tagged
    * content/rules into `canonical` so the vocabulary converges. Both sides are
    * normalized first.
    * @throws AppError-like Error with .status on self-alias or cycle.
    */
-  setTagAlias(personId, alias, canonical, source = 'manual') {
+  setTagAlias(profileId, alias, canonical, source = 'manual') {
     const a = normTag(alias);
     const c = normTag(canonical);
     if (!a || !c) {
@@ -152,34 +152,34 @@ class TagStore {
       throw e;
     }
     // Reject cycles: canonical must not resolve back to alias.
-    if (this._resolveAlias(personId, c) === a) {
+    if (this._resolveAlias(profileId, c) === a) {
       const e = new Error(`alias "${a}" → "${c}" would create a cycle`);
       e.status = 409;
       throw e;
     }
 
     const tx = this.db.transaction(() => {
-      this._stmts.upsertAlias.run(personId, a, c, source);
+      this._stmts.upsertAlias.run(profileId, a, c, source);
       // Retroactively fold existing usage of `a` into `c`.
-      this._stmts.rewriteEntryTag.run(c, a, personId);
-      this._stmts.delEntryTagP.run(a, personId);
-      this._stmts.rewriteItemTag.run(c, a, personId);
-      this._stmts.delItemTagP.run(a, personId);
-      this._stmts.rewriteRuleTag.run(c, a, personId);
-      this._stmts.delRuleTagP.run(a, personId);
+      this._stmts.rewriteEntryTag.run(c, a, profileId);
+      this._stmts.delEntryTagP.run(a, profileId);
+      this._stmts.rewriteItemTag.run(c, a, profileId);
+      this._stmts.delItemTagP.run(a, profileId);
+      this._stmts.rewriteRuleTag.run(c, a, profileId);
+      this._stmts.delRuleTagP.run(a, profileId);
     });
     tx();
     return { alias: a, canonical: c };
   }
 
-  deleteTagAlias(personId, alias) {
-    this._stmts.delAlias.run(personId, normTag(alias));
+  deleteTagAlias(profileId, alias) {
+    this._stmts.delAlias.run(profileId, normTag(alias));
   }
 
-  // Tag catalog (per-person controlled vocabulary) + suggestion
+  // Tag catalog (per-profile controlled vocabulary) + suggestion
 
-  getTagCatalog(personId) {
-    return this._stmts.getCatalog.all(personId);
+  getTagCatalog(profileId) {
+    return this._stmts.getCatalog.all(profileId);
   }
 
   /**
@@ -187,29 +187,29 @@ class TagStore {
    * _canonicalTag, so a catalog entry can never disagree with a stored tag's
    * canonical form.
    */
-  setCatalogTag(personId, tag, { description = null, category = null } = {}) {
-    const t = this._canonicalTag(personId, tag);
+  setCatalogTag(profileId, tag, { description = null, category = null } = {}) {
+    const t = this._canonicalTag(profileId, tag);
     if (!t) {
       const e = new Error('tag must be non-empty after normalization');
       e.status = 400;
       throw e;
     }
-    this._stmts.upsertCatalogTag.run(personId, t, description, category);
+    this._stmts.upsertCatalogTag.run(profileId, t, description, category);
     return { tag: t };
   }
 
-  deleteCatalogTag(personId, tag) {
-    this._stmts.delCatalogTag.run(personId, this._canonicalTag(personId, tag));
+  deleteCatalogTag(profileId, tag) {
+    this._stmts.delCatalogTag.run(profileId, this._canonicalTag(profileId, tag));
   }
 
   /** Opt-in bootstrap: promote the current usage vocabulary into the catalog. Returns {added}. */
-  seedCatalogFromUsage(personId) {
-    const existing = new Set(this._stmts.getCatalog.all(personId).map((r) => r.tag));
+  seedCatalogFromUsage(profileId) {
+    const existing = new Set(this._stmts.getCatalog.all(profileId).map((r) => r.tag));
     let added = 0;
     const tx = this.db.transaction(() => {
-      for (const { tag } of this.listTagsWithCounts(personId)) {
+      for (const { tag } of this.listTagsWithCounts(profileId)) {
         if (existing.has(tag)) continue;
-        this._stmts.upsertCatalogTag.run(personId, tag, null, null);
+        this._stmts.upsertCatalogTag.run(profileId, tag, null, null);
         added++;
       }
     });
@@ -219,11 +219,11 @@ class TagStore {
 
   /**
    * Candidate vocab for suggestion: catalog (preferred) ∪ usage vocab, deduped by
-   * tag, plus the starter vocabulary while the person's own is under SEED_UNTIL.
+   * tag, plus the starter vocabulary while the profile's own is under SEED_UNTIL.
    */
-  _suggestCandidates(personId) {
+  _suggestCandidates(profileId) {
     const byTag = new Map();
-    for (const c of this._stmts.getCatalog.all(personId)) {
+    for (const c of this._stmts.getCatalog.all(profileId)) {
       byTag.set(c.tag, {
         tag: c.tag,
         count: 0,
@@ -231,7 +231,7 @@ class TagStore {
         description: c.description || undefined,
       });
     }
-    for (const { tag, count } of this.listTagsWithCounts(personId)) {
+    for (const { tag, count } of this.listTagsWithCounts(profileId)) {
       const cur = byTag.get(tag);
       if (cur) cur.count = count;
       else byTag.set(tag, { tag, count, inCatalog: false });
@@ -247,22 +247,22 @@ class TagStore {
   }
 
   /**
-   * Record what a person did with tag suggestions. Each event names an entry or
+   * Record what a profile did with tag suggestions. Each event names an entry or
    * item of theirs; `rank` is its position in the suggestion list when the tag came
    * from one. Returns {recorded}.
-   * @throws Error with .status 404 when a target is not the person's.
+   * @throws Error with .status 404 when a target is not the profile's.
    */
-  recordTagEvents(personId, events) {
-    const owner = { entry: this._stmts.personForEntry, item: this._stmts.personForItem };
+  recordTagEvents(profileId, events) {
+    const owner = { entry: this._stmts.profileForEntry, item: this._stmts.profileForItem };
     const tx = this.db.transaction(() => {
       for (const e of events) {
-        if (owner[e.target].get(e.id)?.pid !== personId) {
+        if (owner[e.target].get(e.id)?.pid !== profileId) {
           const err = new Error(`${e.target} ${e.id} not found`);
           err.status = 404;
           throw err;
         }
-        const tag = this._canonicalTag(personId, e.tag);
-        this._stmts.insertTagEvent.run(personId, e.target, e.id, tag, e.action, e.rank ?? null);
+        const tag = this._canonicalTag(profileId, e.tag);
+        this._stmts.insertTagEvent.run(profileId, e.target, e.id, tag, e.action, e.rank ?? null);
       }
     });
     tx();
@@ -273,11 +273,11 @@ class TagStore {
    * How suggestions are faring: accept and dismiss counts by rank, how often a
    * tag was typed by hand instead, and how many hand-typed tags had been shown.
    */
-  tagEventStats(personId) {
+  tagEventStats(profileId) {
     const byRank = new Map();
     const totals = { accept: 0, dismiss: 0, manual: 0, remove: 0 };
     let manualShown = 0;
-    for (const { action, rank, n } of this._stmts.tagEventCounts.all(personId)) {
+    for (const { action, rank, n } of this._stmts.tagEventCounts.all(profileId)) {
       totals[action] += n;
       if (action === 'manual' && rank != null) manualShown += n;
       if ((action === 'accept' || action === 'dismiss') && rank != null) {
@@ -305,25 +305,25 @@ class TagStore {
    * alternate ranker (e.g. embeddings) without changing this method's shape.
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
    */
-  async suggestTags(personId, text, { limit = 8, minScore, scorer, embed } = {}) {
-    const results = await suggest.suggestTags(text, this._suggestCandidates(personId), {
+  async suggestTags(profileId, text, { limit = 8, minScore, scorer, embed } = {}) {
+    const results = await suggest.suggestTags(text, this._suggestCandidates(profileId), {
       limit,
       minScore,
-      scorer: this._personalScorer(personId, scorer, embed),
+      scorer: this._personalScorer(profileId, scorer, embed),
     });
     return { query: String(text), results };
   }
 
-  /** With an embedding function, blend the scorer with votes from the person's tagged bullets. */
-  _personalScorer(personId, scorer, embed) {
+  /** With an embedding function, blend the scorer with votes from the profile's tagged bullets. */
+  _personalScorer(profileId, scorer, embed) {
     if (!scorer || !embed) return scorer;
-    return withNeighbours(scorer, embed, this._taggedExamples(personId));
+    return withNeighbours(scorer, embed, this._taggedExamples(profileId));
   }
 
-  /** The person's tagged entries and bullets, as the text suggestion sees them. */
-  _taggedExamples(personId) {
+  /** The profile's tagged entries and bullets, as the text suggestion sees them. */
+  _taggedExamples(profileId) {
     const examples = [];
-    for (const s of this.getSections(personId)) {
+    for (const s of this.getSections(profileId)) {
       for (const e of this.getSection(s.id).entries) {
         const eText = entryText(e.fields);
         if (eText && e.tags.length) examples.push({ text: eText, tags: e.tags });
@@ -337,19 +337,19 @@ class TagStore {
   }
 
   /**
-   * Suggest tags for every entry/item of a person in one pass — the natural
+   * Suggest tags for every entry/item of a profile in one pass — the natural
    * step right after a legacy import that arrived untagged. Suggest-only: writes
    * nothing; returns candidates + the target's current tags so a confirmer
    * (an MCP client or the UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
    * once and reused across items.
    */
-  async suggestBulk(personId, { limit = 5, minScore, scorer: base, embed } = {}) {
-    const candidates = this._suggestCandidates(personId);
-    const scorer = this._personalScorer(personId, base, embed);
+  async suggestBulk(profileId, { limit = 5, minScore, scorer: base, embed } = {}) {
+    const candidates = this._suggestCandidates(profileId);
+    const scorer = this._personalScorer(profileId, base, embed);
     // Bulk runs are reviewed in one pass, so the lexical floor is stricter than a single suggest.
     const floor = minScore ?? (scorer ? undefined : 0.4);
     const out = [];
-    for (const s of this.getSections(personId)) {
+    for (const s of this.getSections(profileId)) {
       const full = this.getSection(s.id);
       for (const e of full.entries) {
         const eText = entryText(e.fields);

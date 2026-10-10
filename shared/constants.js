@@ -10,7 +10,7 @@
 // Variant render kinds. `cv` = the full main; `resume`/`coverletter` are shaped.
 const VARIANT_KINDS = ['cv', 'resume', 'coverletter'];
 
-// Section slug shape (kebab/underscore, lowercase) — unique per person.
+// Section slug shape (kebab/underscore, lowercase) — unique per profile.
 const SLUG_PATTERN = '^[a-z0-9_-]+$';
 
 // Tag-suggestion ranking methods. `lexical` needs no model; `embedding` is the

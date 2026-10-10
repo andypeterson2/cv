@@ -10,10 +10,10 @@ describe('settings schema', () => {
   it('rejects empty object', () => expect(v({})).toBe(false));
 });
 
-describe('createPerson / personal', () => {
-  it('createPerson requires a name', () => {
-    expect(validators.createPerson({ name: 'Ada' })).toBe(true);
-    expect(validators.createPerson({})).toBe(false);
+describe('createProfile / personal', () => {
+  it('createProfile requires a name', () => {
+    expect(validators.createProfile({ name: 'Ada' })).toBe(true);
+    expect(validators.createProfile({})).toBe(false);
   });
   it('personal requires ≥1 string field', () => {
     expect(validators.personal({ firstName: 'Ada' })).toBe(true);
@@ -151,7 +151,7 @@ describe('validate middleware', () => {
     const req = { body: { name: 'Ada' } };
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
     const next = vi.fn();
-    validate('createPerson')(req, res, next);
+    validate('createProfile')(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
   });
@@ -159,7 +159,7 @@ describe('validate middleware', () => {
     const req = { body: {} };
     const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
     const next = vi.fn();
-    validate('createPerson')(req, res, next);
+    validate('createProfile')(req, res, next);
     // Handed to the error handler, which renders the shared error body.
     expect(res.status).not.toHaveBeenCalled();
     const err = next.mock.calls[0][0];
