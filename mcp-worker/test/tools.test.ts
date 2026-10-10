@@ -7,9 +7,9 @@ import { cvCtx } from '../src/cv-ctx';
 // Worker runtime — proves the tool catalog + the Workers-safe validator behave
 // like the stdio server before that server is deleted.
 describe('cv tool catalog (moved into the Worker)', () => {
-  it('exposes exactly 63 tools, each cv_*-prefixed with a description + schema', () => {
-    expect(TOOL_COUNT).toBe(63);
-    expect(tools.length).toBe(63);
+  it('exposes exactly 69 tools, each cv_*-prefixed with a description + schema', () => {
+    expect(TOOL_COUNT).toBe(69);
+    expect(tools.length).toBe(69);
     for (const t of tools) {
       expect(t.name).toMatch(/^cv_/);
       expect(typeof t.description).toBe('string');
@@ -82,6 +82,15 @@ describe('cv tool catalog (moved into the Worker)', () => {
       }).valid,
     ).toBe(true);
     expect(validate('cv_set_variant_settings', { variant_id: 19, settings: {} }).valid).toBe(false);
+    expect(validate('cv_install_layout', { url: 'http://x.test/a.zip' }).valid).toBe(false);
+    expect(validate('cv_install_layout', { url: 'https://x.test/a.zip' }).valid).toBe(true);
+    expect(validate('cv_check_layout', { url: 'https://x.test/a.zip' }).valid).toBe(true);
+    expect(validate('cv_review_layout', { layout_id: 'u1-a@1', decision: 'maybe' }).valid).toBe(
+      false,
+    );
+    expect(
+      validate('cv_review_layout', { layout_id: 'u1-a@1', decision: 'approve', note: 'ok' }).valid,
+    ).toBe(true);
   });
 
   it('callTool rejects unknown tools + invalid args before any network call', async () => {

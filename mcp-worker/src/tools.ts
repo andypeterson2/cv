@@ -5,11 +5,10 @@
  * Identical to the stdio catalog except for what the Workers runtime forces:
  *   - validation: ajv compiles schemas with `new Function`, which the Workers
  *     runtime forbids → @cfworker/json-schema (a zero-eval interpreter).
- *   - cv_get_pdf: the stdio server wrote the PDF to local disk; a Worker has no
- *     filesystem, so it returns the PDF INLINE as a base64 MCP resource.
- *   - cv_install_layout: reads a local .zip from disk — impossible on a Worker, so
- *     it returns a clear "unsupported on the remote server" error (the only tool
- *     whose behaviour intentionally diverges).
+ *   - cv_get_pdf / cv_download_layout: a Worker has no filesystem, so they return a
+ *     short-lived signed link the Worker serves.
+ *   - cv_install_layout / cv_check_layout: take an https URL the cv backend fetches,
+ *     since a tool call cannot carry a zip.
  *
  * Config (CV_EDITOR_URL + CV_ORIGIN_SECRET) comes from the Worker env, read at call
  * time via the `cloudflare:workers` global env.
@@ -113,6 +112,13 @@ export async function api(
   return text;
 }
 
+/** Fetch a layout's zip bundle from the cv backend, for the signed /bundle/<token> route. */
+export async function fetchLayoutBundle(layoutId: string): Promise<ArrayBuffer> {
+  return (await api('GET', `/api/layouts/${enc(layoutId)}/bundle`, undefined, {
+    expectBinary: true,
+  })) as ArrayBuffer;
+}
+
 /** Fetch a variant's compiled PDF bytes from the cv backend (admin-authed). Used by the
  *  signed /pdf/<token> download route; cv_get_pdf just hands out the link. */
 export async function fetchVariantPdf(variantId: number | string): Promise<ArrayBuffer> {
@@ -123,6 +129,12 @@ export async function fetchVariantPdf(variantId: number | string): Promise<Array
 
 // Shared schema fragments (verbatim from the stdio catalog).
 const profileId = { type: 'integer', description: 'Profile id (from cv_list_profiles)' };
+const zipUrl = {
+  type: 'string',
+  pattern: '^https://',
+  maxLength: 2000,
+  description: 'https URL of the layout .zip',
+};
 const variantId = {
   type: 'integer',
   description: 'Variant id (from cv_list_variants / cv_get_main)',
@@ -897,8 +909,9 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_list_layouts',
     description:
-      'List the layouts you can use — the builtins plus your own uploads — and your default: {layouts:[{id,name,version,kinds,status,source,builtin}], default}. ' +
-      'A layout decides how a variant is typeset; "awesome-cv" is the builtin default. Pick one per variant with ' +
+      'List the layouts you can use and your default: {layouts:[{id,name,kinds,status,source,builtin,own,author,family,versionNo,state,updateAvailable}], default, canReview}. ' +
+      'Builtins, your own uploads and versions, and other accounts\' public versions (id like "u3-modern@2"). state is private | pending | public | unlisted | rejected. ' +
+      'updateAvailable names a newer public version of the same layout; pinning it is opt-in. "awesome-cv" is the builtin default. Pick one per variant with ' +
       'cv_set_variant_layout, or change your default with cv_set_default_layout.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: () => api('GET', '/api/layouts'),
@@ -906,7 +919,8 @@ const toolDefs: ToolDef[] = [
   {
     name: 'cv_set_default_layout',
     description:
-      'Set your account default layout (used by any of your variants that has not chosen its own). layout_id from cv_list_layouts.',
+      'Set your account default layout (used by any of your variants that has not chosen its own). layout_id from cv_list_layouts: a builtin, your own, or a public version. ' +
+      "Choosing someone else's layout test-compiles it on two of your résumés and returns {warnings} without blocking.",
     inputSchema: {
       type: 'object',
       properties: { layout_id: layoutId },
@@ -919,7 +933,8 @@ const toolDefs: ToolDef[] = [
     name: 'cv_set_variant_layout',
     description:
       "Choose a variant's layout. Pass a layout_id (from cv_list_layouts) to override, or null to revert to the global " +
-      "default. The layout must support the variant's kind (cv/resume/coverletter).",
+      "default. The layout must support the variant's kind (cv/resume/coverletter) and be a builtin, yours, or a public version; " +
+      "the pin stays if its author later unpublishes it. Returns {warnings} from a test compile on your data when the layout is someone else's.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -936,21 +951,113 @@ const toolDefs: ToolDef[] = [
       api('PUT', `/api/variants/${enc(a.variant_id)}/layout`, { layout_id: a.layout_id }),
   },
   {
-    name: 'cv_install_layout',
+    name: 'cv_check_layout',
     description:
-      'Install a new layout from a local .zip bundle. NOTE: UNAVAILABLE on the remote MCP server — it reads a file ' +
-      'from the local filesystem, which a Worker does not have. Install layouts from a local dev session instead.',
+      'Check a layout zip without installing it: the cv server downloads it from an https URL (public hosts only, up to 25 MB), ' +
+      'verifies it against the layout contract and your own résumés, and returns {ok, missing:[plain-language problems], report}.',
     inputSchema: {
       type: 'object',
-      properties: { zip_path: { type: 'string', minLength: 1 } },
-      required: ['zip_path'],
+      properties: { url: zipUrl },
+      required: ['url'],
       additionalProperties: false,
     },
-    handler: () => {
-      throw new Error(
-        'cv_install_layout is unavailable on the remote MCP server (no local filesystem to read the .zip). Install layouts from a local dev session, or use a future upload-based flow.',
-      );
+    handler: (a) => api('POST', '/api/layouts/from-url', { url: a.url, dryRun: true }),
+  },
+  {
+    name: 'cv_install_layout',
+    description:
+      'Install a layout from a zip at an https URL (public hosts only, up to 25 MB). It is verified first and installed as ' +
+      'your private layout only if it passes; on failure the error lists what is missing. Re-installing the same manifest id replaces it.',
+    inputSchema: {
+      type: 'object',
+      properties: { url: zipUrl },
+      required: ['url'],
+      additionalProperties: false,
     },
+    handler: (a) => api('POST', '/api/layouts/from-url', { url: a.url }),
+  },
+  {
+    name: 'cv_publish_layout',
+    description:
+      'Publish one of your uploaded layouts for other accounts: it is copied as the next numbered version (id "<layout>@<n>"), ' +
+      're-verified, and waits for the site owner to approve it. Returns the pending version.',
+    inputSchema: {
+      type: 'object',
+      properties: { layout_id: layoutId },
+      required: ['layout_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('POST', `/api/layouts/${enc(a.layout_id)}/publish`, {}),
+  },
+  {
+    name: 'cv_unpublish_layout',
+    description:
+      "Withdraw one of your public or pending versions. It leaves everyone's list, and anyone already using it keeps it.",
+    inputSchema: {
+      type: 'object',
+      properties: { layout_id: layoutId },
+      required: ['layout_id'],
+      additionalProperties: false,
+    },
+    handler: (a) => api('POST', `/api/layouts/${enc(a.layout_id)}/unpublish`, {}),
+  },
+  {
+    name: 'cv_download_layout',
+    description:
+      'Get a short-lived signed link to download a layout as a zip: a builtin, your own, a public version, or one you use.',
+    inputSchema: {
+      type: 'object',
+      properties: { layout_id: layoutId },
+      required: ['layout_id'],
+      additionalProperties: false,
+    },
+    handler: async (a) => {
+      const e = env as unknown as CvEnv;
+      const secret = signingSecret(e);
+      if (!secret) throw new Error('Server misconfigured: no signing secret for download links.');
+      const base = (e.MCP_PUBLIC_URL || '').replace(/\/$/, '');
+      if (!base) throw new Error('Server misconfigured: MCP_PUBLIC_URL is not set.');
+      // Check access now, so a bad id fails here rather than when the link is opened.
+      await api('GET', `/api/layouts/${enc(a.layout_id)}`);
+      const cvUserId = cvCtx.getStore()?.cvUserId;
+      const token = await signPayload({ l: a.layout_id, u: cvUserId }, secret);
+      return {
+        __content: [
+          {
+            type: 'text',
+            text: `Layout ${a.layout_id} zip (link valid ~5 min): ${base}/bundle/${token}`,
+          },
+        ],
+      };
+    },
+  },
+  {
+    name: 'cv_list_pending_layouts',
+    description:
+      'Site owner only: the layout versions waiting for review, with their fixture reports, raw-PDF warnings and compile times.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: () => api('GET', '/api/layouts/review'),
+  },
+  {
+    name: 'cv_review_layout',
+    description:
+      'Site owner only: approve or reject a pending layout version. Approval is refused unless its files are unchanged, every ' +
+      'fixture PDF passed the safety scan, and it compiles within the time limit.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        layout_id: layoutId,
+        decision: { type: 'string', enum: ['approve', 'reject'] },
+        note: { type: 'string', maxLength: 2000 },
+      },
+      required: ['layout_id', 'decision'],
+      additionalProperties: false,
+    },
+    handler: (a) =>
+      api('POST', `/api/layouts/${enc(a.layout_id)}/review`, {
+        decision: a.decision,
+        note: a.note,
+      }),
   },
   {
     name: 'cv_verify_layout',
