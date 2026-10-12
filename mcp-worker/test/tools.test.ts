@@ -100,6 +100,20 @@ describe('cv tool catalog (moved into the Worker)', () => {
       validate('cv_create_variant', { profile_id: 1, name: 'FE Resume', kind: 'resume' }).valid,
     ).toBe(true);
     expect(validate('cv_tag', { target: 'entry', id: 2, tags: ['frontend'] }).valid).toBe(true);
+    // `auto` asks the server to assign an arm, so the request tools take it and
+    // the one that writes a row does not.
+    expect(validate('cv_suggest_tags', { profile_id: 1, text: 'x', scorer: 'auto' }).valid).toBe(
+      true,
+    );
+    expect(
+      validate('cv_suggest_tags_bulk', { profile_id: 1, targets: [], scorer: 'auto' }).valid,
+    ).toBe(false); // targets must be non-empty; the scorer itself is accepted
+    expect(
+      validate('cv_record_tag_events', {
+        profile_id: 1,
+        events: [{ target: 'bullet', id: 1, tag: 'x', action: 'accept', scorer: 'auto' }],
+      }).valid,
+    ).toBe(false);
     expect(
       validate('cv_record_tag_events', {
         profile_id: 1,
