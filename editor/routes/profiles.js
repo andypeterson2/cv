@@ -4,6 +4,7 @@ const { validate } = require('../lib/schema');
 const { AppError, ConflictError, NotFoundError } = require('../lib/errors');
 const wrap = require('../lib/async-handler');
 const linkedin = require('../lib/linkedin');
+const { pickScorer, EMBEDDING_ARMS } = require('../lib/scorer-arms');
 
 /** Parse a numeric :pid / :id route param or throw 400. */
 function intParam(value, label = 'id') {
@@ -12,21 +13,38 @@ function intParam(value, label = 'id') {
   return n;
 }
 
+/** Embedding arms this deployment can serve, probed once and remembered. */
+let servableArms = null;
+function availableArms() {
+  if (servableArms) return servableArms;
+  servableArms = ['lexical'];
+  try {
+    require('../lib/embed-scorer');
+    servableArms.push(...EMBEDDING_ARMS);
+  } catch {
+    // No model installed: lexical is the whole menu.
+  }
+  return servableArms;
+}
+
 /**
- * Map a `scorer` request param to the {scorer, embed} options of db.suggestTags.
- * 'lexical' (or absent) → {} (the default lexical scorer).
- * 'embedding' → the optional embedding module's scorer and embed function,
- * lazy-required so it (and its model) never load unless explicitly requested.
+ * Map a `scorer` request param to the {scorer, embed, chosen} options of
+ * db.suggestTags, where `chosen` names the arm that will actually rank.
+ *
+ * A request naming no arm is assigned one here rather than in the browser, so
+ * the name recorded against an accepted suggestion is what ranked it instead of
+ * what the client assumed. A request pinning an arm this deployment cannot
+ * serve is a 501 rather than a quiet substitution — the offline evaluation pins
+ * one, and mislabelled rows there would be worse than an error.
  */
 function resolveScorer(name) {
-  if (name !== 'embedding') return {};
-  let mod;
-  try {
-    mod = require('../lib/embed-scorer');
-  } catch {
-    throw new AppError('Embedding scorer is not available on this deployment', 501);
+  const chosen = pickScorer(name, availableArms());
+  if (!chosen) {
+    throw new AppError(`Scorer "${name}" is not available on this deployment`, 501);
   }
-  return { scorer: mod.scorer, embed: mod.embed };
+  if (chosen === 'lexical') return { chosen };
+  const mod = require('../lib/embed-scorer');
+  return { scorer: mod.scorer, embed: mod.embed, chosen };
 }
 
 module.exports = function createProfilesRouter(getDb) {

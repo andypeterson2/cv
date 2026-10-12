@@ -7,9 +7,9 @@ import { cvCtx } from '../src/cv-ctx';
 // Worker runtime — proves the tool catalog + the Workers-safe validator behave
 // like the stdio server before that server is deleted.
 describe('cv tool catalog (moved into the Worker)', () => {
-  it('exposes exactly 73 tools, each cv_*-prefixed with a description + schema', () => {
-    expect(TOOL_COUNT).toBe(73);
-    expect(tools.length).toBe(73);
+  it('exposes exactly 74 tools, each cv_*-prefixed with a description + schema', () => {
+    expect(TOOL_COUNT).toBe(74);
+    expect(tools.length).toBe(74);
     for (const t of tools) {
       expect(t.name).toMatch(/^cv_/);
       expect(typeof t.description).toBe('string');
@@ -34,6 +34,7 @@ describe('cv tool catalog (moved into the Worker)', () => {
       'cv_resolve_variant',
       'cv_get_pdf',
       'cv_suggest_tags',
+      'cv_record_tag_events',
       'cv_expand_variant_rules',
       'cv_export_linkedin',
       'cv_linkedin_status',
@@ -58,6 +59,38 @@ describe('cv tool catalog (moved into the Worker)', () => {
     expect(validate('cv_create_profile', { name: '' }).valid).toBe(false);
     expect(validate('cv_export_linkedin', {}).valid).toBe(false);
     expect(validate('cv_export_linkedin', { profile_id: 5, format: 'bad' }).valid).toBe(false);
+    const ev = (e: Record<string, unknown>) => ({ profile_id: 1, events: [e] });
+    expect(
+      validate('cv_record_tag_events', ev({ target: 'section', id: 1, tag: 'x', action: 'accept' }))
+        .valid,
+    ).toBe(false);
+    expect(
+      validate('cv_record_tag_events', ev({ target: 'bullet', id: 1, tag: 'x', action: 'like' }))
+        .valid,
+    ).toBe(false);
+    expect(
+      validate(
+        'cv_record_tag_events',
+        ev({ target: 'bullet', id: 1, tag: 'x', action: 'accept', scorer: 'magic' }),
+      ).valid,
+    ).toBe(false);
+    expect(
+      validate(
+        'cv_record_tag_events',
+        ev({ target: 'bullet', id: 1, tag: 'x', action: 'accept', score: 2 }),
+      ).valid,
+    ).toBe(false);
+    expect(
+      validate('cv_record_tag_events', {
+        profile_id: 1,
+        events: Array.from({ length: 51 }, () => ({
+          target: 'bullet',
+          id: 1,
+          tag: 'x',
+          action: 'accept',
+        })),
+      }).valid,
+    ).toBe(false);
   });
 
   it('accepts well-formed args', () => {
@@ -67,6 +100,22 @@ describe('cv tool catalog (moved into the Worker)', () => {
       validate('cv_create_variant', { profile_id: 1, name: 'FE Resume', kind: 'resume' }).valid,
     ).toBe(true);
     expect(validate('cv_tag', { target: 'entry', id: 2, tags: ['frontend'] }).valid).toBe(true);
+    expect(
+      validate('cv_record_tag_events', {
+        profile_id: 1,
+        events: [
+          {
+            target: 'bullet',
+            id: 2,
+            tag: 'frontend',
+            action: 'accept',
+            rank: 0,
+            score: -0.2,
+            scorer: 'embedding-ft',
+          },
+        ],
+      }).valid,
+    ).toBe(true);
     expect(
       validate('cv_set_variant_rules', { variant_id: 9, include: ['a'], exclude: ['b'] }).valid,
     ).toBe(true);
@@ -165,5 +214,41 @@ describe('per-user scoping — cv calls carry a verified X-User-Id', () => {
   it('refuses a cv call with no authenticated user in context (no request made)', async () => {
     await expect(callTool('cv_list_profiles', {})).rejects.toThrow(/No authenticated cv user/);
     expect(calls).toHaveLength(0);
+  });
+});
+
+/**
+ * Every cv_* tool speaks `bullet`; the REST shape underneath says `item`. The
+ * translation lives in the handler, so nothing in the schema catches it going
+ * wrong — an unmapped event would simply 400 for every agent that recorded one.
+ */
+describe('cv_record_tag_events target mapping', () => {
+  it('sends bullet as item and entry as entry', async () => {
+    const sent: Array<Record<string, unknown>> = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      sent.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ success: true, recorded: 2, skipped: 0 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    try {
+      await cvCtx.run({ cvUserId: 7 }, () =>
+        callTool('cv_record_tag_events', {
+          profile_id: 1,
+          events: [
+            { target: 'bullet', id: 2, tag: 'frontend', action: 'accept', rank: 0 },
+            { target: 'entry', id: 3, tag: 'leadership', action: 'manual' },
+          ],
+        }),
+      );
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(sent[0].events).toMatchObject([
+      { target: 'item', id: 2, tag: 'frontend', action: 'accept', rank: 0 },
+      { target: 'entry', id: 3, tag: 'leadership', action: 'manual' },
+    ]);
   });
 });
