@@ -524,7 +524,9 @@ const toolDefs: ToolDef[] = [
         },
         scorer: {
           type: 'string',
-          enum: shared.SCORER_METHODS,
+          // `auto` is a request mode, so SCORER_METHODS omits it and no recorded
+          // row can carry it. Asking for it is allowed; storing it is not.
+          enum: [...shared.SCORER_METHODS, 'auto'],
           description:
             'Ranking method; lexical (default) needs no model. embedding and embedding-ft are optional local ' +
             'semantic scorers for bulk/offline use; "auto" lets the deployment pick the best it can serve. The ' +
@@ -694,7 +696,7 @@ const toolDefs: ToolDef[] = [
           description:
             'Score floor (lexical default 0.4; embedding returns the top `limit` unless set)',
         },
-        scorer: { type: 'string', enum: shared.SCORER_METHODS },
+        scorer: { type: 'string', enum: [...shared.SCORER_METHODS, 'auto'] },
       },
       required: ['profile_id'],
       additionalProperties: false,
