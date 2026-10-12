@@ -252,11 +252,16 @@ class CvDatabase {
       upsertCatalogTag: p(
         'INSERT INTO tag_catalog (profile_id, tag, description, category) VALUES (?, ?, ?, ?) ON CONFLICT(profile_id, tag) DO UPDATE SET description = excluded.description, category = excluded.category',
       ),
+      // Events name their tag as text, so a fold has to carry them too or the
+      // recorded history stops matching the tags it describes.
+      rewriteTagEventTag: p('UPDATE tag_events SET tag = ? WHERE tag = ? AND profile_id = ?'),
       insertTagEvent: p(
-        'INSERT INTO tag_events (profile_id, target, target_id, tag, action, rank) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO tag_events (profile_id, target, target_id, tag, action, rank, score, scorer) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       ),
+      // SUM and a non-null count rather than AVG: the caller folds these groups
+      // together, and an average cannot be merged without its denominator.
       tagEventCounts: p(
-        'SELECT action, rank, COUNT(*) AS n FROM tag_events WHERE profile_id = ? GROUP BY action, rank',
+        'SELECT scorer, action, rank, COUNT(*) AS n, SUM(score) AS scoreSum, SUM(CASE WHEN score IS NOT NULL THEN 1 ELSE 0 END) AS scoreN FROM tag_events WHERE profile_id = ? GROUP BY scorer, action, rank',
       ),
       insertCatalogTagIfAbsent: p(
         'INSERT OR IGNORE INTO tag_catalog (profile_id, tag, description, category) VALUES (?, ?, ?, ?)',

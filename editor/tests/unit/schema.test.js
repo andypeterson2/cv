@@ -138,6 +138,61 @@ describe('variant schemas', () => {
   });
 });
 
+describe('tagEvents schema', () => {
+  const ok = (e) => ({
+    events: [{ target: 'item', id: 1, tag: 'backend', action: 'accept', ...e }],
+  });
+
+  it('accepts a score and a scorer', () => {
+    expect(validators.tagEvents(ok({ rank: 0, score: 0.41, scorer: 'embedding' }))).toBe(true);
+    expect(validators.tagEvents(ok({ scorer: 'embedding-ft' }))).toBe(true);
+    expect(validators.tagEvents(ok({}))).toBe(true); // both optional
+  });
+
+  it('rejects a scorer nobody serves and a score out of range', () => {
+    expect(validators.tagEvents(ok({ scorer: 'magic' }))).toBe(false);
+    expect(validators.tagEvents(ok({ score: 2 }))).toBe(false);
+    expect(validators.tagEvents(ok({ score: -2 }))).toBe(false);
+    // Cosine runs negative, so a legitimate blended score can be below zero.
+    expect(validators.tagEvents(ok({ score: -0.2 }))).toBe(true);
+  });
+
+  it('leaves the provenance on the object it validated', () => {
+    // The assertion that matters. While these two were undeclared, ajv's
+    // removeAdditional deleted them here with no error, so every other test
+    // passed over a write that stored nothing.
+    const body = ok({ rank: 0, score: 0.41, scorer: 'embedding' });
+    expect(validators.tagEvents(body)).toBe(true);
+    expect(body.events[0]).toEqual({
+      target: 'item',
+      id: 1,
+      tag: 'backend',
+      action: 'accept',
+      rank: 0,
+      score: 0.41,
+      scorer: 'embedding',
+    });
+  });
+
+  it('declares exactly the fields the insert binds', () => {
+    // A field the schema knows and the statement does not is silently dropped,
+    // and one the statement wants and the schema strips never arrives. Assert
+    // the pair agrees rather than any single field.
+    const CvDatabase = require('../../lib/db');
+    const db = new CvDatabase(':memory:');
+    const sql = db._stmts.insertTagEvent.source;
+    db.close();
+    const bound = sql
+      .slice(sql.indexOf('(') + 1, sql.indexOf(')'))
+      .split(',')
+      .map((c) => c.trim())
+      .filter((c) => c !== 'profile_id')
+      .map((c) => (c === 'target_id' ? 'id' : c));
+    const declared = Object.keys(validators.tagEvents.schema.properties.events.items.properties);
+    expect(new Set(declared)).toEqual(new Set(bound));
+  });
+});
+
 describe('isValidKind', () => {
   it('accepts cv/resume/coverletter, rejects others', () => {
     for (const k of ['cv', 'resume', 'coverletter']) expect(isValidKind(k)).toBe(true);

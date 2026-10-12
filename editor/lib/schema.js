@@ -194,7 +194,9 @@ const suggestTagsSchema = {
     text: { type: 'string', minLength: 1, maxLength: 5000 },
     limit: { type: 'integer', minimum: 1, maximum: 50 },
     minScore: { type: 'number', minimum: 0, maximum: 1 },
-    scorer: { type: 'string', enum: SCORER_METHODS },
+    // `auto` asks the server to assign an arm. It is a request mode, which is
+    // why SCORER_METHODS omits it and no recorded row can carry it.
+    scorer: { type: 'string', enum: [...SCORER_METHODS, 'auto'] },
   },
   required: ['text'],
   additionalProperties: false,
@@ -216,6 +218,10 @@ const tagEventsSchema = {
           tag: { type: 'string', minLength: 1, maxLength: 60 },
           action: { type: 'string', enum: ['accept', 'dismiss', 'manual', 'remove'] },
           rank: { type: 'integer', minimum: 0, maximum: 49 },
+          // Not 0..1: the embedding arms blend cosine with vote shares and
+          // cosine runs negative, so a floor of zero would reject real batches.
+          score: { type: 'number', minimum: -1, maximum: 1 },
+          scorer: { type: 'string', enum: SCORER_METHODS },
         },
         required: ['target', 'id', 'tag', 'action'],
         additionalProperties: false,

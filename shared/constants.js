@@ -13,8 +13,10 @@ const VARIANT_KINDS = ['cv', 'resume', 'coverletter'];
 // Section slug shape (kebab/underscore, lowercase) — unique per profile.
 const SLUG_PATTERN = '^[a-z0-9_-]+$';
 
-// Tag-suggestion ranking methods. `lexical` needs no model; `embedding` is the
-// optional local semantic scorer.
-const SCORER_METHODS = ['lexical', 'embedding'];
+// Tag-suggestion ranking methods. `lexical` needs no model; `embedding` and
+// `embedding-ft` are the optional local semantic scorers, stock and fine-tuned.
+// Each names a serving configuration, blend weight and K included, and lands in
+// tag_events, so the names stay fixed once used.
+const SCORER_METHODS = ['lexical', 'embedding', 'embedding-ft'];
 
 module.exports = { VARIANT_KINDS, SLUG_PATTERN, SCORER_METHODS };

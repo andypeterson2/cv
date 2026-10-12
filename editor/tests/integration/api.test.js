@@ -382,6 +382,66 @@ describe('Tag catalog + suggestion', () => {
     expect(foreign.status).toBe(404);
   });
 
+  test('a score and scorer survive the route and reach the stats', async () => {
+    const { i1 } = await buildMain();
+    const ok = await request('POST', `/api/profiles/${pid}/tags/events`, {
+      events: [
+        {
+          target: 'item',
+          id: i1,
+          tag: 'backend',
+          action: 'accept',
+          rank: 0,
+          score: 0.7,
+          scorer: 'embedding',
+        },
+        {
+          target: 'item',
+          id: i1,
+          tag: 'sales',
+          action: 'dismiss',
+          rank: 1,
+          score: 0.2,
+          scorer: 'embedding',
+        },
+      ],
+    });
+    expect(ok.body).toMatchObject({ success: true, recorded: 2 });
+
+    const stats = (await request('GET', `/api/profiles/${pid}/tags/events/stats`)).body;
+    const arm = stats.byScorer.find((x) => x.scorer === 'embedding');
+    expect(arm).toMatchObject({ accept: 1, dismiss: 1, acceptRate: 0.5 });
+    expect(arm.meanAcceptedScore).toBeCloseTo(0.7);
+  });
+
+  test('a late remove for a vanished target is skipped, not a 404', async () => {
+    const { i1 } = await buildMain();
+    await request('DELETE', `/api/items/${i1}`);
+    const res = await request('POST', `/api/profiles/${pid}/tags/events`, {
+      events: [{ target: 'item', id: i1, tag: 'backend', action: 'remove' }],
+    });
+    // One stale id in a batch must not roll back every good row beside it.
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ recorded: 0, skipped: 1 });
+  });
+
+  test('suggest reports which arm ranked, so the client records a fact', async () => {
+    const { e1 } = await buildMain();
+    await request('POST', `/api/entries/${e1}/tags`, { tags: ['frontend'] });
+    const res = await request('POST', `/api/profiles/${pid}/tags/suggest`, {
+      text: 'Built the React frontend library',
+    });
+    expect(res.body.scorer).toBe('lexical');
+
+    // A pinned arm this deployment cannot serve is an error, never a quiet
+    // substitution: the offline evaluation pins one and would mislabel its rows.
+    const pinned = await request('POST', `/api/profiles/${pid}/tags/suggest`, {
+      text: 'Built the React frontend library',
+      scorer: 'auto-nonsense',
+    });
+    expect(pinned.status).toBe(400);
+  });
+
   test('400s: suggest without text, catalog without tag', async () => {
     expect((await request('POST', `/api/profiles/${pid}/tags/suggest`, {})).status).toBe(400);
     expect(
