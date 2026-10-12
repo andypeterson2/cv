@@ -10,10 +10,6 @@ const suggest = require('../suggest');
 const { SEED_TAGS, seedTag } = require('../seed-tags');
 const { withNeighbours } = require('../neighbour-scorer');
 
-// Below this many distinct tags of their own, a profile's suggestions also draw
-// on the starter vocabulary.
-const SEED_UNTIL = 30;
-
 class TagStore {
   // Tags
 
@@ -171,6 +167,8 @@ class TagStore {
       // emits no event: an alias is a vocabulary edit, and a `manual` row here
       // would invent a label the author never typed.
       this._stmts.rewriteTagEventTag.run(c, a, profileId);
+      this._stmts.rewriteCatalogTag.run(c, a, profileId);
+      this._stmts.delCatalogTagP.run(a, profileId);
     });
     tx();
     return { alias: a, canonical: c };
@@ -223,7 +221,13 @@ class TagStore {
 
   /**
    * Candidate vocab for suggestion: catalog (preferred) ∪ usage vocab, deduped by
-   * tag, plus the starter vocabulary while the profile's own is under SEED_UNTIL.
+   * tag, topped up with the starter vocabulary.
+   *
+   * The starter tags stay in play however large a profile's own vocabulary
+   * grows, so a concept it has not reached for yet can still be offered. A
+   * starter tag the profile has aliased away is left out: the stored tags were
+   * folded to the canonical form, and offering the old name back would read as
+   * a duplicate of the tag the author just renamed.
    */
   _suggestCandidates(profileId) {
     const byTag = new Map();
@@ -240,12 +244,10 @@ class TagStore {
       if (cur) cur.count = count;
       else byTag.set(tag, { tag, count, inCatalog: false });
     }
-    if (byTag.size < SEED_UNTIL) {
-      for (const s of SEED_TAGS) {
-        if (!byTag.has(s.tag)) {
-          byTag.set(s.tag, { tag: s.tag, count: 0, inCatalog: false, description: s.description });
-        }
-      }
+    for (const s of SEED_TAGS) {
+      if (byTag.has(s.tag)) continue;
+      if (this._resolveAlias(profileId, s.tag) !== s.tag) continue;
+      byTag.set(s.tag, { tag: s.tag, count: 0, inCatalog: false, description: s.description });
     }
     return [...byTag.values()];
   }
@@ -464,7 +466,7 @@ class TagStore {
    * (an MCP client or the UI) can apply via addEntryTags/addItemTags. Candidate vocab is built
    * once and reused across items.
    */
-  async suggestBulk(profileId, { limit = 5, minScore, scorer: base, embed } = {}) {
+  async suggestBulk(profileId, { limit = 5, minScore, scorer: base, embed, chosen } = {}) {
     const candidates = this._suggestCandidates(profileId);
     const scorer = this._personalScorer(profileId, base, embed);
     // Bulk runs are reviewed in one pass, so the lexical floor is stricter than a single suggest.
@@ -505,9 +507,10 @@ class TagStore {
         }
       }
     }
-    return { count: out.length, items: out };
+    // Same as suggestTags: the caller records the arm that ranked a suggestion
+    // it accepts, rather than naming one it assumed was serving.
+    return { count: out.length, items: out, scorer: chosen ?? (base ? null : 'lexical') };
   }
 }
 
 module.exports = TagStore;
-module.exports.SEED_UNTIL = SEED_UNTIL;

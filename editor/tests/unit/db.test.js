@@ -5,7 +5,6 @@
 
 const CvDatabase = require('../../lib/db');
 const { SEED_TAGS } = require('../../lib/seed-tags');
-const { SEED_UNTIL } = require('../../lib/db/tags');
 
 let db;
 let pid;
@@ -167,17 +166,49 @@ describe('Tag catalog + suggestion', () => {
     expect(tags).toEqual(expect.arrayContaining(['postgresql', 'sql']));
   });
 
-  test('the starter vocabulary drops out once a profile has their own', async () => {
+  test('the starter vocabulary stays in play however many tags a profile has', async () => {
     const { e1 } = buildMain();
+    // Well past the 30 that used to drop the starter tags: a concept the
+    // profile has never reached for is still offerable.
     db.addEntryTags(
       e1,
-      Array.from({ length: SEED_UNTIL }, (_, i) => `own-tag-${i}`),
+      Array.from({ length: 40 }, (_, i) => `own-tag-${i}`),
     );
     const { results } = await db.suggestTags(pid, 'Designed the PostgreSQL schema', {
       minScore: 0,
       limit: 0,
     });
-    expect(results.some((r) => r.tag === 'postgresql')).toBe(false);
+    expect(results.some((r) => r.tag === 'postgresql')).toBe(true);
+  });
+
+  test('a starter tag the profile aliased away is not offered under its old name', async () => {
+    buildMain();
+    db.setTagAlias(pid, 'postgresql', 'postgres');
+    const { results } = await db.suggestTags(pid, 'Designed the PostgreSQL schema', {
+      minScore: 0,
+      limit: 0,
+    });
+    const tags = results.map((r) => r.tag);
+    expect(tags).not.toContain('postgresql');
+  });
+
+  test('an alias fold carries the catalogued tag with it', async () => {
+    const { e1 } = buildMain();
+    db.addEntryTags(e1, ['postgresql']); // a starter tag, so it joins the catalog
+    expect(db.getTagCatalog(pid).some((c) => c.tag === 'postgresql')).toBe(true);
+    db.setTagAlias(pid, 'postgresql', 'postgres');
+    const catalog = db.getTagCatalog(pid).map((c) => c.tag);
+    expect(catalog).toContain('postgres');
+    expect(catalog).not.toContain('postgresql');
+  });
+
+  test('a bulk run reports the arm that ranked it', async () => {
+    buildMain();
+    const out = await db.suggestBulk(pid, { chosen: 'embedding' });
+    expect(out.scorer).toBe('embedding');
+    expect(out.count).toBeGreaterThan(0);
+    // With no arm named and no scorer injected, lexical is what ran.
+    expect((await db.suggestBulk(pid)).scorer).toBe('lexical');
   });
 
   test('a starter tag joins the catalog with its description on first use', () => {
