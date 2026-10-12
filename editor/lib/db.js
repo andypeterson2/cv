@@ -244,6 +244,10 @@ class CvDatabase {
       delRuleTagP: p(
         'DELETE FROM variant_rules WHERE tag = ? AND variant_id IN (SELECT id FROM variants WHERE profile_id = ?)',
       ),
+      rewriteCatalogTag: p(
+        'UPDATE OR IGNORE tag_catalog SET tag = ? WHERE tag = ? AND profile_id = ?',
+      ),
+      delCatalogTagP: p('DELETE FROM tag_catalog WHERE tag = ? AND profile_id = ?'),
 
       // Tag catalog (per-profile controlled vocabulary)
       getCatalog: p(
