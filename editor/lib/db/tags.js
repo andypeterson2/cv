@@ -167,6 +167,10 @@ class TagStore {
       this._stmts.delItemTagP.run(a, profileId);
       this._stmts.rewriteRuleTag.run(c, a, profileId);
       this._stmts.delRuleTagP.run(a, profileId);
+      // A fold relabels recorded rows so they keep naming a live tag. It
+      // emits no event: an alias is a vocabulary edit, and a `manual` row here
+      // would invent a label the author never typed.
+      this._stmts.rewriteTagEventTag.run(c, a, profileId);
     });
     tx();
     return { alias: a, canonical: c };
@@ -249,42 +253,148 @@ class TagStore {
   /**
    * Record what a profile did with tag suggestions. Each event names an entry or
    * item of theirs; `rank` is its position in the suggestion list when the tag came
-   * from one. Returns {recorded}.
-   * @throws Error with .status 404 when a target is not the profile's.
+   * from one, and `score`/`scorer` say what ranked it there. Returns
+   * {recorded, skipped}.
+   *
+   * The tag is folded to its canonical form, so a `manual` row carries the same
+   * string `addEntryTags` wrote and the two can be joined later.
+   *
+   * A `remove` or `manual` whose target has since been deleted is skipped rather
+   * than thrown: those arrive late and in batches, and one stale id would roll
+   * back every good row beside it. An `accept` or `dismiss` names something the
+   * client just had on screen, so a missing target there is still a 404.
+   * @throws Error with .status 404 when an accept/dismiss target is not the profile's.
    */
   recordTagEvents(profileId, events) {
     const owner = { entry: this._stmts.profileForEntry, item: this._stmts.profileForItem };
+    let recorded = 0;
+    let skipped = 0;
     const tx = this.db.transaction(() => {
       for (const e of events) {
         if (owner[e.target].get(e.id)?.pid !== profileId) {
+          if (e.action === 'remove' || e.action === 'manual') {
+            skipped += 1;
+            continue;
+          }
           const err = new Error(`${e.target} ${e.id} not found`);
           err.status = 404;
           throw err;
         }
         const tag = this._canonicalTag(profileId, e.tag);
-        this._stmts.insertTagEvent.run(profileId, e.target, e.id, tag, e.action, e.rank ?? null);
+        // A tag of punctuation alone normalizes to empty and would store a row
+        // nothing can join to.
+        if (!tag) {
+          skipped += 1;
+          continue;
+        }
+        this._stmts.insertTagEvent.run(
+          profileId,
+          e.target,
+          e.id,
+          tag,
+          e.action,
+          e.rank ?? null,
+          e.score ?? null,
+          e.scorer ?? null,
+        );
+        recorded += 1;
       }
     });
     tx();
-    return { recorded: events.length };
+    return { recorded, skipped };
+  }
+
+  /** One scorer's tally, created on first sight of that scorer. */
+  _scorerRow(map, scorer) {
+    let row = map.get(scorer);
+    if (!row) {
+      row = {
+        scorer,
+        accept: 0,
+        dismiss: 0,
+        manual: 0,
+        remove: 0,
+        goldManual: 0,
+        shownManual: 0,
+        acceptedScoreSum: 0,
+        acceptedScoreN: 0,
+        dismissedScoreSum: 0,
+        dismissedScoreN: 0,
+        ranks: new Map(),
+      };
+      map.set(scorer, row);
+    }
+    return row;
+  }
+
+  /** Fold one grouped row into its scorer's tally. */
+  _tallyScorer(scorers, { scorer, action, rank, n, scoreSum, scoreN }) {
+    const s = this._scorerRow(scorers, scorer ?? null);
+    s[action] += n;
+    if (action === 'manual') s[rank == null ? 'goldManual' : 'shownManual'] += n;
+    if (action !== 'accept' && action !== 'dismiss') return;
+    const key = action === 'accept' ? 'accepted' : 'dismissed';
+    s[`${key}ScoreSum`] += scoreSum || 0;
+    s[`${key}ScoreN`] += scoreN || 0;
+    if (rank == null) return;
+    const r = s.ranks.get(rank) || { rank, accept: 0, dismiss: 0 };
+    r[action] += n;
+    s.ranks.set(rank, r);
+  }
+
+  /** One scorer's numbers, from the tally it accumulated. */
+  _scorerSummary(s, rate) {
+    const mean = (sum, count) => (count > 0 ? sum / count : null);
+    const decided = s.accept + s.dismiss + s.manual;
+    return {
+      scorer: s.scorer,
+      accept: s.accept,
+      dismiss: s.dismiss,
+      manual: s.manual,
+      remove: s.remove,
+      acceptRate: rate(s.accept, s.dismiss),
+      verdictShare: decided > 0 ? s.accept / decided : null,
+      goldManual: s.goldManual,
+      shownManual: s.shownManual,
+      meanAcceptedScore: mean(s.acceptedScoreSum, s.acceptedScoreN),
+      meanDismissedScore: mean(s.dismissedScoreSum, s.dismissedScoreN),
+      byRank: [...s.ranks.values()]
+        .sort((a, b) => a.rank - b.rank)
+        .map((r) => ({ ...r, acceptRate: rate(r.accept, r.dismiss) })),
+    };
   }
 
   /**
    * How suggestions are faring: accept and dismiss counts by rank, how often a
    * tag was typed by hand instead, and how many hand-typed tags had been shown.
+   *
+   * `byScorer` splits the same rows by what ranked them, which is what decides
+   * between two rankers. Rows written before scorers were recorded appear under
+   * a null scorer rather than being dropped, so the denominators stay right.
+   *
+   * Two readings to keep straight. `acceptRate` only counts suggestions the
+   * author acted on — one ignored on screen records nothing — so it describes
+   * the ones that drew a verdict, and `verdictShare` sets accepts against every
+   * decision including typing a tag by hand. And a mean score is comparable
+   * within a scorer only: the lexical arm is a fuzzy ratio, the embedding arms
+   * are uncalibrated cosine.
    */
   tagEventStats(profileId) {
     const byRank = new Map();
     const totals = { accept: 0, dismiss: 0, manual: 0, remove: 0 };
+    const scorers = new Map();
     let manualShown = 0;
-    for (const { action, rank, n } of this._stmts.tagEventCounts.all(profileId)) {
+    for (const row of this._stmts.tagEventCounts.all(profileId)) {
+      const { action, rank, n } = row;
       totals[action] += n;
       if (action === 'manual' && rank != null) manualShown += n;
       if ((action === 'accept' || action === 'dismiss') && rank != null) {
-        const row = byRank.get(rank) || { rank, accept: 0, dismiss: 0 };
-        row[action] += n;
-        byRank.set(rank, row);
+        const r = byRank.get(rank) || { rank, accept: 0, dismiss: 0 };
+        r[action] += n;
+        byRank.set(rank, r);
       }
+
+      this._tallyScorer(scorers, row);
     }
     const rate = (a, b) => (a + b > 0 ? a / (a + b) : null);
     return {
@@ -295,6 +405,15 @@ class TagStore {
       acceptRate: rate(totals.accept, totals.dismiss),
       manualShare: rate(totals.manual, totals.accept),
       manualShownShare: totals.manual > 0 ? manualShown / totals.manual : null,
+      byScorer: [...scorers.values()]
+        .map((s) => this._scorerSummary(s, rate))
+        // Busiest first so the output is stable to read and to assert on; the
+        // unattributed rows sort last whatever their volume.
+        .sort((a, b) => {
+          if ((a.scorer === null) !== (b.scorer === null)) return a.scorer === null ? 1 : -1;
+          const volume = (x) => x.accept + x.dismiss + x.manual + x.remove;
+          return volume(b) - volume(a) || String(a.scorer).localeCompare(String(b.scorer));
+        }),
     };
   }
 
@@ -305,13 +424,15 @@ class TagStore {
    * alternate ranker (e.g. embeddings) without changing this method's shape.
    * @returns {Promise<{query, results:[{tag, score, inCatalog, count, via}]}>}
    */
-  async suggestTags(profileId, text, { limit = 8, minScore, scorer, embed } = {}) {
+  async suggestTags(profileId, text, { limit = 8, minScore, scorer, embed, chosen } = {}) {
     const results = await suggest.suggestTags(text, this._suggestCandidates(profileId), {
       limit,
       minScore,
       scorer: this._personalScorer(profileId, scorer, embed),
     });
-    return { query: String(text), results };
+    // `chosen` goes back so the caller records the arm that ranked a
+    // suggestion it accepts.
+    return { query: String(text), results, scorer: chosen ?? (scorer ? null : 'lexical') };
   }
 
   /** With an embedding function, blend the scorer with votes from the profile's tagged bullets. */
