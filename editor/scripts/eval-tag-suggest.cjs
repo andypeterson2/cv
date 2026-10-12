@@ -39,7 +39,6 @@ const path = require('node:path');
 const suggest = require('../lib/suggest');
 const { withNeighbours, ALPHA, K } = require('../lib/neighbour-scorer');
 const { SEED_TAGS } = require('../lib/seed-tags');
-const { SEED_UNTIL } = require('../lib/db/tags');
 
 const SEED_DEFAULT = 1;
 const ALPHAS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
@@ -153,8 +152,8 @@ function splitHalves(rows, seed) {
 
 /**
  * Candidate list: every tag the profile uses, with counts from the pool side
- * only. `withSeed` adds the starter vocabulary, which serving does while the
- * profile's own tag count is under SEED_UNTIL.
+ * only. `withSeed` adds the starter vocabulary, which serving now does for
+ * every profile whatever its own tag count.
  */
 function buildCandidates(allRows, pool, withSeed) {
   const counts = new Map();
@@ -278,10 +277,7 @@ async function main() {
     `selected on the selection half: blend weight ${chosen.alpha}, k ${chosen.k}, ` +
       `starter vocabulary ${chosen.withSeed ? 'on' : 'off'}`,
   );
-  console.log(
-    `serving uses: blend weight ${ALPHA}, k ${K}, ` +
-      `starter vocabulary under ${SEED_UNTIL} tags of the profile's own`,
-  );
+  console.log(`serving uses: blend weight ${ALPHA}, k ${K}, starter vocabulary always in play`);
   console.log(line('selection half fit', { ...chosen }));
   console.log('held-out half:');
   console.log(line('no neighbour votes', baseline));
