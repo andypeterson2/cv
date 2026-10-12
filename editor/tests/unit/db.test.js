@@ -223,6 +223,117 @@ describe('Tag catalog + suggestion', () => {
     expect(stats.acceptRate).toBeCloseTo(2 / 3);
     expect(stats.manualShare).toBe(0.5);
     expect(stats.manualShownShare).toBe(0.5);
+
+    // Read the columns back rather than the summary: this test passed for the
+    // life of the feature while the insert was dropping both fields.
+    const stored = db.db
+      .prepare('SELECT tag, score, scorer FROM tag_events WHERE profile_id = ? ORDER BY id')
+      .all(pid);
+    expect(stored[0]).toEqual({ tag: 'backend', score: 0.41, scorer: 'embedding' });
+    expect(stored[1]).toEqual({ tag: 'python', score: null, scorer: 'embedding' });
+    expect(stored[4]).toEqual({ tag: 'acme-internal', score: null, scorer: null });
+  });
+
+  test('stats split by scorer, keeping the whole-profile numbers as they were', () => {
+    const { e1, i1 } = buildMain();
+    db.recordTagEvents(pid, [
+      {
+        target: 'item',
+        id: i1,
+        tag: 'backend',
+        action: 'accept',
+        rank: 0,
+        score: 0.8,
+        scorer: 'embedding',
+      },
+      {
+        target: 'item',
+        id: i1,
+        tag: 'python',
+        action: 'dismiss',
+        rank: 0,
+        score: 0.6,
+        scorer: 'embedding',
+      },
+      { target: 'item', id: i1, tag: 'rust', action: 'accept', rank: 2, scorer: 'embedding' },
+      {
+        target: 'item',
+        id: i1,
+        tag: 'sales',
+        action: 'accept',
+        rank: 0,
+        score: -0.1,
+        scorer: 'lexical',
+      },
+      { target: 'entry', id: e1, tag: 'leadership', action: 'manual', scorer: 'lexical' },
+      { target: 'entry', id: e1, tag: 'ops', action: 'manual', rank: 3, scorer: 'lexical' },
+      { target: 'entry', id: e1, tag: 'legacy', action: 'accept', rank: 1 },
+    ]);
+    const stats = db.tagEventStats(pid);
+
+    // Busiest scorer first, unattributed rows last whatever their volume.
+    expect(stats.byScorer.map((s) => s.scorer)).toEqual(['embedding', 'lexical', null]);
+
+    const [embedding, lexical, unattributed] = stats.byScorer;
+    expect(embedding).toMatchObject({ accept: 2, dismiss: 1, acceptRate: 2 / 3 });
+    // Mean over the rows that carried a score, not over every accept.
+    expect(embedding.meanAcceptedScore).toBeCloseTo(0.8);
+    expect(embedding.meanDismissedScore).toBeCloseTo(0.6);
+    expect(embedding.byRank).toEqual([
+      { rank: 0, accept: 1, dismiss: 1, acceptRate: 0.5 },
+      { rank: 2, accept: 1, dismiss: 0, acceptRate: 1 },
+    ]);
+
+    // A manual tag with no rank was never on screen; one with a rank was.
+    expect(lexical).toMatchObject({ goldManual: 1, shownManual: 1, verdictShare: 1 / 3 });
+    expect(lexical.meanAcceptedScore).toBeCloseTo(-0.1);
+    expect(unattributed).toMatchObject({ scorer: null, accept: 1, meanAcceptedScore: null });
+
+    // The pre-existing shape is what cv_tag_suggestion_stats documents.
+    expect(stats.totals).toEqual({ accept: 4, dismiss: 1, manual: 2, remove: 0 });
+    expect(stats.acceptRate).toBe(0.8);
+  });
+
+  test('a tag that normalizes to nothing is skipped rather than stored', () => {
+    const { i1 } = buildMain();
+    const out = db.recordTagEvents(pid, [
+      { target: 'item', id: i1, tag: '---', action: 'accept', rank: 0 },
+      { target: 'item', id: i1, tag: 'backend', action: 'accept', rank: 1 },
+    ]);
+    expect(out).toEqual({ recorded: 1, skipped: 1 });
+    expect(db.tagEventStats(pid).totals.accept).toBe(1);
+  });
+
+  test('a late remove for a deleted target is skipped, an accept is not', () => {
+    const { i1 } = buildMain();
+    const other = db.createProfile('Other');
+    expect(
+      db.recordTagEvents(other, [{ target: 'item', id: i1, tag: 'x', action: 'remove' }]),
+    ).toEqual({ recorded: 0, skipped: 1 });
+    expect(() =>
+      db.recordTagEvents(other, [{ target: 'item', id: i1, tag: 'x', action: 'accept' }]),
+    ).toThrow(/not found/);
+  });
+
+  test('folding a tag alias relabels the events that named it', () => {
+    const { i1 } = buildMain();
+    db.recordTagEvents(pid, [
+      { target: 'item', id: i1, tag: 'k8s', action: 'accept', rank: 0, scorer: 'embedding' },
+    ]);
+    db.setTagAlias(pid, 'k8s', 'kubernetes');
+    const tags = db.db
+      .prepare('SELECT tag FROM tag_events WHERE profile_id = ?')
+      .all(pid)
+      .map((r) => r.tag);
+    // Relabelled, not duplicated: an alias is a vocabulary edit, so it must not
+    // invent a tagging decision the author never made.
+    expect(tags).toEqual(['kubernetes']);
+    expect(db.tagEventStats(pid).totals).toEqual({
+      accept: 1,
+      dismiss: 0,
+      manual: 0,
+      remove: 0,
+    });
   });
 
   test("a tag event must name one of the profile's own entries or items", () => {

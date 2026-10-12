@@ -526,7 +526,10 @@ const toolDefs: ToolDef[] = [
           type: 'string',
           enum: shared.SCORER_METHODS,
           description:
-            'Ranking method; lexical (default) needs no model. embedding is an optional local semantic scorer for bulk/offline use.',
+            'Ranking method; lexical (default) needs no model. embedding and embedding-ft are optional local ' +
+            'semantic scorers for bulk/offline use; "auto" lets the deployment pick the best it can serve. The ' +
+            'response reports the arm that actually ranked in its `scorer` field — pass that value back to ' +
+            'cv_record_tag_events rather than assuming one.',
         },
       },
       required: ['profile_id', 'text'],
@@ -546,7 +549,10 @@ const toolDefs: ToolDef[] = [
       'How tag suggestions are faring for a profile, from what they did with them in the editor: ' +
       '{totals:{accept,dismiss,manual,remove}, byRank:[{rank,accept,dismiss,acceptRate}], acceptRate, ' +
       'manualShare (hand-typed tags per accepted suggestion), manualShownShare (hand-typed tags that had been ' +
-      'suggested)}. Read-only.',
+      'suggested), byScorer (the same tallies split by which ranker produced them, each with acceptRate, ' +
+      'verdictShare, goldManual vs shownManual, and mean scores)}. acceptRate counts only suggestions that drew a ' +
+      'verdict, since an ignored one records nothing, and a mean score compares within one scorer but not between ' +
+      'two. Read-only.',
     inputSchema: {
       type: 'object',
       properties: { profile_id: profileId },
@@ -554,6 +560,53 @@ const toolDefs: ToolDef[] = [
       additionalProperties: false,
     },
     handler: (a) => api('GET', `/api/profiles/${enc(a.profile_id)}/tags/events/stats`),
+  },
+  {
+    name: 'cv_record_tag_events',
+    description:
+      'Record what happened to tag suggestions, so the ranking can be measured and improved. Call this after ' +
+      'cv_suggest_tags + cv_tag: one {action:"accept"} per suggestion applied, carrying its rank, score and the ' +
+      'scorer from that suggest response\'s `scorer` field; one {action:"dismiss"} per suggestion returned and not ' +
+      'applied; {action:"manual"} with no rank for a tag coined outside the suggestions; {action:"remove"} when ' +
+      'untagging. These rows are the evaluation set that decides which ranker ships — a tagging pass without them ' +
+      'cannot be measured. Up to 50 events a call. Returns {recorded, skipped}.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        profile_id: profileId,
+        events: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 50,
+          items: {
+            type: 'object',
+            properties: {
+              target: { type: 'string', enum: ['entry', 'bullet'] },
+              id: { type: 'integer', minimum: 1 },
+              tag: { type: 'string', minLength: 1, maxLength: 60 },
+              action: { type: 'string', enum: ['accept', 'dismiss', 'manual', 'remove'] },
+              rank: { type: 'integer', minimum: 0, maximum: 49 },
+              score: { type: 'number', minimum: -1, maximum: 1 },
+              scorer: { type: 'string', enum: shared.SCORER_METHODS },
+            },
+            required: ['target', 'id', 'tag', 'action'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['profile_id', 'events'],
+      additionalProperties: false,
+    },
+    // Every cv_* tool says `bullet`; the REST shape says `item`. Without this
+    // map each event is rejected, and the validator strips unknown keys rather
+    // than reporting them, so the mistake would arrive as a bare 400.
+    handler: (a) =>
+      api('POST', `/api/profiles/${enc(a.profile_id)}/tags/events`, {
+        events: (a.events as Array<Record<string, unknown>>).map((e) => ({
+          ...e,
+          target: e.target === 'bullet' ? 'item' : 'entry',
+        })),
+      }),
   },
   {
     name: 'cv_list_tag_catalog',
@@ -621,7 +674,8 @@ const toolDefs: ToolDef[] = [
     description:
       'Suggest tags for EVERY entry and bullet of a profile in one call — use right after importing an untagged CV to ' +
       'tag the whole thing efficiently. Returns {count, items:[{target, id, text, current, suggestions:[…]}]}. ' +
-      'Suggest-only: nothing is written. Review and apply the good ones with cv_tag. Pass scorer:"embedding" for ' +
+      'Suggest-only: nothing is written. Review and apply the good ones with cv_tag, then report what you did with ' +
+      'cv_record_tag_events so the ranking can be measured. Pass scorer:"embedding" for ' +
       'local semantic ranking over many items without per-item frontier cost.',
     inputSchema: {
       type: 'object',
