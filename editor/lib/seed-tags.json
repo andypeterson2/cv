@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "attribution": "Contains ESCO classification data (v1.1.0), © European Union, https://esco.ec.europa.eu. Reuse is authorised under Commission Decision 2011/833/EU; ESCO labels are shortened to tags here.",
+  "version": 2,
+  "attribution": "Contains ESCO classification data (v1.1.0), © European Union, https://esco.ec.europa.eu. Reuse is authorised under Commission Decision 2011/833/EU; ESCO labels are shortened to tags here. Contains information from the O*NET 29.0 Database by the U.S. Department of Labor, Employment and Training Administration (USDOL/ETA), used under the CC BY 4.0 license; a developer-oriented subset of the O*NET hot-technology list is used, with names shortened to tags. USDOL/ETA has not endorsed these changes.",
   "tags": [
     {
       "tag": "leadership",
@@ -2461,6 +2461,366 @@
       "description": "write scientific publications: Present the hypothesis, findings, and conclusions of your scientific research in your field of expertise in a professional publication.",
       "category": "esco-research",
       "uri": "http://data.europa.eu/esco/skill/c3c2420c-ce9a-4371-8eed-1db479c3a562"
+    },
+    {
+      "tag": "aws",
+      "description": "Amazon Web Services AWS software",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "azure",
+      "description": "Microsoft Azure software",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "jira",
+      "description": "Atlassian JIRA",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "linux",
+      "description": "Linux",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "kubernetes",
+      "description": "Kubernetes",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "git",
+      "description": "Git",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "docker",
+      "description": "Docker",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "html",
+      "description": "Hypertext markup language HTML",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "react",
+      "description": "React",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "terraform",
+      "description": "IBM Terraform",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "active-directory",
+      "description": "Microsoft Active Directory",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "confluence",
+      "description": "Atlassian Confluence",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "github",
+      "description": "GitHub",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "c",
+      "description": "C",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "powershell",
+      "description": "Microsoft PowerShell",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "snowflake",
+      "description": "Snowflake",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "apache-kafka",
+      "description": "Apache Kafka",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "unix",
+      "description": "UNIX",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "bash",
+      "description": "Bash",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "node.js",
+      "description": "Node.js",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "go",
+      "description": "Go",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "microsoft-sql-server",
+      "description": "Microsoft SQL Server",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "apache-spark",
+      "description": "Apache Spark",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "splunk",
+      "description": "Splunk Enterprise",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "xml",
+      "description": "Extensible markup language XML",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "json",
+      "description": "JavaScript Object Notation JSON",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "pytorch",
+      "description": "PyTorch",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "mongodb",
+      "description": "MongoDB",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "gitlab",
+      "description": "GitLab",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "macos",
+      "description": "Apple macOS",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "tensorflow",
+      "description": "TensorFlow",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "spring-boot",
+      "description": "Spring Boot",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "spring-framework",
+      "description": "Spring Framework",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "apache-hadoop",
+      "description": "Apache Hadoop",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "dotnet",
+      "description": "Microsoft .NET Framework",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "apache-airflow",
+      "description": "Apache Airflow",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "ec2",
+      "description": "Amazon Elastic Compute Cloud EC2",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "cloudformation",
+      "description": "Amazon Web Services AWS CloudFormation",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "shell-scripting",
+      "description": "Shell script",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "grafana",
+      "description": "Grafana Labs Grafana Cloud",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "pl-sql",
+      "description": "Oracle PL/SQL",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "jquery",
+      "description": "jQuery",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "selenium",
+      "description": "Selenium",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "oracle-cloud",
+      "description": "Oracle Cloud software",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "amazon-redshift",
+      "description": "Amazon Redshift",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "graphql",
+      "description": "GraphQL",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "atlassian-bitbucket",
+      "description": "Atlassian Bitbucket",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "bgp",
+      "description": "Border Gateway Protocol BGP",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "prometheus",
+      "description": "Prometheus",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "microsoft-visual-studio",
+      "description": "Microsoft Visual Studio",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "ibm-db2",
+      "description": "IBM DB2",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "j2ee",
+      "description": "Oracle Java 2 Platform Enterprise Edition J2EE",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "vue.js",
+      "description": "Vue.js",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "amazon-dynamodb",
+      "description": "Amazon DynamoDB",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "ssrs",
+      "description": "Microsoft SQL Server Reporting Services SSRS",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "red-hat-enterprise-linux",
+      "description": "Red Hat Enterprise Linux",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "ssis",
+      "description": "Microsoft SQL Server Integration Services SSIS",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "openshift",
+      "description": "Red Hat OpenShift",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "junit",
+      "description": "JUnit",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "oracle-database",
+      "description": "Oracle Database",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "oracle-sql-developer",
+      "description": "Oracle SQL Developer",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "transact-sql",
+      "description": "Transact-SQL",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "redis",
+      "description": "Redis",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "apache-hive",
+      "description": "Apache Hive",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "elasticsearch",
+      "description": "Elasticsearch",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "apache-cassandra",
+      "description": "Apache Cassandra",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "hibernate",
+      "description": "Hibernate ORM",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "unix-shell",
+      "description": "UNIX Shell",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "bootstrap",
+      "description": "Bootstrap",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "subversion",
+      "description": "Apache Subversion SVN",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "asp",
+      "description": "Microsoft Active Server Pages ASP",
+      "category": "onet-technology"
+    },
+    {
+      "tag": "django",
+      "description": "Django",
+      "category": "onet-technology"
     }
   ]
 }
