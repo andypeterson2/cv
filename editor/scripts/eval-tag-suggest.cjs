@@ -30,6 +30,7 @@
  *   node scripts/eval-tag-suggest.cjs --db ../cv.db --profile 5
  *   node scripts/eval-tag-suggest.cjs --export <exported-profile JSON>
  *   node scripts/eval-tag-suggest.cjs --db ../cv.db --profile 5 --seed 2
+ *   node scripts/eval-tag-suggest.cjs --export <json> --alpha 0.6 --k 8 --withSeed 0
  *
  * Needs the optional @huggingface/transformers dependency and the MiniLM model
  * cache; CV_EMBED_OFFLINE=1 forbids a runtime download.
@@ -184,14 +185,22 @@ async function score(queries, pool, arm) {
   const scorer = arm.opts ? withNeighbours(arm.base, arm.embed, pool, arm.opts) : arm.base;
   let hit1 = 0;
   let hit3 = 0;
+  let hit5 = 0;
+  // The share of a bullet's gold tags a cluster of five catches, since a bullet
+  // with three right answers is served badly by a list that finds one.
+  let found = 0;
+  let goldTotal = 0;
   for (const q of queries) {
-    const out = await suggest.suggestTags(q.text, arm.candidates, { limit: 3, scorer });
+    const out = await suggest.suggestTags(q.text, arm.candidates, { limit: 5, scorer });
     const ranked = out.map((r) => r.tag);
     const gold = new Set(q.tags);
     if (ranked.slice(0, 1).some((t) => gold.has(t))) hit1++;
     if (ranked.slice(0, 3).some((t) => gold.has(t))) hit3++;
+    if (ranked.slice(0, 5).some((t) => gold.has(t))) hit5++;
+    found += ranked.slice(0, 5).filter((t) => gold.has(t)).length;
+    goldTotal += gold.size;
   }
-  return { hit1, hit3, n: queries.length };
+  return { hit1, hit3, hit5, found, goldTotal, n: queries.length };
 }
 
 /** hit@3, then hit@1, then the weight that trusts the votes least. */
@@ -233,7 +242,37 @@ function pct(hit, n) {
 }
 
 function line(label, r) {
-  return `  ${label.padEnd(22)} hit@1 ${r.hit1}/${r.n} (${pct(r.hit1, r.n)})   hit@3 ${r.hit3}/${r.n} (${pct(r.hit3, r.n)})`;
+  return (
+    `  ${label.padEnd(22)} hit@1 ${r.hit1}/${r.n} (${pct(r.hit1, r.n)})   ` +
+    `hit@3 ${r.hit3}/${r.n} (${pct(r.hit3, r.n)})   hit@5 ${r.hit5}/${r.n} (${pct(r.hit5, r.n)})`
+  );
+}
+
+/**
+ * Score fixed parameters on the held-out half, with no selection step.
+ *
+ * Letting every seed choose its own grid point measures the noise in that
+ * choice. To decide whether a constant should change, hold one setting fixed
+ * and score it on held-out data across seeds.
+ */
+async function fixedArm(rows, args, embed, base) {
+  const { first, second } = splitHalves(rows, args.seed);
+  const withSeed = args.withSeed !== '0';
+  const candidates = buildCandidates(rows, first, withSeed);
+  const alpha = Number(args.alpha);
+  // The fuzzy string match alone, which is what a profile without the optional
+  // dependency is served, and the floor the embedding arm has to clear.
+  const lexical = args.base === 'lexical';
+  const arm = { candidates, embed, base: lexical ? undefined : base };
+  const r =
+    alpha === 1 || lexical
+      ? await score(second, first, arm)
+      : await score(second, first, { ...arm, opts: { alpha, k: Number(args.k) } });
+  console.log(
+    `seed ${args.seed}  ${lexical ? 'lexical' : `alpha ${alpha}  k ${args.k}`}  ` +
+      `starter ${withSeed ? 'on' : 'off'}  hit@1 ${r.hit1}/${r.n}  hit@3 ${r.hit3}/${r.n}  ` +
+      `hit@5 ${r.hit5}/${r.n}  found ${r.found}/${r.goldTotal}`,
+  );
 }
 
 async function main() {
@@ -257,9 +296,10 @@ async function main() {
     return;
   }
 
-  const { first, second } = splitHalves(rows, args.seed);
   const { embed, scorer: base } = require('../lib/embed-scorer');
+  if (args.alpha !== undefined) return fixedArm(rows, args, embed, base);
 
+  const { first, second } = splitHalves(rows, args.seed);
   const chosen = await selectParams(first, rows, embed, base);
   const candidates = buildCandidates(rows, first, chosen.withSeed);
   const baseline = await score(second, first, { candidates, embed, base });

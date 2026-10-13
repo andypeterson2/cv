@@ -9,6 +9,10 @@
  *
  * ALPHA, K and MIN_EXAMPLES are what serving uses; a caller sweeping them must
  * pass its own, so a measurement states the values it scored.
+ *
+ * These values name a serving configuration. `scorer` in tag_events records the
+ * arm alone, so rows written either side of a change here measure different
+ * things.
  */
 
 const { cosineSim } = require('./cosine');
