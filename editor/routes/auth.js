@@ -6,9 +6,15 @@ const { parseOriginSecrets, matchesOriginSecret } = require('../lib/origin-secre
 /**
  * Front-door user provisioning.
  *
- * The gateway drives "Sign in with Google", verifies the id_token, then calls this
- * to create-or-update the cv user for that Google `sub` and get back the cv user id
- * (which it stores in the session and injects as X-User-Id on later requests).
+ * The gateway calls this to create-or-update the cv user for a Google `sub` and get
+ * back the cv user id, which it then injects as X-User-Id on that person's requests.
+ * When it calls depends on the gateway's mode:
+ *   - with access grants on (the gateway's ACCESS_GRANTS), signing in to the site
+ *     makes no cv user at all. This is called only when the owner approves someone's
+ *     request for the CV editor, and for the owner's own sign-in;
+ *   - with grants off, it is called on every Google sign-in, as it always was.
+ * The MCP worker calls it too, for the owner only (it is admin-gated there).
+ * cv does not need to know which: it trusts any caller holding the front-door secret.
  *
  * This is the one endpoint that mints users, so it is not behind tokenAuth (there is
  * no user yet) — it is gated instead by the shared front-door secret (X-Origin-Secret),
